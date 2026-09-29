@@ -234,6 +234,7 @@ export class OidcService {
         name: text('name') ?? text('preferred_username') ?? text('email') ?? idClaims.sub,
         email: text('email') ?? null,
         groups: claimValues(claims, settings.groupsClaim) ?? [],
+        claimNames: Object.keys(claims).sort(),
       },
       returnTo: login.return_to,
     };

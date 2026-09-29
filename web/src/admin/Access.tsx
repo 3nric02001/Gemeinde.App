@@ -24,6 +24,21 @@ export interface AdminGroup {
   lastSeenAt: number | null;
 }
 
+export interface DeniedLogin {
+  at: number;
+  name: string;
+  email: string | null;
+  reason: 'no-group' | 'disabled';
+  groups: string[];
+  groupsClaim: string;
+  claimNames: string[];
+}
+
+interface GroupsData {
+  items: AdminGroup[];
+  lastDenied: DeniedLogin | null;
+}
+
 export interface OidcView {
   enabled: boolean;
   issuer: string;
@@ -178,13 +193,13 @@ function UsersAdmin() {
 // ---------- Gruppen ----------
 
 function GroupsAdmin() {
-  const [data, error, setData] = useLoad<{ items: AdminGroup[] }>('/api/admin/groups');
+  const [data, error, setData] = useLoad<GroupsData>('/api/admin/groups');
   const [actionError, setActionError] = useState<string | undefined>();
   const [name, setName] = useState('');
 
   const save = async (group: string, body: { enabled?: boolean; role?: Role }) => {
     try {
-      setData(await adminRequest<{ items: AdminGroup[] }>('PUT', `/api/admin/groups/${encodeURIComponent(group)}`, body));
+      setData(await adminRequest<GroupsData>('PUT', `/api/admin/groups/${encodeURIComponent(group)}`, body));
       setActionError(undefined);
     } catch (e) {
       setActionError((e as Error).message);
@@ -192,7 +207,7 @@ function GroupsAdmin() {
   };
   const remove = async (group: string) => {
     try {
-      setData(await adminRequest<{ items: AdminGroup[] }>('DELETE', `/api/admin/groups/${encodeURIComponent(group)}`));
+      setData(await adminRequest<GroupsData>('DELETE', `/api/admin/groups/${encodeURIComponent(group)}`));
     } catch (e) {
       setActionError((e as Error).message);
     }
@@ -226,6 +241,13 @@ function GroupsAdmin() {
         <p class="admin-error" role="alert">
           {actionError}
         </p>
+      )}
+      {data?.lastDenied && (
+        <DeniedLoginNote
+          login={data.lastDenied}
+          groups={data.items}
+          onEnable={(group) => void save(group, { enabled: true })}
+        />
       )}
       {error ? (
         <ErrorNote message={error} />
@@ -278,6 +300,53 @@ function GroupsAdmin() {
         </ul>
       )}
     </>
+  );
+}
+
+/** Zeigt, was der Identity Provider bei der letzten abgewiesenen Anmeldung geliefert hat. */
+function DeniedLoginNote({
+  login,
+  groups,
+  onEnable,
+}: {
+  login: DeniedLogin;
+  groups: AdminGroup[];
+  onEnable: (group: string) => void;
+}) {
+  const enabled = new Set(groups.filter((g) => g.enabled).map((g) => g.name));
+  const who = login.email ? `${login.name} (${login.email})` : login.name;
+  return (
+    <section class="admin-panel admin-denied" aria-label="Letzte abgewiesene Anmeldung">
+      <h2>Letzte abgewiesene Anmeldung</h2>
+      <p class="admin-hint">
+        {who} am {new Date(login.at).toLocaleString('de-DE')}
+        {login.reason === 'disabled' ? ': das Konto ist unter Benutzer gesperrt.' : ': in keiner freigeschalteten Gruppe.'}
+      </p>
+      {login.reason === 'no-group' &&
+        (login.groups.length > 0 ? (
+          <ul class="chips-row" aria-label="Gelieferte Gruppen">
+            {login.groups.map((group) =>
+              enabled.has(group) ? (
+                <li key={group} class="chip is-on">
+                  {group} · freigeschaltet
+                </li>
+              ) : (
+                <li key={group}>
+                  <button type="button" class="chip" onClick={() => onEnable(group)}>
+                    {group} freischalten
+                  </button>
+                </li>
+              ),
+            )}
+          </ul>
+        ) : (
+          <p class="admin-hint">
+            Der Identity Provider hat im Claim „{login.groupsClaim}“ keine Gruppen geliefert. Erhalten hat die App:{' '}
+            {login.claimNames.join(', ') || 'keine Claims'}. Prüfe, ob der Identity Provider die Gruppen mitschickt (bei
+            Authentik über den Scope „profile“), oder trage unter Anmeldung den passenden Claim ein.
+          </p>
+        ))}
+    </section>
   );
 }
 

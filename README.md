@@ -130,6 +130,10 @@ nur „Mit Gemeinde-Konto anmelden“; die Anmeldung des lokalen Admins steht un
   kann Gruppen auch vorab eintragen. Nur Gruppen mit Haken sind freigeschaltet, und nur wer in einer
   freigeschalteten Gruppe ist, wird als Benutzer angelegt. Jede Gruppe bekommt eine Rolle; wer in
   mehreren ist, erhält die höchste. Änderungen gelten sofort, auch für bereits angemeldete Benutzer.
+- **Abgewiesene Anmeldung**: Kommt jemand nicht hinein („Dein Konto ist … nicht freigeschaltet“),
+  zeigt Verwaltung → Gruppen die letzte abgewiesene Anmeldung mit den gelieferten Gruppen, die sich
+  dort direkt freischalten lassen. Liefert der Identity Provider gar keine Gruppen, stehen dort die
+  erhaltenen Claims; bei Authentik kommen die Gruppen über den Scope `profile` im Claim `groups`.
 - **Benutzer** (Verwaltung → Benutzer): Liste mit Rolle, Gruppen und letzter Anmeldung. Einzelne
   Benutzer lassen sich sperren oder entfernen.
 

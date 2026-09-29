@@ -4,7 +4,7 @@ import type { DB } from '../db.js';
 import { getBranding } from '../branding.js';
 import { OidcService } from '../auth/oidc.js';
 import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_MS, sessionUser, type SessionUser } from '../auth/sessions.js';
-import { AuthError, changePassword, checkLocalLogin, hasRole, upsertOidcUser, type Role } from '../auth/users.js';
+import { AuthError, changePassword, checkLocalLogin, hasRole, recordDeniedLogin, upsertOidcUser, type Role } from '../auth/users.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -272,6 +272,15 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
             { subject: identity.subject, groups: identity.groups, reason: result.denied },
             'OIDC-Anmeldung ohne Zugang',
           );
+          recordDeniedLogin(db, {
+            at: Date.now(),
+            name: identity.name,
+            email: identity.email,
+            reason: result.denied,
+            groups: identity.groups,
+            groupsClaim: oidc.settings().groupsClaim,
+            claimNames: identity.claimNames ?? [],
+          });
           return reply.redirect(`/?anmeldung=${result.denied === 'disabled' ? 'gesperrt' : 'keine-gruppe'}`);
         }
         startSession(request, reply, result.user.id);

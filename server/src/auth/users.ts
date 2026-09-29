@@ -284,6 +284,35 @@ export interface OidcIdentity {
   name: string;
   email: string | null;
   groups: string[];
+  /** Namen aller Claims, die der Identity Provider geliefert hat (für die Fehlersuche) */
+  claimNames?: string[];
+}
+
+/** Letzte abgewiesene OIDC-Anmeldung, damit der Admin sieht, welche Gruppen ankamen */
+export interface DeniedLogin {
+  at: number;
+  name: string;
+  email: string | null;
+  reason: 'no-group' | 'disabled';
+  groups: string[];
+  groupsClaim: string;
+  claimNames: string[];
+}
+
+const DENIED_LOGIN_KEY = 'oidcLastDenied';
+
+export function recordDeniedLogin(db: DB, login: DeniedLogin): void {
+  setMeta(db, DENIED_LOGIN_KEY, JSON.stringify(login));
+}
+
+export function lastDeniedLogin(db: DB): DeniedLogin | null {
+  const raw = getMeta(db, DENIED_LOGIN_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as DeniedLogin;
+  } catch {
+    return null;
+  }
 }
 
 export type OidcLoginResult = { user: User } | { denied: 'no-group' | 'disabled' };

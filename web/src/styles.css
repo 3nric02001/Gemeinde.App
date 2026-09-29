@@ -1762,6 +1762,12 @@ html[data-text='xlarge'] .now-playing {
   font-size: 18px;
 }
 
+.admin-denied .chips-row {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
 .admin-panel .field + .field {
   margin-top: 0;
 }

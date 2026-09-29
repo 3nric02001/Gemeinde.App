@@ -80,6 +80,42 @@ describe('Verwaltung', () => {
     await waitFor(() => expect(screen.getByText('Lokaler Admin · Benutzername admin', { exact: false })).toBeTruthy());
   });
 
+  it('zeigt die letzte abgewiesene Anmeldung und schaltet gelieferte Gruppen frei', async () => {
+    await signedInAs('admin');
+    let groups = [{ name: 'gemeinde', enabled: false, role: 'listener', userCount: 0, lastSeenAt: 1 }];
+    const lastDenied = {
+      at: Date.now(),
+      name: 'Enrico',
+      email: 'enrico@example.org',
+      reason: 'no-group',
+      groups: ['gemeinde'],
+      groupsClaim: 'groups',
+      claimNames: ['email', 'groups', 'sub'],
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      if (init?.method === 'PUT') groups = [{ ...groups[0]!, enabled: true }];
+      return json({ items: groups, lastDenied });
+    });
+    render(<Admin location={at('/admin/gruppen')} />);
+    await waitFor(() => expect(screen.getByText('Letzte abgewiesene Anmeldung')).toBeTruthy());
+    fireEvent.click(screen.getByText('gemeinde freischalten'));
+    await waitFor(() => expect(screen.getByText('gemeinde · freigeschaltet')).toBeTruthy());
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]!.body))).toEqual({ enabled: true });
+  });
+
+  it('erklärt, wenn der Identity Provider keine Gruppen liefert', async () => {
+    await signedInAs('admin');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json({
+        items: [],
+        lastDenied: { at: 1, name: 'Enrico', email: null, reason: 'no-group', groups: [], groupsClaim: 'groups', claimNames: ['email', 'sub'] },
+      }),
+    );
+    render(<Admin location={at('/admin/gruppen')} />);
+    await waitFor(() => expect(screen.getByText(/keine Gruppen geliefert/)).toBeTruthy());
+    expect(screen.getByText(/Erhalten hat die App: email, sub/)).toBeTruthy();
+  });
+
   it('sperrt Hörer aus', async () => {
     await signedInAs('listener');
     render(<Admin location={at('/admin')} />);

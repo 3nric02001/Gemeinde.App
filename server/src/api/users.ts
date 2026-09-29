@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import type { OidcService, OidcSettings } from '../auth/oidc.js';
-import { AuthError, deleteGroup, deleteUser, listGroups, listUsers, ROLES, saveGroup, setUserDisabled, type Role } from '../auth/users.js';
+import { AuthError, deleteGroup, deleteUser, lastDeniedLogin, listGroups, listUsers, ROLES, saveGroup, setUserDisabled, type Role } from '../auth/users.js';
 import { authErrorHandler, redirectUri } from './auth.js';
 import { getBranding, saveBranding, type Branding } from '../branding.js';
 
@@ -70,7 +70,9 @@ export async function registerUserAdminRoutes(
       return reply.code(204).send();
     });
 
-    admin.get('/api/admin/groups', async () => ({ items: listGroups(db) }));
+    // Mit der letzten abgewiesenen Anmeldung, damit der Admin sieht, welche Gruppen ankamen
+    const groupsView = () => ({ items: listGroups(db), lastDenied: lastDeniedLogin(db) });
+    admin.get('/api/admin/groups', async () => groupsView());
 
     admin.put(
       '/api/admin/groups/:name',
@@ -86,13 +88,13 @@ export async function registerUserAdminRoutes(
       },
       async (request: NameRequest) => {
         saveGroup(db, request.params.name, request.body as { enabled?: boolean; role?: Role });
-        return { items: listGroups(db) };
+        return groupsView();
       },
     );
 
     admin.delete('/api/admin/groups/:name', { schema: { params: nameParam } }, async (request: NameRequest) => {
       deleteGroup(db, request.params.name);
-      return { items: listGroups(db) };
+      return groupsView();
     });
 
     const view = (request: FastifyRequest, settings: OidcSettings) => {
