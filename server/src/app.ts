@@ -4,6 +4,7 @@ import type { Config } from './config.js';
 import { openDatabase, type DB } from './db.js';
 import { LibraryScanner } from './library/scanner.js';
 import { NextcloudClient } from './nextcloud/webdav.js';
+import { registerWeb } from './web.js';
 
 export interface AppContext {
   app: FastifyInstance;
@@ -22,6 +23,9 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
   const scanner = new LibraryScanner(db, client, app.log, config.scanConcurrency);
 
   await registerRoutes(app, { db, client, scanner, adminToken: config.adminToken });
+  if (!(await registerWeb(app, config.webDir))) {
+    app.log.info({ webDir: config.webDir }, 'Keine Weboberfläche gefunden, nur die API ist erreichbar');
+  }
   app.addHook('onClose', async () => db.close());
   return { app, db, scanner };
 }

@@ -4,3 +4,4 @@
 **/.env
 .git
 server/test
+web/test
