@@ -5,6 +5,7 @@ import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextclou
 import { rebuildAlbums } from './albums.js';
 import { extractMetadata, tagSpan, type TrackMeta } from './metadata.js';
 import { coverRank, dirname, isAudioFile } from './pathMeta.js';
+import { foldValue } from './text.js';
 
 /** So viel vom Dateianfang lesen wir zuerst für Tags; reicht für ID3v2, FLAC und Ogg ohne großes Cover. */
 export const HEAD_BYTES = 256 * 1024;
@@ -177,7 +178,10 @@ export class LibraryScanner {
         track_no = excluded.track_no, disc_no = excluded.disc_no, year = excluded.year, genre = excluded.genre,
         duration = excluded.duration, compilation = excluded.compilation, cover_id = excluded.cover_id,
         scanned_at = excluded.scanned_at
+      RETURNING id
     `);
+    const clearTags = this.db.prepare('DELETE FROM track_tags WHERE track_id = ?');
+    const addTag = this.db.prepare('INSERT INTO track_tags (track_id, tag, value, vkey) VALUES (?, ?, ?, ?)');
     const saveCover = this.db.prepare(`
       INSERT INTO covers (hash, mime, data) VALUES (?, ?, ?)
       ON CONFLICT(hash) DO UPDATE SET mime = excluded.mime
@@ -191,7 +195,7 @@ export class LibraryScanner {
           const hash = createHash('sha256').update(meta.picture.data).digest('hex');
           coverId = (saveCover.get(hash, meta.picture.mime, meta.picture.data) as { id: number }).id;
         }
-        upsert.run({
+        const { id } = upsert.get({
           path: entry.path,
           etag: entry.etag,
           size: entry.size,
@@ -208,7 +212,9 @@ export class LibraryScanner {
           compilation: meta.compilation ? 1 : 0,
           coverId,
           now,
-        });
+        }) as { id: number };
+        clearTags.run(id);
+        for (const [tag, value] of meta.tags) addTag.run(id, tag, value, foldValue(value));
         if (known.has(entry.path)) this.status.updated++;
         else this.status.added++;
       }

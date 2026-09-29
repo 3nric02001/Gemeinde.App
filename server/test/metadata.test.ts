@@ -28,6 +28,25 @@ describe('extractMetadata', () => {
     expect(meta).toMatchObject({ title: 'Morgenlied', artist: 'Anna', album: 'Erstes Album', year: 2001, trackNo: 2 });
   });
 
+  it('sammelt alle Tags für Kategorien, auch eigene Felder', async () => {
+    const data = mp3({ title: 'T', artist: 'Chor; Band', genre: 'lied', composer: 'Bach', custom: { Kategorie: 'Musik' } });
+    const meta = await extractMetadata('a/b.mp3', data, 'audio/mpeg');
+    expect(meta.tags).toEqual([
+      ['artist', 'Chor'],
+      ['artist', 'Band'],
+      ['album', 'a'],
+      ['genre', 'Lied'],
+      ['composer', 'Bach'],
+      ['kategorie', 'Musik'],
+    ]);
+    const vorbis = await extractMetadata('a/b.flac', flac({ title: 'T', artist: 'A', track: 2, custom: { Sprecher: 'Meier' } }), 'audio/flac');
+    expect(vorbis.tags).toEqual([
+      ['artist', 'A'],
+      ['album', 'a'],
+      ['sprecher', 'Meier'],
+    ]);
+  });
+
   it('übersteht kaputte Dateien', async () => {
     const meta = await extractMetadata('lose.mp3', Buffer.from('keine musik'), 'audio/mpeg');
     expect(meta).toMatchObject({ title: 'lose', artist: UNKNOWN_ARTIST, album: undefined });

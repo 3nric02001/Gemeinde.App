@@ -8,6 +8,7 @@ import { match, navigate, type Location } from '../router';
 import { Empty, ErrorNote, Loading } from '../pages/common';
 import { adminRequest, getToken, setToken, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
+import { CategoriesAdmin, CategoryEditor } from './Categories';
 
 /** Verwaltung unter /admin: vorerst mit ADMIN_TOKEN, später über OIDC-Rollen. */
 export function Admin({ location }: { location: Location }) {
@@ -38,13 +39,30 @@ export function Admin({ location }: { location: Location }) {
   }
 
   const album = match('/admin/album/:id', location.path);
+  const category = match('/admin/kategorie/:id', location.path);
+  const onCategories = location.path === '/admin/kategorien';
+  let content;
+  if (album && /^\d+$/.test(album.id!)) content = <AlbumEditor key={album.id} id={Number(album.id)} onError={onError} />;
+  else if (category && (category.id === 'neu' || /^\d+$/.test(category.id!))) {
+    const id = category.id === 'neu' ? undefined : Number(category.id);
+    content = <CategoryEditor key={category.id} id={id} onError={onError} />;
+  } else if (onCategories) content = <CategoriesAdmin onError={onError} />;
+  else content = <AlbumsAdmin params={location.params} onError={onError} onLogout={() => logout()} />;
+
+  const inCategories = onCategories || Boolean(category);
   return (
     <div class="page admin">
-      {album && /^\d+$/.test(album.id!) ? (
-        <AlbumEditor key={album.id} id={Number(album.id)} onError={onError} />
-      ) : (
-        <AlbumsAdmin params={location.params} onError={onError} onLogout={() => logout()} />
+      {!album && !category && (
+        <nav class="chips-row admin-tabs" aria-label="Verwaltung">
+          <a class={`chip${inCategories ? '' : ' is-on'}`} href="/admin" aria-current={inCategories ? undefined : 'page'}>
+            Alben
+          </a>
+          <a class={`chip${inCategories ? ' is-on' : ''}`} href="/admin/kategorien" aria-current={inCategories ? 'page' : undefined}>
+            Kategorien
+          </a>
+        </nav>
       )}
+      {content}
     </div>
   );
 }

@@ -65,6 +65,27 @@ bei jedem Scan wieder angewendet. Fehlt eine Datei eines eigenen Albums zeitweis
 erscheint sie nach dem nächsten Scan wieder an ihrem Platz. Wird eine Datei umbenannt oder
 verschoben, muss sie im eigenen Album neu eingetragen werden.
 
+## Verwaltung: Kategorien
+
+Unter **Verwaltung → Kategorien** legt man eigene Kategorien an, benennt sie um, ordnet sie oder löscht sie.
+Jede Kategorie mit „Im Menü anzeigen“ steht in der Seitenleiste und unter Suche, mit einer Seite aller Werte
+(`/kategorie/<name>`) und je Wert einer Seite mit Alben und Titeln zum Abspielen.
+
+- **Tag-Felder**: Eine Kategorie nimmt ihre Werte aus einem oder mehreren Feldern der Musikdateien, z. B.
+  „Interpreten“ aus Interpret und Album-Interpret. Zur Auswahl stehen alle Felder, die in der Bibliothek vorkommen,
+  auch eigene ID3-Felder (TXXX, etwa „Kategorie“ oder „Sprecher“) und eigene Vorbis-Kommentare in FLAC/Ogg.
+  Mehrere Werte in einem Feld („Chor; Gemeinde“) werden einzeln geführt.
+- **Werte zusammenfassen**: Mehrere Tag-Werte erscheinen unter einem Namen, z. B. „Musik“ aus Musik, Lied.
+  Groß-/Kleinschreibung und Akzente spielen dabei keine Rolle. Wahlweise zeigt die Kategorie nur die
+  zusammengefassten Werte.
+- **Vorschau**: Beim Einrichten zeigt die Verwaltung sofort, welche Werte mit wie vielen Titeln entstehen.
+
+Vorgegeben sind „Interpreten“ (im Menü) und „Genre“ (nicht im Menü). Die Filter nach Genre und Jahrzehnt
+sowie der Reiter „Datum“ bleiben davon unberührt. Beim ersten Start mit dieser Version liest der Scan alle
+Dateien einmal neu, um auch die übrigen Tag-Felder zu erfassen.
+
+![Kategorie in der Verwaltung](docs/screenshots/admin-categories.png)
+
 ## So funktioniert es
 
 - Ein **Service-Account** in der Nextcloud (mit App-Passwort) liest genau den Ordner, der in
@@ -130,6 +151,8 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `GET /api/albums/:id/cover` | Albumcover (Bild im Ordner, sonst eingebettet) |
 | `GET /api/tracks/:id/cover` | Bild des Titels, sonst Albumcover |
 | `GET /api/tracks?q=&artist=&genre=&year=&decade=&albumId=&limit=&offset=` | Titel suchen und filtern |
+| `GET /api/categories` | Kategorien in der eingestellten Reihenfolge (`{ id, name, slug, inNav }`) |
+| `GET /api/categories/:slug/values?q=` | Werte einer Kategorie mit Anzahl Titel |
 | `GET /api/tracks/:id/stream` | Audio streamen (unterstützt `Range`) |
 | `GET /api/artists?q=` | Interpreten mit Anzahl Alben und Titel |
 | `GET /api/dates?limit=&offset=` | Unterste Ordner mit Datum im Namen, neueste zuerst |
@@ -140,6 +163,7 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `GET /api/health` | Healthcheck |
 
 Alle Listen liefern `{ items, total, limit, offset }`. Alben haben `kind: "auto" | "manual"`.
+`/api/albums` und `/api/tracks` filtern mit `category=<slug>&value=<Wert>` nach dem Wert einer Kategorie.
 
 Verwaltung (alle mit `Authorization: Bearer <ADMIN_TOKEN>`):
 
@@ -158,11 +182,20 @@ Verwaltung (alle mit `Authorization: Bearer <ADMIN_TOKEN>`):
 | `PUT /api/admin/albums/:id/rules/:ruleId` | Regel ändern, gleicher Aufbau |
 | `DELETE /api/admin/albums/:id/rules/:ruleId` | Regel löschen |
 | `POST /api/admin/rules/preview` | `{ condition }`: wie viele und welche Titel eine Regel treffen würde |
+| `GET /api/admin/track-albums?ids=1,2` | In welchen Alben die Titel stehen |
+| `GET /api/admin/categories` | Alle Kategorien mit Tag-Feldern und zusammengefassten Werten |
+| `POST /api/admin/categories` | Kategorie anlegen: `{ name, fields, groups?, inNav?, groupedOnly? }` |
+| `PATCH /api/admin/categories/:id` | Umbenennen oder Zuordnung ändern, gleiche Felder, alle optional |
+| `DELETE /api/admin/categories/:id` | Kategorie löschen |
+| `PUT /api/admin/categories/order` | Reihenfolge: `{ ids }` |
+| `POST /api/admin/categories/preview` | `{ fields, groups?, groupedOnly? }`: welche Werte entstehen würden |
+| `GET /api/admin/tag-fields` | Alle Tag-Felder der Bibliothek mit Anzahl Titel und Beispielwerten |
 
 Eine `condition` ist entweder eine Bedingung `{ field: title|artist|album|genre|path, op: contains|not_contains|starts|equals, value }`
 oder eine Gruppe `{ match: "all" | "any", conditions: [...] }` (UND bzw. ODER, beliebig verschachtelt, bis zu 4 Ebenen
 und 30 Bedingungen). Statt `condition` geht für eine einzelne Bedingung auch `{ field, op, value }` direkt.
-| `GET /api/admin/track-albums?ids=1,2` | In welchen Alben die Titel stehen |
+
+`groups` einer Kategorie ist eine Liste `{ label, values }`, z. B. `{ "label": "Musik", "values": ["Musik", "Lied"] }`.
 
 ## Entwicklung
 

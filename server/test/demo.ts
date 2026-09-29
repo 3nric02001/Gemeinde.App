@@ -56,7 +56,7 @@ albums.forEach(([artist, album, year, genre, titles, colors], n) => {
       : { data: png(sampler ? [40 + i * 50, 80, 200 - i * 40] : colors[0]!, sampler ? [250, 200 - i * 30, 90 + i * 40] : colors[1]!), mime: 'image/png' };
     cloud.put(
       `${artist}/${album}/${String(i + 1).padStart(2, '0')} ${title}.mp3`,
-      mp3({ title, artist, album, track: i + 1, year, genre, picture }, 3000 + i * 800),
+      mp3({ title, artist, album, track: i + 1, year, genre, picture, custom: { Kategorie: ['Chor', 'Lobpreis'].includes(genre) ? 'Lied' : 'Musik' } }, 3000 + i * 800),
     );
   });
   if (colors && !embedded) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
@@ -72,7 +72,7 @@ for (const [folder, titles, colors] of services) {
   titles.forEach((title, i) =>
     cloud.put(
       `${folder}/${String(i + 1).padStart(2, '0')} ${title}.mp3`,
-      mp3({ title, artist: 'MBG Brake', album: folder.split('/').pop(), track: i + 1, genre: 'Gottesdienst', picture: colors ? { data: png(colors[0]!, colors[1]!), mime: 'image/png' } : undefined }, 4000),
+      mp3({ title, artist: 'MBG Brake', album: folder.split('/').pop(), track: i + 1, genre: 'Gottesdienst', custom: { Kategorie: title.startsWith('Predigt') ? 'Predigt' : 'Musik', ...(title.startsWith('Predigt') ? { Sprecher: 'Pastor Meier' } : {}) }, picture: colors ? { data: png(colors[0]!, colors[1]!), mime: 'image/png' } : undefined }, 4000),
     ),
   );
 }

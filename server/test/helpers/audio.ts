@@ -11,7 +11,10 @@ export interface Tags {
   disc?: number;
   year?: number;
   genre?: string;
+  composer?: string;
   compilation?: boolean;
+  /** Eigene Tag-Felder (TXXX bzw. Vorbis-Kommentare) */
+  custom?: Record<string, string>;
   /** Eingebettetes Cover (APIC bzw. FLAC PICTURE) */
   picture?: { data: Buffer; mime: string };
 }
@@ -40,7 +43,9 @@ export function mp3(tags: Tags, frames = 20): Buffer {
     ['TPOS', tags.disc?.toString()],
     ['TDRC', tags.year?.toString()],
     ['TCON', tags.genre],
+    ['TCOM', tags.composer],
     ['TCMP', tags.compilation ? '1' : undefined],
+    ...Object.entries(tags.custom ?? {}).map(([name, value]): [string, string] => ['TXXX', `${name}\u0000${value}`]),
   ];
   const frames3 = entries.filter(([, v]) => v !== undefined).map(([id, v]) => id3Frame(id, v!));
   if (tags.picture) frames3.push(id3Frame('APIC', apic(tags.picture)));
@@ -75,6 +80,8 @@ export function flac(tags: Tags, seconds = 180): Buffer {
     DATE: tags.year?.toString(),
     GENRE: tags.genre,
     COMPILATION: tags.compilation ? '1' : undefined,
+    COMPOSER: tags.composer,
+    ...Object.fromEntries(Object.entries(tags.custom ?? {}).map(([k, v]) => [k.toUpperCase(), v])),
   })
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => Buffer.from(`${k}=${v}`, 'utf8'));

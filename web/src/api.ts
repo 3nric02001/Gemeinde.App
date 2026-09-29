@@ -53,6 +53,26 @@ export interface Artist {
   trackCount: number;
 }
 
+/** Frei definierbare Kategorie ("Interpreten", "Musik" ...), in der Verwaltung angelegt */
+export interface CategoryInfo {
+  id: number;
+  name: string;
+  slug: string;
+  /** Im Menü und auf der Startseite anzeigen */
+  inNav: boolean;
+}
+
+export interface CategoryValue {
+  value: string;
+  trackCount: number;
+  /** Zusammengefasster Wert, z. B. "Musik" aus den Tag-Werten Musik und Lied */
+  grouped: boolean;
+  sources?: string[];
+}
+
+export const categoryUrl = (slug: string, value?: string) =>
+  `/kategorie/${encodeURIComponent(slug)}${value === undefined ? '' : `/${encodeURIComponent(value)}`}`;
+
 export interface Facet<T = string> {
   value: T;
   count: number;
