@@ -18,7 +18,18 @@ describe('parseFolderDate', () => {
     expect(parseFolderDate('3 März 2025')).toBe('2025-03-03');
   });
 
+  it('nimmt ein fehlendes Jahr nur, wenn es vorgegeben ist', () => {
+    expect(parseFolderDate('Gottesdienst 27.09.')).toBeUndefined();
+    expect(parseFolderDate('Gottesdienst 27.09.', 2025)).toBe('2025-09-27');
+    expect(parseFolderDate('3. Mai Konfirmation', 2025)).toBe('2025-05-03');
+    // Ohne Punkt nach dem Tag kein Datum: "Teil 3 Mai…"
+    expect(parseFolderDate('Teil 3 Maienlied', 2025)).toBeUndefined();
+  });
+
   it('ignoriert Namen ohne gültiges Datum', () => {
+    // Uneinheitliche Trenner sind kein Datum, sondern zwei Zahlen
+    expect(parseFolderDate('100 Jahre 1925 1025')).toBeUndefined();
+    expect(parseFolderDate('1. Advent 2025')).toBeUndefined();
     expect(parseFolderDate('Adventskonzert (2021)')).toBeUndefined();
     expect(parseFolderDate('Feiert Jesus 20')).toBeUndefined();
     expect(parseFolderDate('2026-02-31')).toBeUndefined();
@@ -68,20 +79,24 @@ async function get<T = any>(url: string): Promise<T> {
 }
 
 describe('Datum-Ansicht', () => {
-  it('listet unterste Ordner mit Datum, neueste zuerst', async () => {
+  it('listet Alben mit Datum, neueste zuerst', async () => {
     const page = await get('/api/dates');
     expect(page.total).toBe(3);
-    expect(page.items.map((f: any) => [f.date, f.name, f.trackCount])).toEqual([
+    expect(page.items.map((f: any) => [f.date, f.title, f.trackCount])).toEqual([
       ['2026-09-27', '2026-09-27 Erntedank', 2],
       ['2026-09-20', '20.09.2026', 1],
       ['2025-12-14', '2025-12-14 Advent', 2],
     ]);
-    expect(page.items[0].coverTrackId).not.toBeNull();
-    expect(page.items[1].coverTrackId).toBeNull();
+    expect(page.items[0].hasCover).toBe(true);
+    expect(page.items[1].hasCover).toBe(false);
+    // Dieselben Einträge wie in der Albenliste
+    const albums = await get('/api/albums?dated=true&sort=date');
+    expect(albums.items.map((a: any) => a.id)).toEqual(page.items.map((f: any) => f.id));
   });
 
-  it('liefert die Titel eines Ordners in Reihenfolge', async () => {
+  it('führt ältere Ordner-Links zum Album', async () => {
     const folder = await get(`/api/dates/folder?path=${encodeURIComponent('Konzerte/2025-12-14 Advent')}`);
+    expect(folder.albumId).toBe(folder.id);
     expect(folder.tracks.map((t: any) => t.title)).toEqual(['Teil 1', 'Teil 2']);
     const erntedank = await get(`/api/dates/folder?path=${encodeURIComponent('Gottesdienste/2026/2026-09-27 Erntedank')}`);
     expect(erntedank.tracks.map((t: any) => t.title)).toEqual(['Predigt', 'Lied']);
@@ -93,5 +108,65 @@ describe('Datum-Ansicht', () => {
     cloud.put('Gottesdienste/2026/2026-10-04/Predigt.mp3', mp3({ title: 'Neu', artist: 'Pastor' }));
     await ctx.scanner.scan();
     expect((await get('/api/dates?limit=1')).items[0].date).toBe('2026-10-04');
+  });
+});
+
+describe('Gottesdienste erkennen', () => {
+  const albums = async () =>
+    (await get('/api/albums?dated=true&sort=date&limit=50')).items.map((a: any) => ({
+      title: a.title,
+      date: a.date,
+      artist: a.artist,
+      year: a.year,
+      speaker: a.speaker,
+      passage: a.passage,
+      trackCount: a.trackCount,
+    }));
+
+  it('fasst Unterordner eines Gottesdienstes zu einem Album zusammen', async () => {
+    cloud.put('Gottesdienste/2026-10-11/Predigt/Predigt.mp3', mp3({ title: 'Predigt', artist: 'Pastor' }));
+    cloud.put('Gottesdienste/2026-10-11/Lobpreis/01.mp3', mp3({ title: 'Lied 1', artist: 'Band', track: 1 }));
+    cloud.put('Gottesdienste/2026-10-11/Lobpreis/02.mp3', mp3({ title: 'Lied 2', artist: 'Band', track: 2 }));
+    await ctx.scanner.scan();
+    expect((await albums())[0]).toMatchObject({ title: '2026-10-11', date: '2026-10-11', trackCount: 3 });
+  });
+
+  it('teilt einen Ordner mit Datum nicht nach abweichenden Album-Tags', async () => {
+    cloud.put('Gottesdienste/2026-10-18 Jubiläum/01.mp3', mp3({ title: 'Begrüßung', artist: 'Pastor', album: 'Jubiläum', track: 1 }));
+    cloud.put('Gottesdienste/2026-10-18 Jubiläum/02.mp3', mp3({ title: 'Lied', artist: 'Chor', album: 'Jubiläum', track: 2 }));
+    cloud.put('Gottesdienste/2026-10-18 Jubiläum/03.mp3', mp3({ title: 'Predigt', artist: 'Pastor', album: 'Jubiläum', track: 3 }));
+    cloud.put('Gottesdienste/2026-10-18 Jubiläum/04.mp3', mp3({ title: 'Segen', artist: 'Pastor', album: 'Jubilaeum Live', track: 4 }));
+    // ohne Album-Tag: Albumname käme aus dem Ordner
+    cloud.put('Gottesdienste/2026-10-18 Jubiläum/05.mp3', mp3({ title: 'Nachspiel', artist: 'Orgel', track: 5 }));
+    await ctx.scanner.scan();
+    const dated = (await albums()).filter((a: any) => a.date === '2026-10-18');
+    expect(dated).toHaveLength(1);
+    expect(dated[0]).toMatchObject({ title: 'Jubiläum', trackCount: 5 });
+  });
+
+  it('macht aus Dateien mit Datum im Namen je Datum einen Gottesdienst mit Sprecher und Bibelstelle', async () => {
+    cloud.put('Predigten 2026/2026-08-02 Meier - Psalm 23.mp3', mp3({}, 60));
+    cloud.put('Predigten 2026/2026-08-09 Schulz - Joh 3,16.mp3', mp3({}, 60));
+    cloud.put('Predigten 2026/2026-08-16 Meier - Römer 8.mp3', mp3({ title: 'Nichts kann uns trennen', artist: 'Meier' }, 60));
+    await ctx.scanner.scan();
+    const august = (await albums()).filter((a: any) => a.date?.startsWith('2026-08'));
+    expect(august).toEqual([
+      { title: 'Nichts kann uns trennen', date: '2026-08-16', artist: 'Meier', year: 2026, speaker: 'Meier', passage: 'Römer 8', trackCount: 1 },
+      { title: 'Joh 3,16', date: '2026-08-09', artist: 'Schulz', year: 2026, speaker: 'Schulz', passage: 'Joh 3,16', trackCount: 1 },
+      { title: 'Psalm 23', date: '2026-08-02', artist: 'Meier', year: 2026, speaker: 'Meier', passage: 'Psalm 23', trackCount: 1 },
+    ]);
+    // Der Sprecher aus dem Dateinamen ist auch eine Kategorie
+    const speakers = await get('/api/categories/sprecher/values');
+    expect(speakers.items.map((v: any) => v.value)).toEqual(['Meier', 'Schulz']);
+  });
+
+  it('nimmt ein fehlendes Jahr aus dem Elternordner und keinen Jahresordner als Interpreten', async () => {
+    cloud.put('Predigten/2025/30.11./Predigt.mp3', mp3({ title: 'Advent' }));
+    await ctx.scanner.scan();
+    const [album] = (await albums()).filter((a: any) => a.date === '2025-11-30');
+    expect(album).toMatchObject({ title: '30.11.', year: 2025 });
+    expect(album.artist).not.toBe('2025');
+    const track = (await get('/api/tracks?q=Advent')).items.find((t: any) => t.albumDate === '2025-11-30');
+    expect(track.artist).toBe('Unbekannter Interpret');
   });
 });

@@ -311,6 +311,10 @@ html[data-text='xlarge'] .now-playing {
   color: var(--on-accent);
 }
 
+.segmented-kinds {
+  margin-bottom: 12px;
+}
+
 .segmented-sample {
   font-weight: 800;
   line-height: 1;

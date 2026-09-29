@@ -37,12 +37,12 @@ describe('Formatierung', () => {
   });
 
   it('zeigt unter dem Anlass Datum und Sprecher', () => {
-    const folder = {
-      folder: 'x', date: '2026-09-27', trackCount: 3, duration: 0, coverTrackId: null,
-      albumId: null, speaker: null, passage: null, description: null,
+    const album = {
+      id: 1, artist: '', year: 2026, genre: null, date: '2026-09-27', trackCount: 3, duration: 0, hasCover: false,
+      speaker: null, passage: null, description: null,
     };
-    expect(folderSubtitle({ ...folder, name: '2026-09-27 Erntedank' })).toBe('So., 27.09.2026');
-    expect(folderSubtitle({ ...folder, name: '2026-09-27', speaker: 'Pastor Meier' })).toBe('So., 27.09.2026 · Pastor Meier');
+    expect(folderSubtitle({ ...album, title: '2026-09-27 Erntedank' })).toBe('So., 27.09.2026');
+    expect(folderSubtitle({ ...album, title: '2026-09-27', speaker: 'Pastor Meier' })).toBe('So., 27.09.2026 · Pastor Meier');
   });
 
   it('benennt Gottesdienste nach Anlass und Datum statt nach dem Ordner', () => {

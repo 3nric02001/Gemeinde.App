@@ -1,7 +1,6 @@
 import type { DB } from '../db.js';
 import { normalizeKey } from './albums.js';
-import { parseFolderDate } from './dates.js';
-import { albumFolderOf, basename } from './pathMeta.js';
+import { albumFolderOf, dateOfPath } from './pathMeta.js';
 
 /**
  * Regeln füllen eigene Alben automatisch, z. B. "Titel enthält Predigt → Album Predigten".
@@ -78,6 +77,8 @@ export interface RuleTrack {
   album: string | null;
   genre: string | null;
   year: number | null;
+  disc_no?: number | null;
+  track_no?: number | null;
 }
 
 function fieldText(track: RuleTrack, field: RuleField): string {
@@ -120,15 +121,26 @@ export function ruleMatcher(condition: RuleCondition): (track: RuleTrack) => boo
   };
 }
 
+const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+
 /**
- * Reihenfolge der Titel, die eine Regel hinzufügt: nach Datum im Ordnernamen, neueste zuerst
- * (passt zu Gottesdienst-Aufnahmen), Titel ohne Datum danach nach Pfad.
+ * Reihenfolge der Titel, die eine Regel hinzufügt: nach Datum (Ordner- oder Dateiname), neueste zuerst
+ * (passt zu Gottesdienst-Aufnahmen), Titel ohne Datum danach. Innerhalb eines Datums bzw. Ordners
+ * wie im Album: nach CD und Tracknummer, sonst nach Dateiname ("2 …" vor "10 …").
  */
-export function compareRuleTracks(a: RuleTrack, b: RuleTrack): number {
-  const da = parseFolderDate(basename(albumFolderOf(a.path))) ?? '';
-  const db = parseFolderDate(basename(albumFolderOf(b.path))) ?? '';
-  if (da !== db) return da && db ? db.localeCompare(da) : da ? -1 : 1;
-  return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+export function sortRuleTracks<T extends RuleTrack>(tracks: T[]): T[] {
+  const keyed = tracks.map((track) => ({ track, date: dateOfPath(track.path) ?? '', folder: albumFolderOf(track.path) }));
+  keyed.sort((a, b) => {
+    if (a.date !== b.date) return a.date && b.date ? b.date.localeCompare(a.date) : a.date ? -1 : 1;
+    return (
+      collator.compare(a.folder, b.folder) ||
+      (a.track.disc_no ?? 1) - (b.track.disc_no ?? 1) ||
+      Number(a.track.track_no == null) - Number(b.track.track_no == null) ||
+      (a.track.track_no ?? 0) - (b.track.track_no ?? 0) ||
+      collator.compare(a.track.path, b.track.path)
+    );
+  });
+  return keyed.map((entry) => entry.track);
 }
 
 export function listRules(db: DB, albumId?: number): AlbumRule[] {
@@ -171,6 +183,6 @@ export function evaluateRules<T extends RuleTrack>(db: DB, tracks: T[]): RuleRes
     }
     members.set(rule.albumId, list);
   }
-  for (const list of members.values()) list.sort(compareRuleTracks);
+  for (const [albumId, list] of members) members.set(albumId, sortRuleTracks(list));
   return { members, moved };
 }

@@ -67,7 +67,12 @@ export const ACCESS_SECTIONS: Array<{ path: string; label: string; Component: Fu
 
 /** Reiter der Verwaltung; Benutzer, Gruppen und Anmeldung nur für Admins. */
 export function AdminTabs({ path, admin }: { path: string; admin: boolean }) {
-  const tabs = [{ path: '/admin', label: 'Alben' }, { path: '/admin/kategorien', label: 'Kategorien' }, ...(admin ? ACCESS_SECTIONS : [])];
+  const tabs = [
+    { path: '/admin', label: 'Alben' },
+    { path: '/admin/kategorien', label: 'Kategorien' },
+    { path: '/admin/pruefen', label: 'Prüfen' },
+    ...(admin ? ACCESS_SECTIONS : []),
+  ];
   const active = tabs.find((t) => t.path === path)?.path ?? '/admin';
   return (
     <nav class="chips-row admin-tabs" aria-label="Bereiche der Verwaltung">

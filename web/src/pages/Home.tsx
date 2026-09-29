@@ -1,7 +1,7 @@
-import type { Album, DatedFolder, Facets, Page, Track } from '../api';
-import { query, trackCoverUrl } from '../api';
+import type { Album, Facets, Page, Track } from '../api';
+import { coverUrl, query } from '../api';
 import { useAuth } from '../auth';
-import { Shelf } from '../components/AlbumCard';
+import { playAlbum, Shelf } from '../components/AlbumCard';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
@@ -10,7 +10,7 @@ import { decadeLabel, formatDuration, formatLongDate, plural, withoutDate } from
 import { useApi } from '../hooks';
 import { useMe } from '../me';
 import { Empty } from './common';
-import { folderHref, playFolder } from './Dates';
+import type { DatedAlbum } from './Dates';
 
 /** Genres, die für Gottesdienste stehen; die Genre-Reihe auf Start zeigt Musik */
 const SERVICE_GENRE = /gottesdienst|predigt/i;
@@ -31,7 +31,7 @@ function firstName(name: string | undefined, kind: string | undefined): string |
 export function Home() {
   const { user } = useAuth();
   const me = useMe();
-  const latest = useApi<Page<DatedFolder>>('/api/dates?limit=1');
+  const latest = useApi<Page<DatedAlbum>>('/api/dates?limit=1');
   const personal = useApi<{ resume: Array<Track & { position: number }>; recent: Album[] }>('/api/me/home');
   // Gottesdienste und Musik getrennt, damit dieselben Karten nicht zweimal untereinander stehen
   const services = useApi<Page<Album>>('/api/albums?dated=true&sort=date&limit=13');
@@ -66,7 +66,7 @@ export function Home() {
 
       <InstallHint />
 
-      {service && <LatestService folder={service} />}
+      {service && <LatestService album={service} />}
 
       {resume.length > 0 && (
         <section class="shelf">
@@ -82,7 +82,7 @@ export function Home() {
       <Shelf
         title="Weitere Gottesdienste"
         href="/datum"
-        albums={(services.data?.items ?? []).filter((album) => album.id !== service?.albumId).slice(0, 12)}
+        albums={(services.data?.items ?? []).filter((album) => album.id !== service?.id).slice(0, 12)}
       />
       <Shelf title="Neue Musik" href="/alben?sort=recent" albums={recent.data?.items ?? []} />
       {topGenre && (
@@ -131,31 +131,31 @@ export function Home() {
 }
 
 /** Große Karte ganz oben: der neueste Gottesdienst zum direkten Abspielen */
-function LatestService({ folder }: { folder: DatedFolder }) {
-  const occasion = withoutDate(folder.name);
+function LatestService({ album }: { album: DatedAlbum }) {
+  const occasion = withoutDate(album.title);
   return (
     <section class="latest">
-      <a class="latest-link" href={folderHref(folder.folder)}>
+      <a class="latest-link" href={`/album/${album.id}`}>
         <Cover
-          src={folder.coverTrackId ? trackCoverUrl({ id: folder.coverTrackId }) : undefined}
-          title={folder.name}
-          date={folder.date}
+          src={album.hasCover ? coverUrl(album.id) : undefined}
+          title={album.title}
+          date={album.date}
           class="latest-cover"
           eager
         />
         <span class="latest-text">
           <span class="eyebrow">Letzter Gottesdienst</span>
-          <span class="latest-title">{occasion || formatLongDate(folder.date)}</span>
+          <span class="latest-title">{occasion || formatLongDate(album.date)}</span>
           <span class="latest-sub">
-            {[occasion ? formatLongDate(folder.date) : undefined, folder.speaker, folder.passage].filter(Boolean).join(' · ')}
+            {[occasion ? formatLongDate(album.date) : undefined, album.speaker, album.passage].filter(Boolean).join(' · ')}
           </span>
         </span>
       </a>
       <button
         type="button"
         class="button-primary latest-play"
-        onClick={() => void playFolder(folder.folder)}
-        aria-label={`${occasion || formatLongDate(folder.date)} abspielen`}
+        onClick={() => void playAlbum(album.id)}
+        aria-label={`${occasion || formatLongDate(album.date)} abspielen`}
       >
         <Icon name="play" size={20} /> Abspielen
       </button>

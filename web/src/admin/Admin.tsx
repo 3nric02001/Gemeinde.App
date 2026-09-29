@@ -11,6 +11,7 @@ import { AdminTabs, ACCESS_SECTIONS } from './Access';
 import { adminRequest, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
 import { CategoriesAdmin, CategoryEditor } from './Categories';
+import { QualityPanel } from './Quality';
 import { ScanPanel } from './Scan';
 
 /** Verwaltung unter /admin: Alben für Manager und Admins, Benutzer, Gruppen und Anmeldung nur für Admins. */
@@ -38,6 +39,7 @@ export function Admin({ location }: { location: Location }) {
     const id = category.id === 'neu' ? undefined : Number(category.id);
     content = <CategoryEditor key={category.id} id={id} onError={onError} />;
   } else if (location.path === '/admin/kategorien') content = <CategoriesAdmin onError={onError} />;
+  else if (location.path === '/admin/pruefen') content = <QualityPanel />;
   else if (section) content = <section.Component />;
   else content = <AlbumsAdmin params={location.params} onError={onError} />;
 
