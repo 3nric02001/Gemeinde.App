@@ -1,9 +1,11 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DatedFolderDetail, Track } from '../src/api';
+import type { AlbumDetail, Track } from '../src/api';
 import { clearCache } from '../src/api';
 import { TabBar } from '../src/components/Nav';
+import { Album } from '../src/pages/Album';
 import { DateFolder } from '../src/pages/DateFolder';
+import * as router from '../src/router';
 
 afterEach(() => {
   cleanup();
@@ -18,20 +20,32 @@ const track = (id: number, title: string, artist = 'MBG Brake'): Track => ({
 });
 
 describe('Seite eines Gottesdienstes', () => {
+  const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+
   it('heißt wie überall nach dem Anlass und wiederholt ihn nicht bei jedem Titel', async () => {
-    const detail: DatedFolderDetail = {
-      folder: 'Gottesdienste/2026-09-20', name: '2026-09-20', date: '2026-09-20', trackCount: 2, duration: 240,
-      coverTrackId: null, albumId: 9, speaker: 'Pastor Meier', passage: null, description: null,
+    // Bei Gottesdiensten ist, wer predigt, der Interpret des Albums
+    const detail: AlbumDetail = {
+      id: 9, title: '2026-09-20', artist: 'Pastor Meier', year: 2026, genre: null, trackCount: 2, duration: 240,
+      hasCover: false, kind: 'auto', date: '2026-09-20', speaker: 'Pastor Meier', passage: 'Psalm 23', description: null,
       tracks: [track(1, 'Lobpreis'), track(2, 'Predigt', 'Pastor Meier')],
     };
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(detail), { headers: { 'content-type': 'application/json' } }));
-    render(<DateFolder path="Gottesdienste/2026-09-20" />);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      json(String(input).startsWith('/api/albums/9') ? detail : { items: [], total: 0, limit: 13, offset: 0 }),
+    );
+    render(<Album id={9} />);
     expect(await screen.findByRole('heading', { level: 1, name: 'Gottesdienst' })).toBeTruthy();
-    expect(screen.getByText('Sonntag, 20. September 2026 · MBG Brake')).toBeTruthy();
+    expect(screen.getByText('Pastor Meier', { selector: '.hero-sub a' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Datum' }).getAttribute('href')).toBe('/datum');
     // Nur der abweichende Interpret, kein "So., 20.09.2026" in jeder Zeile
-    expect([...document.querySelectorAll('.track-sub')].map((el) => el.textContent)).toEqual(['', 'Pastor Meier']);
+    expect([...document.querySelectorAll('.track-sub')].map((el) => el.textContent)).toEqual(['MBG Brake', '']);
     expect(screen.getByLabelText('Zu den Favoriten')).toBeTruthy();
+  });
+
+  it('führt ältere Links auf einen Datumsordner zum Album', async () => {
+    const navigate = vi.spyOn(router, 'navigate').mockImplementation(() => undefined);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ albumId: 9 }));
+    render(<DateFolder path="Gottesdienste/2026-09-20" />);
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/album/9', { replace: true }));
   });
 });
 

@@ -1,8 +1,10 @@
 import type { DB } from '../db.js';
-import { parseFolderDate } from './dates.js';
+import { findPassage } from './bible.js';
+import { parseFolderDate } from './dateText.js';
 import { PASSAGE_TAGS, SPEAKER_TAGS, UNKNOWN_ARTIST } from './metadata.js';
 import { evaluateRules } from './rules.js';
-import { albumFolderOf, basename, dirname } from './pathMeta.js';
+import { albumFolderOf, basename, dirname, fileStem, folderDate, parsePath, type PathMeta } from './pathMeta.js';
+import { sortKey } from './text.js';
 
 export const VARIOUS_ARTISTS = 'Verschiedene Interpreten';
 export const LOOSE_TRACKS = 'Einzeltitel';
@@ -22,6 +24,11 @@ interface TrackRow {
   disc_no: number | null;
   album_id: number | null;
   cover_id: number | null;
+  album_key: string | null;
+  added_at: number | null;
+  album_sort: string | null;
+  album_artist_sort: string | null;
+  album_tagged: number | null;
 }
 
 interface AlbumDraft {
@@ -29,6 +36,10 @@ interface AlbumDraft {
   title: string;
   folder: string;
   tracks: TrackRow[];
+  /** Datum aus den Dateinamen, wenn ein Ordner nach Datum aufgeteilt wurde */
+  date?: string;
+  /** Titel steht fest (Aufteilung nach Datum), statt aus den Album-Tags zu kommen */
+  fixedTitle?: boolean;
 }
 
 export function normalizeKey(value: string): string {
@@ -65,10 +76,101 @@ function albumArtist(tracks: TrackRow[]): string {
 /**
  * Albumschlüssel: Albumordner (Disc-Unterordner zusammengefasst) plus normalisierter Albumname.
  * So landen Sampler mit vielen Interpreten in einem Album, während ein Sammelordner
- * mit Titeln verschiedener Alben sauber aufgeteilt wird.
+ * mit Titeln verschiedener Alben sauber aufgeteilt wird. Welcher Albumname für einen Titel gilt,
+ * entscheidet groupTracks mit Blick auf den ganzen Ordner; der Schlüssel steht danach in tracks.album_key.
  */
-export function albumKey(path: string, album: string | null): string {
-  return `${albumFolderOf(path)}\u0000${album ? normalizeKey(album) : ''}`;
+export function albumKey(folder: string, album: string | null): string {
+  return `${folder}\u0000${album ? normalizeKey(album) : ''}`;
+}
+
+/** Schlüssel eines Albums, das aus einem nach Datum aufgeteilten Ordner entsteht */
+const dateKey = (folder: string, date: string) => `${folder}\u0000@${date}`;
+
+/** "Live 2020 (Remastered)", "Live 2020 [Deluxe]" -> "live 2020": Zusätze in Klammern zählen nicht. */
+function baseAlbumKey(album: string): string {
+  const base = album.replace(/(?:\s*[([][^)\]]*[)\]])+\s*$/, '');
+  return normalizeKey(base) || normalizeKey(album);
+}
+
+interface Group {
+  key: string;
+  folder: string;
+  title: string;
+  date?: string;
+  fixedTitle?: boolean;
+}
+
+/**
+ * Ordnet jedem Titel sein automatisches Album zu, mit Blick auf den ganzen Albumordner:
+ * - Ordner ohne Datum, in denen die meisten Dateien ein Datum im Namen tragen
+ *   ("Predigten 2026/2026-09-27 Meier - Psalm 23.mp3"), werden je Datum ein eigenes Album.
+ * - Sonst entscheidet der Album-Tag. Titel ohne eigenen Tag (Albumname kommt aus dem Ordner) und
+ *   einzelne Abweichler zählen zum Album, das im Ordner klar überwiegt; Zusätze wie "(Remastered)"
+ *   trennen nicht. Echte Sammelordner mit mehreren Alben bleiben aufgeteilt.
+ */
+export function groupTracks(
+  tracks: Array<Pick<TrackRow, 'id' | 'path' | 'album' | 'title' | 'album_tagged'>>,
+  parsed: (path: string) => PathMeta,
+): Map<number, Group> {
+  const byFolder = new Map<string, typeof tracks>();
+  for (const track of tracks) {
+    const folder = albumFolderOf(track.path);
+    const list = byFolder.get(folder) ?? [];
+    list.push(track);
+    byFolder.set(folder, list);
+  }
+  const result = new Map<number, Group>();
+  for (const [folder, list] of byFolder) {
+    let rest = list;
+    if (folder && !folderDate(folder)) {
+      const dated = list.filter((t) => parsed(t.path).date);
+      const dates = new Set(dated.map((t) => parsed(t.path).date!));
+      if (dates.size >= 2 && dated.length * 2 >= list.length) {
+        for (const date of dates) {
+          const members = dated.filter((t) => parsed(t.path).date === date);
+          // Eine Aufnahme heißt wie ihr Titel ("Psalm 23"), mehrere an einem Tag nach dem Datum ("Gottesdienst").
+          const title = members.length === 1 ? members[0]!.title : date;
+          for (const t of members) result.set(t.id, { key: dateKey(folder, date), folder, title, date, fixedTitle: true });
+        }
+        rest = list.filter((t) => !parsed(t.path).date);
+      }
+    }
+    if (rest.length) groupByAlbumTag(folder, rest, result);
+  }
+  return result;
+}
+
+function groupByAlbumTag(
+  folder: string,
+  tracks: Array<Pick<TrackRow, 'id' | 'path' | 'album' | 'title' | 'album_tagged'>>,
+  result: Map<number, Group>,
+): void {
+  // Ohne eigenen Album-Tag (Name aus dem Ordner). Bei Titeln, die seit dem Update noch nicht neu gelesen
+  // wurden, ist das unbekannt; dann zählt ein Albumname wie der Ordner als Tag.
+  const neutral = new Set(tracks.filter((t) => !t.album || t.album_tagged === 0));
+  const tagged = tracks.filter((t) => !neutral.has(t));
+  const groups = new Map<string, typeof tracks>();
+  for (const track of tagged) {
+    const base = baseAlbumKey(track.album!);
+    groups.set(base, [...(groups.get(base) ?? []), track]);
+  }
+  const ordered = [...groups.values()].sort((a, b) => b.length - a.length);
+  const main = ordered[0];
+  if (main && main.length >= 3 && main.length * 2 > tagged.length) {
+    for (const group of ordered.slice(1)) if (group.length === 1) main.push(group.pop()!);
+  }
+  if (neutral.size) {
+    if (main) main.push(...neutral);
+    else ordered.push([...neutral]);
+  }
+  for (const group of ordered) {
+    if (!group.length) continue;
+    const names = group.filter((t) => !neutral.has(t)).map((t) => t.album);
+    const name = mostCommon(names) ?? mostCommon(group.map((t) => t.album)) ?? null;
+    const key = albumKey(folder, name);
+    const title = name ?? (folder ? basename(folder) : LOOSE_TRACKS);
+    for (const track of group) result.set(track.id, { key, folder, title });
+  }
 }
 
 interface AlbumRow {
@@ -90,7 +192,7 @@ interface Override {
 
 const COMPARED = [
   'title', 'artist', 'year', 'genre', 'folder', 'cover', 'coverId', 'count', 'duration', 'hidden',
-  'date', 'speaker', 'passage', 'description',
+  'date', 'speaker', 'passage', 'description', 'sortTitle', 'sortArtist', 'createdAt',
 ] as const;
 
 export const MANUAL_KEY_PREFIX = 'manual:';
@@ -101,8 +203,42 @@ function compareTracks(a: TrackRow, b: TrackRow): number {
     (a.disc_no ?? 1) - (b.disc_no ?? 1) ||
     Number(a.track_no === null) - Number(b.track_no === null) ||
     (a.track_no ?? 0) - (b.track_no ?? 0) ||
-    (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+    comparePaths(a.path, b.path)
   );
+}
+
+const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+/** Pfade wie im Dateimanager: "2 Lied" vor "10 Lied", "Ärger" bei A */
+export const comparePaths = (a: string, b: string) => collator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Ein verschwundenes Album lebt in einem neuen weiter, wenn die meisten Titel dorthin gewandert sind
+ * (Album-Tag korrigiert, Ordner umbenannt, anders gruppiert). So bleiben ID, Favoriten, Korrekturen
+ * und herausgenommene Titel erhalten. Liefert Paare alter und neuer Schlüssel.
+ */
+export function matchRenamedAlbums(
+  vanished: Array<{ key: string; members: Set<number> }>,
+  fresh: Map<string, Set<number>>,
+): Array<[string, string]> {
+  const pairs: Array<[string, string, number]> = [];
+  for (const old of vanished) {
+    for (const [key, members] of fresh) {
+      let overlap = 0;
+      for (const id of old.members) if (members.has(id)) overlap++;
+      if (overlap > 0 && overlap * 2 >= old.members.size && overlap * 2 >= members.size) pairs.push([old.key, key, overlap]);
+    }
+  }
+  pairs.sort((a, b) => b[2] - a[2]);
+  const usedOld = new Set<string>();
+  const usedNew = new Set<string>();
+  const result: Array<[string, string]> = [];
+  for (const [from, to] of pairs) {
+    if (usedOld.has(from) || usedNew.has(to)) continue;
+    usedOld.add(from);
+    usedNew.add(to);
+    result.push([from, to]);
+  }
+  return result;
 }
 
 function coverFor(tracks: TrackRow[], covers: Map<string, string>, folder?: string): string | undefined {
@@ -125,7 +261,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     const tracks = db
       .prepare(
         `SELECT id, path, title, artist, album_artist, album, year, genre, duration, compilation, track_no, disc_no, album_id,
-                cover_id
+                cover_id, album_key, added_at, album_sort, album_artist_sort, album_tagged
          FROM tracks`,
       )
       .all() as TrackRow[];
@@ -136,6 +272,59 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         r.path,
       ]),
     );
+    const pathMeta = new Map<string, PathMeta>();
+    const parsed = (path: string) => {
+      let meta = pathMeta.get(path);
+      if (!meta) pathMeta.set(path, (meta = parsePath(path)));
+      return meta;
+    };
+
+    // 1. Jedem Titel sein automatisches Album zuordnen und den Schlüssel am Titel merken (für die Verwaltung).
+    const groups = groupTracks(tracks, parsed);
+    const setKey = db.prepare('UPDATE tracks SET album_key = ? WHERE id = ?');
+    const keyMembers = new Map<string, Set<number>>();
+    for (const track of tracks) {
+      const { key } = groups.get(track.id)!;
+      if (track.album_key !== key) setKey.run(key, track.id);
+      track.album_key = key;
+      keyMembers.set(key, (keyMembers.get(key) ?? new Set()).add(track.id));
+    }
+
+    // Bisheriger Inhalt aller Alben (für Wiedererkennung und um unnötiges Schreiben zu sparen)
+    const current = new Map<number, number[]>();
+    for (const row of db.prepare('SELECT album_id, track_id FROM album_tracks ORDER BY album_id, position').all() as Array<{
+      album_id: number;
+      track_id: number;
+    }>) {
+      const list = current.get(row.album_id) ?? [];
+      list.push(row.track_id);
+      current.set(row.album_id, list);
+    }
+
+    // 2. Verschwundene Alben in neuen wiedererkennen und ihnen Schlüssel samt Eingriffen mitgeben.
+    const known = db.prepare("SELECT id, key FROM albums WHERE kind = 'auto'").all() as Array<{ id: number; key: string }>;
+    const knownKeys = new Set(known.map((row) => row.key));
+    const fresh = new Map([...keyMembers].filter(([key]) => !knownKeys.has(key)));
+    if (fresh.size) {
+      const excludedIds = new Map<string, number[]>();
+      for (const row of db.prepare('SELECT path, album_key FROM track_exclusions').all() as Array<{ path: string; album_key: string }>) {
+        const id = byPath.get(row.path)?.id;
+        if (id !== undefined) excludedIds.set(row.album_key, [...(excludedIds.get(row.album_key) ?? []), id]);
+      }
+      const vanished = known
+        .filter((row) => !keyMembers.has(row.key))
+        .map((row) => ({ key: row.key, members: new Set([...(current.get(row.id) ?? []), ...(excludedIds.get(row.key) ?? [])]) }))
+        .filter((row) => row.members.size > 0);
+      const rename = db.prepare('UPDATE albums SET key = ? WHERE key = ?');
+      const renameOverride = db.prepare('UPDATE OR IGNORE album_overrides SET key = ? WHERE key = ?');
+      const renameExclusions = db.prepare('UPDATE OR IGNORE track_exclusions SET album_key = ? WHERE album_key = ?');
+      for (const [from, to] of matchRenamedAlbums(vanished, fresh)) {
+        rename.run(to, from);
+        renameOverride.run(to, from);
+        renameExclusions.run(to, from);
+      }
+    }
+
     const overrides = new Map(
       (db.prepare('SELECT key, title, artist, year, genre, speaker, passage, description, hidden FROM album_overrides').all() as Array<
         Override & { key: string }
@@ -161,33 +350,55 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     const speakers = sermonTag(SPEAKER_TAGS);
     const passages = sermonTag(PASSAGE_TAGS);
 
-    // Automatische Alben: Titel nach Ordner und Albumname gruppieren.
+    // 3. Automatische Alben aus den Gruppen, ohne herausgenommene und per Regel verschobene Titel.
     const drafts = new Map<string, AlbumDraft>();
     for (const track of tracks) {
-      const key = albumKey(track.path, track.album);
-      if (excluded.has(`${track.path}\u0000${key}`) || rules.moved.has(track.id)) continue;
-      let draft = drafts.get(key);
+      const group = groups.get(track.id)!;
+      if (excluded.has(`${track.path}\u0000${group.key}`) || rules.moved.has(track.id)) continue;
+      let draft = drafts.get(group.key);
       if (!draft) {
-        const folder = albumFolderOf(track.path);
-        draft = { key, title: track.album ?? (folder ? basename(folder) : LOOSE_TRACKS), folder, tracks: [] };
-        drafts.set(key, draft);
+        draft = { key: group.key, title: group.title, folder: group.folder, tracks: [], date: group.date, fixedTitle: group.fixedTitle };
+        drafts.set(group.key, draft);
       }
       draft.tracks.push(track);
     }
 
-    const derive = (draft: AlbumDraft, cover: string | undefined) => {
+    const derive = (draft: AlbumDraft, cover: string | undefined, createdAt: number) => {
       const override = overrides.get(draft.key);
-      const tagTitle = mostCommon(draft.tracks.map((t) => t.album));
-      // Datum aus dem Albumordner ("2026-09-27 Erntedank"), sonst aus dem Albumnamen; nur bei automatischen Alben.
-      const date = draft.folder ? (parseFolderDate(basename(draft.folder)) ?? (tagTitle ? parseFolderDate(tagTitle) : undefined)) : undefined;
+      const tagTitle = draft.fixedTitle ? undefined : mostCommon(draft.tracks.map((t) => t.album));
+      const title = override?.title ?? tagTitle ?? draft.title;
+      // Datum aus den Dateinamen, dem Albumordner ("2026-09-27 Erntedank") oder dem Albumnamen; nur bei automatischen Alben.
+      const date = draft.folder
+        ? (draft.date ?? folderDate(draft.folder) ?? (tagTitle ? parseFolderDate(tagTitle) : undefined))
+        : undefined;
+      // Längster Titel zuerst: bei einem Gottesdienst meist die Predigt
+      const byLength = [...draft.tracks].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
+      const speaker =
+        override?.speaker ??
+        mostCommon(draft.tracks.map((t) => speakers.get(t.id))) ??
+        (date ? mostCommon(byLength.map((t) => parsed(t.path).speaker)) : undefined) ??
+        null;
+      const passage =
+        override?.passage ??
+        mostCommon(draft.tracks.map((t) => passages.get(t.id))) ??
+        (date
+          ? [...byLength.map((t) => t.title), ...byLength.map((t) => fileStem(t.path)), title].map(findPassage).find(Boolean)
+          : undefined) ??
+        null;
+      // Bei Gottesdiensten ist, wer predigt, der Interpret; das Jahr kommt aus dem Datum.
+      const artist =
+        override?.artist ?? (date && speaker ? speaker : draft.tracks.length ? albumArtist(draft.tracks) : UNKNOWN_ARTIST);
+      const sortTitle = sortKey(override?.title ?? mostCommon(draft.tracks.map((t) => t.album_sort)) ?? title);
+      const sortArtist = sortKey(override?.artist ?? mostCommon(draft.tracks.map((t) => t.album_artist_sort)) ?? artist);
       return {
         key: draft.key,
-        title: override?.title ?? tagTitle ?? draft.title,
-        artist: override?.artist ?? (draft.tracks.length ? albumArtist(draft.tracks) : UNKNOWN_ARTIST),
-        year: override?.year ?? mostCommon(draft.tracks.map((t) => t.year)) ?? (date ? Number(date.slice(0, 4)) : null),
+        title,
+        artist,
+        year:
+          override?.year ?? (date ? Number(date.slice(0, 4)) : undefined) ?? mostCommon(draft.tracks.map((t) => t.year)) ?? null,
         date: date ?? null,
-        speaker: override?.speaker ?? mostCommon(draft.tracks.map((t) => speakers.get(t.id))) ?? null,
-        passage: override?.passage ?? mostCommon(draft.tracks.map((t) => passages.get(t.id))) ?? null,
+        speaker,
+        passage,
         description: override?.description ?? null,
         genre: override?.genre ?? mostCommon(draft.tracks.map((t) => t.genre)) ?? null,
         folder: draft.folder,
@@ -197,33 +408,37 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         count: draft.tracks.length,
         duration: draft.tracks.reduce((sum, t) => sum + (t.duration ?? 0), 0),
         hidden: override?.hidden ? 1 : 0,
-        now,
+        sortTitle,
+        sortArtist,
+        createdAt,
       };
     };
 
     const upsertAuto = db.prepare(`
       INSERT INTO albums (key, title, artist, year, genre, folder, cover_path, cover_id, track_count, duration, hidden, created_at,
-                          date, speaker, passage, description)
-      VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @coverId, @count, @duration, @hidden, @now,
-              @date, @speaker, @passage, @description)
+                          date, speaker, passage, description, sort_title, sort_artist)
+      VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @coverId, @count, @duration, @hidden, @createdAt,
+              @date, @speaker, @passage, @description, @sortTitle, @sortArtist)
       ON CONFLICT(key) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, year = excluded.year, genre = excluded.genre,
         folder = excluded.folder, cover_path = excluded.cover_path, cover_id = excluded.cover_id,
         track_count = excluded.track_count, duration = excluded.duration, hidden = excluded.hidden,
-        date = excluded.date, speaker = excluded.speaker, passage = excluded.passage, description = excluded.description
+        date = excluded.date, speaker = excluded.speaker, passage = excluded.passage, description = excluded.description,
+        sort_title = excluded.sort_title, sort_artist = excluded.sort_artist, created_at = excluded.created_at
       RETURNING id
     `);
     const updateManual = db.prepare(`
       UPDATE albums SET title = @title, artist = @artist, year = @year, genre = @genre, folder = @folder,
         cover_path = @cover, cover_id = @coverId, track_count = @count, duration = @duration, hidden = @hidden,
-        date = @date, speaker = @speaker, passage = @passage, description = @description
+        date = @date, speaker = @speaker, passage = @passage, description = @description,
+        sort_title = @sortTitle, sort_artist = @sortArtist
       WHERE id = @id
     `);
 
     const existing = db
       .prepare(
         `SELECT id, key, kind, title, artist, year, genre, folder, cover_path AS cover, cover_id AS coverId, track_count AS count, duration, hidden,
-                date, speaker, passage, description
+                date, speaker, passage, description, sort_title AS sortTitle, sort_artist AS sortArtist, created_at AS createdAt
          FROM albums`,
       )
       .all() as Array<AlbumRow & Record<string, unknown>>;
@@ -237,8 +452,13 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     const autoOf = new Map<number, number>();
     for (const draft of drafts.values()) {
       draft.tracks.sort(compareTracks);
-      const values = derive(draft, coverFor(draft.tracks, covers, draft.folder));
       const known = existingByKey.get(draft.key);
+      // "Neu hinzugefügt": wann der erste Titel in die Nextcloud kam, nicht wann die App ihn zuerst sah
+      const added = draft.tracks.reduce<number | undefined>(
+        (min, t) => (t.added_at !== null && (min === undefined || t.added_at < min) ? t.added_at : min),
+        undefined,
+      );
+      const values = derive(draft, coverFor(draft.tracks, covers, draft.folder), added ?? (known?.createdAt as number | undefined) ?? now);
       const id = known && unchanged(known, values) ? known.id : (upsertAuto.get(values) as { id: number }).id;
       contents.set(id, draft.tracks);
       for (const track of draft.tracks) autoOf.set(track.id, id);
@@ -259,21 +479,12 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       const listed = new Set(members.map((t) => t.id));
       for (const track of rules.members.get(album.id) ?? []) if (!listed.has(track.id)) members.push(track);
       const draft: AlbumDraft = { key: album.key, title: LOOSE_TRACKS, folder: '', tracks: members };
-      const values = derive(draft, coverFor(members, covers));
+      const values = derive(draft, coverFor(members, covers), album.createdAt as number);
       if (!unchanged(album, values)) updateManual.run({ ...values, id: album.id });
       contents.set(album.id, members);
     }
 
     // album_tracks nur für Alben neu schreiben, deren Inhalt sich geändert hat.
-    const current = new Map<number, number[]>();
-    for (const row of db.prepare('SELECT album_id, track_id FROM album_tracks ORDER BY album_id, position').all() as Array<{
-      album_id: number;
-      track_id: number;
-    }>) {
-      const list = current.get(row.album_id) ?? [];
-      list.push(row.track_id);
-      current.set(row.album_id, list);
-    }
     const clear = db.prepare('DELETE FROM album_tracks WHERE album_id = ?');
     const insert = db.prepare('INSERT INTO album_tracks (album_id, track_id, position) VALUES (?, ?, ?)');
     for (const [albumId, members] of contents) {

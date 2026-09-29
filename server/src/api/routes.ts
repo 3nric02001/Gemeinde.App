@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
 import { categoryFilter, categoryValues, getCategory, listCategories } from '../library/categories.js';
-import { datedFolderTrackIds, listDatedFolders, withSermonInfo } from '../library/dates.js';
+import { datedAlbumForFolder, listDatedAlbums } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
 import type { CoverThumbnails } from '../library/thumbnails.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
@@ -15,7 +15,6 @@ import {
   getFacets,
   getTrackCover,
   getTrackFile,
-  getTracksByIds,
   listArtists,
   searchAlbums,
   searchTracks,
@@ -263,7 +262,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     },
   );
 
-  // Unterste Ordner mit Datum im Namen, z. B. Gottesdienst-Aufnahmen
+  // Alben mit Datum (Gottesdienste, Aufnahmen), neueste zuerst
   app.get(
     '/api/dates',
     {
@@ -277,8 +276,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     },
     async (request) => {
       const { limit, offset } = request.query as { limit: number; offset: number };
-      const folders = listDatedFolders(db);
-      return { items: withSermonInfo(db, folders.slice(offset, offset + limit)), total: folders.length, limit, offset };
+      return listDatedAlbums(db, limit, offset);
     },
   );
 
@@ -296,9 +294,9 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     },
     async (request, reply) => {
       const { path } = request.query as { path: string };
-      const folder = listDatedFolders(db).find((f) => f.folder === path);
-      if (!folder) return reply.code(404).send({ error: 'Ordner nicht gefunden' });
-      return { ...withSermonInfo(db, [folder])[0], tracks: getTracksByIds(db, datedFolderTrackIds(db, folder.folder)) };
+      const album = datedAlbumForFolder(db, path);
+      if (!album) return reply.code(404).send({ error: 'Ordner nicht gefunden' });
+      return album;
     },
   );
 
