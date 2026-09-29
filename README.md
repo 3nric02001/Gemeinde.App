@@ -25,6 +25,13 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer
 - **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; findet auch eigene
   Tag-Felder wie den Sprecher, Predigten neueste zuerst; ohne Suchbegriff Stöbern nach Genre
+- **Verdecktes Scoring**: Titel, die oft gehört werden, stehen in der Suche und im Genre-Vorschlag auf
+  der Startseite weiter oben. Gezählt wird eine Wiedergabe nach 30 Sekunden tatsächlich gehörter Zeit
+  (kurze Titel nach der Hälfte), je Person und Titel höchstens einmal in 6 Stunden, über alle Hörer
+  zusammen. Ältere Wiedergaben verlieren mit einer Halbwertszeit von 90 Tagen an Gewicht. Innerhalb
+  ähnlicher Beliebtheit bleibt die gewohnte Reihenfolge (neueste Gottesdienste zuerst). Zahlen werden
+  nirgends angezeigt; „Letzter Gottesdienst“, „Neu hinzugefügt“ und bewusst gewählte Sortierungen
+  (Titel, Jahr, Neu hinzugefügt) bleiben unberührt
 - **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach
 - **Datum**: Jeder unterste Ordner, dessen Name ein Datum enthält, erscheint als eigenes „Album“ mit
   Wochentag und Datum, neueste zuerst und nach Monaten gruppiert. Erkannt werden z. B.
@@ -272,7 +279,7 @@ sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 
 | Methode und Pfad | Zweck |
 | --- | --- |
-| `GET /api/albums?q=&artist=&genre=&year=&decade=&sort=artist\|title\|year\|recent&limit=&offset=` | Alben suchen und filtern |
+| `GET /api/albums?q=&artist=&genre=&year=&decade=&sort=artist\|title\|year\|recent\|date\|popular&limit=&offset=` | Alben suchen und filtern |
 | `GET /api/albums/:id` | Album mit Titelliste |
 | `GET /api/albums/:id/cover` | Albumcover (Bild im Ordner, sonst eingebettet) |
 | `GET /api/tracks/:id/cover` | Bild des Titels, sonst Albumcover |
@@ -329,6 +336,7 @@ Persönliches des angemeldeten Hörers:
 | `GET /api/me/progress` | Gespeicherte Stellen angefangener langer Titel |
 | `PUT /api/me/progress/:id` | Hörstand melden: `{ position, duration? }` |
 | `GET /api/me/home` | „Weiterhören“ und „Zuletzt gehört“ für die Startseite |
+| `POST /api/me/plays/:id` | Wiedergabe fürs verdeckte Scoring zählen (meldet der Player nach 30 s Hören) |
 
 Eine `condition` ist entweder eine Bedingung `{ field: title|artist|album|genre|path, op: contains|not_contains|starts|equals, value }`
 oder eine Gruppe `{ match: "all" | "any", conditions: [...] }` (UND bzw. ODER, beliebig verschachtelt, bis zu 4 Ebenen

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { streamUrl, trackCoverUrl, type Track } from './api';
-import { isLong, resumePosition, saveProgress } from './me';
+import { countPlay, isLong, resumePosition, saveProgress } from './me';
 import { Queue, type QueueState, type RepeatMode } from './queue';
 
 /** Jeder Eintrag ist ein eigenes Objekt, damit derselbe Titel mehrfach in der Warteschlange stehen kann. */
@@ -30,6 +30,8 @@ export interface PlayerState {
 export const RATES = [1, 1.25, 1.5, 1.75, 2];
 /** Wie oft der Hörstand langer Titel beim Server landet */
 const PROGRESS_INTERVAL_MS = 15_000;
+/** Als gehört zählt ein Titel nach so vielen Sekunden, kurze Titel schon nach der Hälfte. */
+const PLAY_COUNT_SECONDS = 30;
 
 const STORAGE_KEY = 'gemeinde.player';
 let nextKey = 1;
@@ -54,7 +56,18 @@ export class Player {
   private queueDirty = true;
   private rate = 1;
   /** Titel, der gerade im Audio-Element steckt, und wann sein Hörstand zuletzt gespeichert wurde */
-  private loaded: { track: Track; savedAt: number; recorded: boolean; start?: number } | undefined;
+  private loaded:
+    | {
+        track: Track;
+        savedAt: number;
+        recorded: boolean;
+        start?: number;
+        /** Tatsächlich gehörte Sekunden (Springen zählt nicht) und ob die Wiedergabe schon gemeldet ist */
+        heard: number;
+        lastTime?: number;
+        counted: boolean;
+      }
+    | undefined;
 
   constructor(audio: HTMLAudioElement = new Audio()) {
     this.audio = audio;
@@ -75,7 +88,7 @@ export class Player {
     if (current) {
       // Nach dem Neuladen an derselben Stelle weitermachen, aber nicht von selbst losspielen.
       audio.src = streamUrl(current.track.id);
-      this.loaded = { track: current.track, savedAt: Date.now(), recorded: true };
+      this.loaded = { track: current.track, savedAt: Date.now(), recorded: true, heard: 0, counted: false };
       this.applyRate();
       if (saved.position) {
         audio.addEventListener('loadedmetadata', () => (audio.currentTime = saved.position!), { once: true });
@@ -98,6 +111,11 @@ export class Player {
     audio.addEventListener('timeupdate', () => {
       const loaded = this.loaded;
       if (loaded && !audio.paused && this.long() && Date.now() - loaded.savedAt > PROGRESS_INTERVAL_MS) this.saveProgress();
+      this.trackHeard();
+    });
+    // Nach einem Sprung von der neuen Stelle aus weiterzählen
+    audio.addEventListener('seeking', () => {
+      if (this.loaded) this.loaded.lastTime = undefined;
     });
     audio.addEventListener('error', () => {
       if (!audio.src) return;
@@ -230,6 +248,25 @@ export class Player {
     this.audio.playbackRate = rate;
   }
 
+  /** Gehörte Zeit sammeln und die Wiedergabe einmal melden, sobald genug gehört ist. */
+  private trackHeard(): void {
+    const loaded = this.loaded;
+    const time = this.audio.currentTime;
+    if (!loaded || loaded.counted || !Number.isFinite(time)) return;
+    if (!this.audio.paused && !this.audio.seeking && loaded.lastTime !== undefined) {
+      const step = time - loaded.lastTime;
+      // timeupdate kommt etwa viermal pro Sekunde; größere Schritte sind Sprünge
+      if (step > 0 && step < 2 * this.audio.playbackRate + 1) loaded.heard += step;
+    }
+    loaded.lastTime = time;
+    const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : (loaded.track.duration ?? 0);
+    const needed = duration > 0 ? Math.min(PLAY_COUNT_SECONDS, duration / 2) : PLAY_COUNT_SECONDS;
+    if (loaded.heard >= needed) {
+      loaded.counted = true;
+      countPlay(loaded.track);
+    }
+  }
+
   private saveProgress(): void {
     const loaded = this.loaded;
     let position = this.audio.currentTime;
@@ -283,7 +320,7 @@ export class Player {
     this.audio.src = streamUrl(current.track.id);
     // Angefangene Predigt: an der gemerkten Stelle weiter
     const start = resumePosition(current.track);
-    this.loaded = { track: current.track, savedAt: Date.now(), recorded: false, start };
+    this.loaded = { track: current.track, savedAt: Date.now(), recorded: false, start, heard: 0, counted: false };
     this.applyRate();
     if (start !== undefined) {
       this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = start), { once: true });
