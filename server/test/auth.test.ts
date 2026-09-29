@@ -323,8 +323,16 @@ describe('OIDC', () => {
     const denied = await oidcLogin();
     expect(denied).toEqual({ location: '/?anmeldung=keine-gruppe', cookie: undefined });
     expect((await as(admin, { method: 'GET', url: '/api/admin/users' })).json().items).toHaveLength(1);
-    const seen = (await as(admin, { method: 'GET', url: '/api/admin/groups' })).json().items;
-    expect(seen.map((g: { name: string }) => g.name).sort()).toEqual(['jugend', 'musik']);
+    const groupsPage = (await as(admin, { method: 'GET', url: '/api/admin/groups' })).json();
+    expect(groupsPage.items.map((g: { name: string }) => g.name).sort()).toEqual(['jugend', 'musik']);
+    expect(groupsPage.lastDenied).toMatchObject({
+      name: 'Anna',
+      email: 'anna@example.org',
+      reason: 'no-group',
+      groups: ['musik', 'jugend'],
+      groupsClaim: 'groups',
+    });
+    expect(groupsPage.lastDenied.claimNames).toEqual(expect.arrayContaining(['groups', 'sub']));
 
     await setGroup(admin, 'musik', { enabled: true });
     const ok = await oidcLogin('/album/1');
