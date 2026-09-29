@@ -122,6 +122,7 @@ export interface TagField {
 
 /** Lesbare Namen der gängigen Tag-Felder; eigene Felder (TXXX) erscheinen mit ihrem Namen */
 export const TAG_LABELS: Record<string, string> = {
+  filename: 'Dateiname',
   artist: 'Interpret',
   albumartist: 'Album-Interpret',
   album: 'Album',

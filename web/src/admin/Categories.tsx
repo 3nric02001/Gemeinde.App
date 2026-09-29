@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { categoryUrl, type CategoryValue } from '../api';
+import { categoryUrl, query, type CategoryValue } from '../api';
 import { Icon } from '../components/Icon';
 import { plural } from '../format';
 import { CATEGORIES_CHANGED, useDebounced } from '../hooks';
@@ -128,6 +128,8 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
   const [fields, setFields] = useState<TagField[] | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  /** Tag-Feld, dessen Inhalt gerade angezeigt wird */
+  const [inspected, setInspected] = useState<string | undefined>();
 
   const fail = (e: Error) => {
     onError(e);
@@ -246,9 +248,38 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
                     </span>
                   </span>
                 </label>
+                {field.valueCount > 0 && (
+                  <button
+                    type="button"
+                    class={`link-button${inspected === field.tag ? ' is-on' : ''}`}
+                    aria-expanded={inspected === field.tag}
+                    onClick={() => setInspected(inspected === field.tag ? undefined : field.tag)}
+                  >
+                    {inspected === field.tag ? 'Inhalt ausblenden' : `Inhalt anzeigen (${plural(field.valueCount, 'Wert', 'Werte')})`}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
+        )}
+        {inspected && (
+          <TagContent
+            key={inspected}
+            tag={inspected}
+            groupLabel={draft.groups.at(-1)?.label.trim() || undefined}
+            onPick={
+              draft.groups.length
+                ? (value) => {
+                    const last = draft.groups.length - 1;
+                    const values = splitValues(draft.groups[last]!.values);
+                    if (!values.some((v) => v.toLocaleLowerCase('de') === value.toLocaleLowerCase('de'))) {
+                      setGroup(last, { values: [...values, value].join(', ') });
+                    }
+                  }
+                : undefined
+            }
+            onClose={() => setInspected(undefined)}
+          />
         )}
       </section>
 
@@ -309,6 +340,94 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
         )}
       </div>
     </form>
+  );
+}
+
+/**
+ * Aktueller Inhalt eines gescannten Tag-Felds, häufigste Werte zuerst. Mit einer Zusammenfassung
+ * lässt sich ein Wert per Klick in deren Tag-Werte übernehmen.
+ */
+function TagContent({
+  tag,
+  groupLabel,
+  onPick,
+  onClose,
+}: {
+  tag: string;
+  groupLabel: string | undefined;
+  onPick?: (value: string) => void;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState('');
+  const q = useDebounced(text.trim(), 200);
+  const [result, setResult] = useState<{ total: number; items: Array<{ value: string; trackCount: number }> } | undefined>();
+  const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    let current = true;
+    adminRequest<{ total: number; items: Array<{ value: string; trackCount: number }> }>(
+      'GET',
+      `/api/admin/tag-fields/${encodeURIComponent(tag)}/values${query({ q, limit: 300 })}`,
+    )
+      .then((data) => current && (setResult(data), setError(undefined)))
+      .catch((e: Error) => current && setError(e.message));
+    return () => {
+      current = false;
+    };
+  }, [tag, q]);
+
+  return (
+    <div class="tag-content" role="region" aria-label={`Inhalt von ${tagLabel(tag)}`}>
+      <div class="tag-content-head">
+        <h3>
+          Inhalt von „{tagLabel(tag)}“
+          {result && <span class="tag-name"> {plural(result.total, 'Wert', 'Werte')}</span>}
+        </h3>
+        <button type="button" class="icon-button" aria-label="Inhalt schließen" onClick={onClose}>
+          <Icon name="close" size={18} />
+        </button>
+      </div>
+      <form class="search-box search-box-small" role="search" onSubmit={(e) => e.preventDefault()}>
+        <Icon name="search" size={18} />
+        <input
+          type="search"
+          value={text}
+          placeholder="Werte filtern"
+          aria-label="Werte filtern"
+          autocomplete="off"
+          onInput={(e) => setText((e.target as HTMLInputElement).value)}
+        />
+      </form>
+      {onPick && (
+        <p class="admin-hint">Klick auf einen Wert übernimmt ihn in {groupLabel ? `„${groupLabel}“` : 'die letzte Zusammenfassung'}.</p>
+      )}
+      {error ? (
+        <p class="admin-error">{error}</p>
+      ) : !result ? (
+        <Loading />
+      ) : result.items.length === 0 ? (
+        <p class="admin-hint">Keine Werte gefunden.</p>
+      ) : (
+        <ul class="category-preview">
+          {result.items.map((item) =>
+            onPick ? (
+              <li key={item.value}>
+                <button type="button" class="value-chip" title={`Zu ${groupLabel ? `„${groupLabel}“` : 'Zusammenfassung'} hinzufügen`} onClick={() => onPick(item.value)}>
+                  <span>{item.value}</span>
+                  <small>{item.trackCount}</small>
+                </button>
+              </li>
+            ) : (
+              <li key={item.value}>
+                <span>{item.value}</span>
+                <small>{item.trackCount}</small>
+              </li>
+            ),
+          )}
+          {result.total > result.items.length && <li class="is-more">+ {result.total - result.items.length} weitere, über das Filterfeld finden</li>}
+        </ul>
+      )}
+    </div>
   );
 }
 

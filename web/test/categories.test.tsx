@@ -70,6 +70,44 @@ describe('Kategorien in der Verwaltung', () => {
     });
   });
 
+  it('zeigt den Inhalt eines Tag-Felds und übernimmt Werte in eine Zusammenfassung', async () => {
+    await signInAsManager();
+    const urls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      urls.push(url);
+      if (url === '/api/admin/tag-fields') return json(tagFields);
+      if (url.startsWith('/api/admin/tag-fields/genre/values')) {
+        const all = [{ value: 'Lied', trackCount: 2 }, { value: 'Musik', trackCount: 1 }, { value: 'Predigt', trackCount: 1 }];
+        const q = new URL(url, 'http://x').searchParams.get('q');
+        const items = q ? all.filter((v) => v.value.toLowerCase().includes(q)) : all;
+        return json({ total: items.length, items });
+      }
+      if (url === '/api/admin/categories/preview') return json({ total: 0, items: [] });
+      return json({ error: 'unerwartet' }, 500);
+    });
+    render(<Admin location={{ path: '/admin/kategorie/neu', params: new URLSearchParams() }} />);
+
+    await waitFor(() => expect(screen.getByText('Inhalt anzeigen (3 Werte)')).toBeTruthy());
+    fireEvent.click(screen.getByText('Inhalt anzeigen (3 Werte)'));
+    await waitFor(() => expect(screen.getByText('Predigt')).toBeTruthy());
+    expect(screen.getByText('Lied').nextSibling!.textContent).toBe('2');
+
+    fireEvent.input(screen.getByLabelText('Werte filtern'), { target: { value: 'pre' } });
+    await waitFor(() => expect(screen.queryByText('Lied')).toBeNull());
+    expect(urls).toContain('/api/admin/tag-fields/genre/values?q=pre&limit=300');
+    fireEvent.input(screen.getByLabelText('Werte filtern'), { target: { value: '' } });
+    await waitFor(() => expect(screen.getByText('Lied')).toBeTruthy());
+
+    // Mit einer Zusammenfassung wird ein Klick auf einen Wert übernommen.
+    fireEvent.click(screen.getByText('+ Zusammenfassung'));
+    fireEvent.input(screen.getByLabelText('Anzeigen als'), { target: { value: 'Musik' } });
+    fireEvent.click(screen.getByText('Lied'));
+    fireEvent.click(screen.getByText('Musik', { selector: '.value-chip span' }));
+    fireEvent.click(screen.getByText('Lied'));
+    expect((screen.getByLabelText('Tag-Werte, mit Komma getrennt') as HTMLInputElement).value).toBe('Lied, Musik');
+  });
+
   it('ändert die Reihenfolge', async () => {
     await signInAsManager();
     const categories = [

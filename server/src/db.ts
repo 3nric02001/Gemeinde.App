@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { fileStem } from './library/pathMeta.js';
 import { foldValue } from './library/text.js';
 
 export type DB = Database.Database;
@@ -307,6 +308,11 @@ export const migrations: string[] = [
     created_at INTEGER NOT NULL
   ) WITHOUT ROWID;
   `,
+  // Dateiname (ohne Endung) als Tag-Feld für Kategorien; neue Scans schreiben ihn selbst.
+  `
+  INSERT INTO track_tags (track_id, tag, value, vkey)
+    SELECT id, 'filename', file_stem(path), fold(file_stem(path)) FROM tracks WHERE file_stem(path) <> '';
+  `,
 ];
 
 export function openDatabase(path: string): DB {
@@ -318,6 +324,7 @@ export function openDatabase(path: string): DB {
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
   db.function('fold', { deterministic: true }, (value) => (typeof value === 'string' ? foldValue(value) : value));
+  db.function('file_stem', { deterministic: true }, (value) => (typeof value === 'string' ? fileStem(value) : value));
   migrate(db);
   return db;
 }

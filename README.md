@@ -75,7 +75,9 @@ Jede Kategorie mit „Im Menü anzeigen“ steht in der Seitenleiste und unter S
 - **Tag-Felder**: Eine Kategorie nimmt ihre Werte aus einem oder mehreren Feldern der Musikdateien, z. B.
   „Interpreten“ aus Interpret und Album-Interpret. Zur Auswahl stehen alle Felder, die in der Bibliothek vorkommen,
   auch eigene ID3-Felder (TXXX, etwa „Kategorie“ oder „Sprecher“) und eigene Vorbis-Kommentare in FLAC/Ogg.
-  Mehrere Werte in einem Feld („Chor; Gemeinde“) werden einzeln geführt.
+  Mehrere Werte in einem Feld („Chor; Gemeinde“) werden einzeln geführt. Zusätzlich gibt es das Feld „Dateiname“
+  (ohne Endung). „Inhalt anzeigen“ listet alle aktuell gescannten Werte eines Felds mit Anzahl Titel und Filter;
+  ein Klick auf einen Wert übernimmt ihn in die letzte Zusammenfassung.
 - **Werte zusammenfassen**: Mehrere Tag-Werte erscheinen unter einem Namen, z. B. „Musik“ aus Musik, Lied.
   Groß-/Kleinschreibung und Akzente spielen dabei keine Rolle. Wahlweise zeigt die Kategorie nur die
   zusammengefassten Werte.
@@ -233,6 +235,7 @@ Verwaltung (Manager und Admins):
 | `PUT /api/admin/categories/order` | Reihenfolge: `{ ids }` |
 | `POST /api/admin/categories/preview` | `{ fields, groups?, groupedOnly? }`: welche Werte entstehen würden |
 | `GET /api/admin/tag-fields` | Alle Tag-Felder der Bibliothek mit Anzahl Titel und Beispielwerten |
+| `GET /api/admin/tag-fields/:tag/values?q=&limit=` | Aktueller Inhalt eines Tag-Felds, häufigste Werte zuerst |
 
 Eine `condition` ist entweder eine Bedingung `{ field: title|artist|album|genre|path, op: contains|not_contains|starts|equals, value }`
 oder eine Gruppe `{ match: "all" | "any", conditions: [...] }` (UND bzw. ODER, beliebig verschachtelt, bis zu 4 Ebenen

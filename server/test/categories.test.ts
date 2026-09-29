@@ -78,6 +78,28 @@ describe('Kategorien', () => {
     expect(byTag.sprecher).toMatchObject({ trackCount: 1, samples: ['Pastor Meier'] });
     expect(byTag.composer).toMatchObject({ trackCount: 1, samples: ['Bach'] });
     expect(byTag.title).toBeUndefined();
+    expect(byTag.filename).toMatchObject({ trackCount: 4, valueCount: 4 });
+  });
+
+  it('zeigt den aktuellen Inhalt eines Tag-Felds', async () => {
+    expect(await call('GET', '/api/admin/tag-fields/genre/values')).toEqual({
+      total: 3,
+      items: [
+        { value: 'Lied', trackCount: 2 },
+        { value: 'Musik', trackCount: 1 },
+        { value: 'Predigt', trackCount: 1 },
+      ],
+    });
+    expect(await call('GET', '/api/admin/tag-fields/Kategorie/values?q=pred')).toEqual({ total: 1, items: [{ value: 'Predigt', trackCount: 1 }] });
+    expect(await call('GET', '/api/admin/tag-fields/gibtsnicht/values')).toEqual({ total: 0, items: [] });
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/admin/tag-fields/genre/values' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('bietet den Dateinamen als Feld an', async () => {
+    await call('POST', '/api/admin/categories', { name: 'Dateien', fields: ['filename'] }, 201);
+    expect((await values('dateien')).map((v) => v.value)).toEqual(['01 Macht hoch', '01 Oceans', '01 Psalm 23', '02 Zion']);
+    expect(await trackTitles('category=dateien&value=01%20Psalm%2023')).toEqual(['Psalm 23']);
   });
 
   it('fasst Werte zusammen: Musik <- Musik, Lied', async () => {
@@ -189,6 +211,7 @@ describe('Migration auf Kategorien', () => {
         { tag: 'album', value: 'Alb', vkey: 'alb' },
         { tag: 'albumartist', value: 'Gemeinde', vkey: 'gemeinde' },
         { tag: 'artist', value: 'Chör', vkey: 'chor' },
+        { tag: 'filename', value: 'a', vkey: 'a' },
         { tag: 'genre', value: 'Lied', vkey: 'lied' },
         { tag: 'year', value: '2020', vkey: '2020' },
       ]);

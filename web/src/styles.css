@@ -1443,6 +1443,70 @@ h2 {
   opacity: 0.7;
 }
 
+.tag-fields li {
+  padding-bottom: 6px;
+}
+
+.link-button {
+  margin-left: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tag-content {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.tag-content-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tag-content h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.tag-content .search-box {
+  background: var(--surface);
+}
+
+.tag-content .category-preview li {
+  background: var(--surface);
+}
+
+.tag-content .category-preview .is-more {
+  background: none;
+}
+
+.value-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.category-preview li:has(.value-chip):hover {
+  background: var(--surface-2);
+}
+
 .category-preview .is-more {
   background: none;
   color: var(--muted);

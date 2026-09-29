@@ -47,6 +47,11 @@ export function basename(path: string): string {
   return parts[parts.length - 1] ?? '';
 }
 
+/** Dateiname ohne Endung: "Predigten/02 Psalm 23.mp3" -> "02 Psalm 23" */
+export function fileStem(path: string): string {
+  return basename(path).replace(/\.[^.]+$/, '');
+}
+
 export function dirname(path: string): string {
   const index = path.lastIndexOf('/');
   return index >= 0 ? path.slice(0, index) : '';
