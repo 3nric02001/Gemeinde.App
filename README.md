@@ -162,7 +162,10 @@ kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
   Nur neue Dateien und solche mit geändertem ETag werden gelesen, und davon nur der Anfang mit den
   Tags (256 KB, bei großen eingebetteten Covern etwas mehr). Nach dem Update auf diese Version
   liest der erste Scan alle Dateien einmal neu, um die Cover zu übernehmen. Gelöschte Dateien verschwinden aus der Bibliothek; Ordner, die gerade nicht lesbar
-  sind, bleiben unangetastet. Stand, Fortschritt und letzten Fehler zeigt die Verwaltung unter
+  sind, bleiben unangetastet. Ist ein ganzer Musikordner plötzlich leer oder fehlen auf einmal mehr als
+  20 Titel und mehr als ein Fünftel der Bibliothek (etwa weil ein Speicher nicht eingehängt ist), entfernt
+  der Scan nichts und wartet auf eine Bestätigung in der Verwaltung; sonst gingen Favoriten und
+  Weiterhören-Stellen aller Hörer verloren. Stand, Fortschritt und letzten Fehler zeigt die Verwaltung unter
   **Alben** („Abgleich mit der Nextcloud“), dort startet „Jetzt scannen“ einen Scan sofort.
   Antwortet die Nextcloud auf eine Anfrage 60 Sekunden lang nicht, wird sie abgebrochen, damit ein
   einzelner hängender Download den Scan nicht aufhält.

@@ -268,11 +268,24 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   }));
 
   // Nur Manager und Admins (siehe requiredRole)
-  app.post('/api/scan', async (_request, reply) => {
-    const alreadyRunning = scanner.isRunning();
-    void scanner.scan();
-    return reply.code(202).send({ started: !alreadyRunning, status: scanner.getStatus() });
-  });
+  app.post(
+    '/api/scan',
+    {
+      schema: {
+        body: {
+          type: ['object', 'null'],
+          // Auch ungewöhnlich viele fehlende Titel entfernen (nach Rückfrage in der Verwaltung)
+          properties: { removeMissing: { type: 'boolean' } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const alreadyRunning = scanner.isRunning();
+      void scanner.scan({ removeMissing: (request.body as { removeMissing?: boolean } | null)?.removeMissing === true });
+      return reply.code(202).send({ started: !alreadyRunning, status: scanner.getStatus() });
+    },
+  );
 
   await registerAdminRoutes(app, { db });
   await registerMeRoutes(app, { db });

@@ -24,6 +24,7 @@ const base: ScanStatus = {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -76,6 +77,22 @@ describe('Scan in der Verwaltung', () => {
       timeout: 5000,
     });
   }, 10000);
+
+  it('fragt nach, bevor zurückgehaltene Titel entfernt werden', async () => {
+    const held = { ...base, state: 'failed', heldBack: 250, lastError: 'Musikordner ist leer: /Gemeinde/Predigten.' };
+    const responses = [json(held), json({ started: true, status: { ...held, state: 'running' } })];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => responses.shift()!);
+    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    vi.stubGlobal('confirm', confirm);
+    render(<ScanPanel />);
+    await waitFor(() => expect(screen.getByText('Der letzte Scan wartet auf eine Bestätigung.')).toBeTruthy());
+    fireEvent.click(screen.getByText('250 Titel entfernen'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('250 Titel entfernen'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toEqual({ removeMissing: true });
+  });
 
   it('zeigt, wenn der Server den Start ablehnt', async () => {
     const responses = [json(base), json({ error: 'Anfrage von fremder Seite abgelehnt' }, 403)];

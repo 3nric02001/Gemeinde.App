@@ -12,6 +12,13 @@ export const HEAD_BYTES = 256 * 1024;
 /** Größere Tag-Blöcke (meist wegen eines eingebetteten Covers) werden bis zu dieser Größe nachgeladen. */
 export const MAX_TAG_BYTES = 8 * 1024 * 1024;
 const WRITE_BATCH = 50;
+/**
+ * Fehlen auf einmal mehr Titel als das (mindestens REMOVAL_MIN, sonst dieser Anteil der Bibliothek),
+ * oder ist ein ganzer Musikordner leer, entfernt der Scan nichts, bis es in der Verwaltung bestätigt wird.
+ * So löscht ein kurz nicht eingehängter Speicher nicht Favoriten und Weiterhören aller Hörer.
+ */
+export const REMOVAL_MIN = 20;
+export const REMOVAL_SHARE = 0.2;
 
 export interface ScanStatus {
   state: 'idle' | 'running' | 'failed';
@@ -27,6 +34,8 @@ export interface ScanStatus {
   updated: number;
   removed: number;
   failed: number;
+  /** Titel, die in der Nextcloud fehlen, aber zur Sicherheit nicht entfernt wurden */
+  heldBack: number;
   /** Warum der Scan abgebrochen ist, oder bei einzelnen unlesbaren Dateien die erste Ursache */
   lastError: string | null;
 }
@@ -60,6 +69,7 @@ export class LibraryScanner {
     updated: 0,
     removed: 0,
     failed: 0,
+    heldBack: 0,
     lastError: null,
   };
   private current: Promise<ScanStatus> | null = null;
@@ -79,17 +89,20 @@ export class LibraryScanner {
     return this.current !== null;
   }
 
-  /** Startet einen Scan; läuft schon einer, wird dessen Promise zurückgegeben. */
-  scan(): Promise<ScanStatus> {
+  /**
+   * Startet einen Scan; läuft schon einer, wird dessen Promise zurückgegeben.
+   * `removeMissing` entfernt fehlende Titel auch dann, wenn es ungewöhnlich viele sind.
+   */
+  scan(options: { removeMissing?: boolean } = {}): Promise<ScanStatus> {
     if (!this.current) {
-      this.current = this.run().finally(() => {
+      this.current = this.run(options.removeMissing ?? false).finally(() => {
         this.current = null;
       });
     }
     return this.current;
   }
 
-  private async run(): Promise<ScanStatus> {
+  private async run(removeMissing: boolean): Promise<ScanStatus> {
     this.status = {
       state: 'running',
       startedAt: new Date().toISOString(),
@@ -101,12 +114,14 @@ export class LibraryScanner {
       updated: 0,
       removed: 0,
       failed: 0,
+      heldBack: 0,
       lastError: null,
     };
     try {
-      await this.sync();
-      this.status.state = 'idle';
-      setMeta(this.db, 'lastScanAt', new Date().toISOString());
+      await this.sync(removeMissing);
+      // Zurückgehaltene Titel brauchen eine Entscheidung; bis dahin gilt der Scan nicht als erfolgreich.
+      this.status.state = this.status.heldBack > 0 ? 'failed' : 'idle';
+      if (this.status.heldBack === 0) setMeta(this.db, 'lastScanAt', new Date().toISOString());
     } catch (error) {
       this.status.state = 'failed';
       this.status.lastError = error instanceof Error ? error.message : String(error);
@@ -168,7 +183,7 @@ export class LibraryScanner {
     return { files, covers, unreadable };
   }
 
-  private async sync(): Promise<void> {
+  private async sync(removeMissing: boolean): Promise<void> {
     const { files, covers, unreadable } = await this.walk();
     this.status.filesSeen = files.length;
 
@@ -259,14 +274,31 @@ export class LibraryScanner {
 
     // Nur löschen, was sicher weg ist: Titel in unlesbaren Ordnern bleiben erhalten.
     const isUnderUnreadable = (path: string) => unreadable.some((dir) => path.startsWith(`${dir}/`));
-    const gone = [...known.keys()].filter((path) => !remotePaths.has(path) && !isUnderUnreadable(path));
+    let gone = [...known.keys()].filter((path) => !remotePaths.has(path) && !isUnderUnreadable(path));
+    const emptyRoots = this.client.roots.filter((root) => {
+      const inRoot = (path: string) => root === '' || path.startsWith(`${root}/`);
+      return !files.some((file) => inRoot(file.path)) && [...known.keys()].some(inRoot);
+    });
+    const limit = Math.max(REMOVAL_MIN, Math.floor(known.size * REMOVAL_SHARE));
+    let keepCovers = isUnderUnreadable;
+    if (!removeMissing && gone.length > 0 && (gone.length > limit || emptyRoots.length > 0)) {
+      this.status.heldBack = gone.length;
+      this.status.lastError = emptyRoots.length
+        ? `Musikordner ist leer: ${emptyRoots.map((root) => this.client.absolute(root)).join(', ')}. ` +
+          `${gone.length} Titel wurden nicht entfernt, bis das in der Verwaltung bestätigt wird.`
+        : `${gone.length} von ${known.size} Titeln fehlen in der Nextcloud. ` +
+          'Sie wurden zur Sicherheit nicht entfernt, bis das in der Verwaltung bestätigt wird.';
+      this.log.warn({ missing: gone.length, known: known.size, emptyRoots }, 'Scan entfernt fehlende Titel nicht ohne Bestätigung');
+      gone = [];
+      keepCovers = () => true;
+    }
     const remove = this.db.prepare('DELETE FROM tracks WHERE path = ?');
     this.db.transaction(() => {
       for (const path of gone) remove.run(path);
     })();
     this.status.removed = gone.length;
 
-    this.saveCovers(covers, isUnderUnreadable);
+    this.saveCovers(covers, keepCovers);
     rebuildAlbums(this.db);
     // Bilder, auf die kein Titel mehr zeigt, wegräumen.
     this.db.prepare('DELETE FROM covers WHERE id NOT IN (SELECT cover_id FROM tracks WHERE cover_id IS NOT NULL)').run();
