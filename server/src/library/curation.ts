@@ -2,13 +2,31 @@ import { randomUUID } from 'node:crypto';
 import type { DB } from '../db.js';
 import { albumKey, MANUAL_KEY_PREFIX, rebuildAlbums } from './albums.js';
 import { getAlbum } from './queries.js';
-import { evaluateRules, listRules, ruleMatcher, type RuleCondition, type RuleTrack } from './rules.js';
+import { evaluateRules, listRules, parseCondition, ruleMatcher, type RuleCondition, type RuleTrack } from './rules.js';
 
 /**
  * Admin-Werkzeuge für Alben: manuelle Alben zusammenstellen und automatische korrigieren.
  * Gespeichert wird nur, was der Admin festlegt (album_overrides, track_exclusions,
  * manual_album_tracks); die Alben selbst baut rebuildAlbums danach und nach jedem Scan neu.
  */
+
+/** Regel aus der API: entweder `condition` (auch verschachtelt) oder eine einzelne Bedingung field/op/value */
+export interface RuleInput {
+  condition?: unknown;
+  field?: string;
+  op?: string;
+  value?: string;
+  move?: boolean;
+}
+
+export function toCondition(input: RuleInput | unknown): RuleCondition {
+  const body = (input ?? {}) as RuleInput;
+  try {
+    return parseCondition(body.condition ?? { field: body.field, op: body.op, value: body.value });
+  } catch (error) {
+    throw new CurationError(400, (error as Error).message);
+  }
+}
 
 export class CurationError extends Error {
   constructor(
@@ -151,7 +169,7 @@ export function albumDetail(db: DB, id: number) {
 
 export function createManualAlbum(
   db: DB,
-  fields: AlbumFields & { title: string; trackIds?: number[]; move?: boolean; rules?: Array<RuleCondition & { move?: boolean }> },
+  fields: AlbumFields & { title: string; trackIds?: number[]; move?: boolean; rules?: RuleInput[] },
 ): number {
   const title = cleanText(fields.title);
   if (!title) throw new CurationError(400, 'Das Album braucht einen Titel');
@@ -164,13 +182,7 @@ export function createManualAlbum(
       .get(key, title, Date.now()) as { id: number };
     writeOverride(db, key, { ...fields, title });
     if (fields.trackIds?.length) addTracks(db, id, fields.trackIds, { move: fields.move, rebuild: false });
-    const insertRule = db.prepare(
-      'INSERT INTO album_rules (album_id, field, op, value, move, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    );
-    for (const rule of fields.rules ?? []) {
-      if (!cleanText(rule.value)) throw new CurationError(400, 'Die Regel braucht einen Suchbegriff');
-      insertRule.run(id, rule.field, rule.op, rule.value.trim(), rule.move ? 1 : 0, Date.now());
-    }
+    for (const rule of fields.rules ?? []) insertRule(db, id, rule);
     return id;
   })();
   rebuildAlbums(db);
@@ -221,18 +233,27 @@ export function previewRule(db: DB, condition: RuleCondition, limit = 20) {
   };
 }
 
-export function addRule(db: DB, albumId: number, rule: RuleCondition & { move?: boolean }): void {
-  const album = findAlbum(db, albumId);
-  requireManual(album);
-  if (!cleanText(rule.value)) throw new CurationError(400, 'Die Regel braucht einen Suchbegriff');
-  db.prepare('INSERT INTO album_rules (album_id, field, op, value, move, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+function insertRule(db: DB, albumId: number, rule: RuleInput): void {
+  db.prepare('INSERT INTO album_rules (album_id, condition, move, created_at) VALUES (?, ?, ?, ?)').run(
     albumId,
-    rule.field,
-    rule.op,
-    rule.value.trim(),
+    JSON.stringify(toCondition(rule)),
     rule.move ? 1 : 0,
     Date.now(),
   );
+}
+
+export function addRule(db: DB, albumId: number, rule: RuleInput): void {
+  requireManual(findAlbum(db, albumId));
+  insertRule(db, albumId, rule);
+  rebuildAlbums(db);
+}
+
+export function updateRule(db: DB, albumId: number, ruleId: number, rule: RuleInput): void {
+  const condition = toCondition(rule);
+  const { changes } = db
+    .prepare('UPDATE album_rules SET condition = ?, move = ? WHERE id = ? AND album_id = ?')
+    .run(JSON.stringify(condition), rule.move ? 1 : 0, ruleId, albumId);
+  if (!changes) throw new CurationError(404, 'Regel nicht gefunden');
   rebuildAlbums(db);
 }
 

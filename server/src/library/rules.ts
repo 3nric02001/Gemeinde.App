@@ -9,22 +9,64 @@ import { albumFolderOf, basename } from './pathMeta.js';
  * neue passende Titel landen also ohne Zutun im Album.
  */
 export const RULE_FIELDS = ['title', 'artist', 'album', 'genre', 'path'] as const;
-export const RULE_OPS = ['contains', 'starts', 'equals'] as const;
+export const RULE_OPS = ['contains', 'not_contains', 'starts', 'equals'] as const;
+export const MAX_DEPTH = 4;
+export const MAX_CONDITIONS = 30;
 
 export type RuleField = (typeof RULE_FIELDS)[number];
 export type RuleOp = (typeof RULE_OPS)[number];
 
-export interface RuleCondition {
+/** Eine einzelne Bedingung, z. B. Titel enthält "Predigt" */
+export interface RuleLeaf {
   field: RuleField;
   op: RuleOp;
   value: string;
 }
 
-export interface AlbumRule extends RuleCondition {
+/** Gruppe: "all" = alle Bedingungen müssen passen (UND), "any" = mindestens eine (ODER). Beliebig verschachtelbar. */
+export interface RuleGroup {
+  match: 'all' | 'any';
+  conditions: RuleCondition[];
+}
+
+export type RuleCondition = RuleLeaf | RuleGroup;
+
+export interface AlbumRule {
   id: number;
   albumId: number;
+  condition: RuleCondition;
   /** Passende Titel aus ihrem automatischen Album herausnehmen */
   move: boolean;
+}
+
+export const isGroup = (condition: RuleCondition): condition is RuleGroup => 'match' in condition;
+
+/**
+ * Prüft eine Bedingung aus der API und bringt sie in Normalform (Werte getrimmt,
+ * Gruppen mit nur einem Eintrag aufgelöst). Wirft mit verständlicher Meldung.
+ */
+export function parseCondition(input: unknown): RuleCondition {
+  let count = 0;
+  const walk = (node: unknown, depth: number): RuleCondition => {
+    if (!node || typeof node !== 'object') throw new Error('Ungültige Bedingung');
+    const obj = node as Record<string, unknown>;
+    if ('match' in obj || 'conditions' in obj) {
+      if (depth >= MAX_DEPTH) throw new Error(`Höchstens ${MAX_DEPTH} Ebenen verschachteln`);
+      if (obj.match !== 'all' && obj.match !== 'any') throw new Error('Gruppe braucht "all" (UND) oder "any" (ODER)');
+      if (!Array.isArray(obj.conditions) || obj.conditions.length === 0) throw new Error('Eine Gruppe braucht mindestens eine Bedingung');
+      const conditions = obj.conditions.map((child) => walk(child, depth + 1));
+      return conditions.length === 1 ? conditions[0]! : { match: obj.match, conditions };
+    }
+    if (++count > MAX_CONDITIONS) throw new Error(`Höchstens ${MAX_CONDITIONS} Bedingungen pro Regel`);
+    if (!RULE_FIELDS.includes(obj.field as RuleField)) throw new Error('Unbekanntes Feld in der Bedingung');
+    const op = obj.op ?? 'contains';
+    if (!RULE_OPS.includes(op as RuleOp)) throw new Error('Unbekannte Bedingung');
+    const value = typeof obj.value === 'string' ? obj.value.trim() : '';
+    if (!value) throw new Error('Jede Bedingung braucht einen Suchbegriff');
+    if (value.length > 200) throw new Error('Suchbegriff ist zu lang');
+    return { field: obj.field as RuleField, op: op as RuleOp, value };
+  };
+  return walk(input, 0);
 }
 
 export interface RuleTrack {
@@ -55,13 +97,26 @@ function fieldText(track: RuleTrack, field: RuleField): string {
 
 /** Groß-/Kleinschreibung, Umlaute, Akzente und Satzzeichen spielen keine Rolle. */
 export function ruleMatcher(condition: RuleCondition): (track: RuleTrack) => boolean {
+  if (isGroup(condition)) {
+    const children = condition.conditions.map(ruleMatcher);
+    return condition.match === 'all'
+      ? (track) => children.every((matches) => matches(track))
+      : (track) => children.some((matches) => matches(track));
+  }
   const needle = normalizeKey(condition.value);
   if (!needle) return () => false;
   return (track) => {
     const text = normalizeKey(fieldText(track, condition.field));
-    if (condition.op === 'equals') return text === needle;
-    if (condition.op === 'starts') return text.startsWith(needle);
-    return text.includes(needle);
+    switch (condition.op) {
+      case 'equals':
+        return text === needle;
+      case 'starts':
+        return text.startsWith(needle);
+      case 'not_contains':
+        return !text.includes(needle);
+      default:
+        return text.includes(needle);
+    }
   };
 }
 
@@ -79,11 +134,11 @@ export function compareRuleTracks(a: RuleTrack, b: RuleTrack): number {
 export function listRules(db: DB, albumId?: number): AlbumRule[] {
   const rows = db
     .prepare(
-      `SELECT id, album_id AS albumId, field, op, value, move FROM album_rules
+      `SELECT id, album_id AS albumId, condition, move FROM album_rules
        ${albumId === undefined ? '' : 'WHERE album_id = ?'} ORDER BY id`,
     )
-    .all(...(albumId === undefined ? [] : [albumId])) as Array<Omit<AlbumRule, 'move'> & { move: number }>;
-  return rows.map((row) => ({ ...row, move: Boolean(row.move) }));
+    .all(...(albumId === undefined ? [] : [albumId])) as Array<{ id: number; albumId: number; condition: string; move: number }>;
+  return rows.map((row) => ({ ...row, condition: JSON.parse(row.condition) as RuleCondition, move: Boolean(row.move) }));
 }
 
 export interface RuleResult<T extends RuleTrack> {
@@ -104,7 +159,7 @@ export function evaluateRules<T extends RuleTrack>(db: DB, tracks: T[]): RuleRes
     ),
   );
   for (const rule of rules) {
-    const matches = ruleMatcher(rule);
+    const matches = ruleMatcher(rule.condition);
     const list = members.get(rule.albumId) ?? [];
     const seen = new Set(list.map((t) => t.id));
     for (const track of tracks) {

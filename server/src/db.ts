@@ -185,6 +185,21 @@ export const migrations: string[] = [
     PRIMARY KEY (album_id, path)
   ) WITHOUT ROWID;
   `,
+  // Regeln als verschachtelte Bedingung (UND/ODER-Gruppen) statt einer einzelnen Bedingung.
+  `
+  CREATE TABLE album_rules_new (
+    id         INTEGER PRIMARY KEY,
+    album_id   INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    condition  TEXT NOT NULL,
+    move       INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  INSERT INTO album_rules_new (id, album_id, condition, move, created_at)
+    SELECT id, album_id, json_object('field', field, 'op', op, 'value', value), move, created_at FROM album_rules;
+  DROP TABLE album_rules;
+  ALTER TABLE album_rules_new RENAME TO album_rules;
+  CREATE INDEX album_rules_album ON album_rules(album_id);
+  `,
 ];
 
 export function openDatabase(path: string): DB {

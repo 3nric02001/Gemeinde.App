@@ -270,7 +270,7 @@ describe('Datenbank-Migration', () => {
 
 describe('Regeln', () => {
   it('füllt ein Album mit allen passenden Titeln, auch künftigen', async () => {
-    const preview = await call('GET', '/api/admin/rules/preview?field=title&value=predigt');
+    const preview = await call('POST', '/api/admin/rules/preview', { field: 'title', value: 'predigt' });
     expect(preview.total).toBe(2);
 
     const album = await call<AlbumJson & { rules: Array<{ id: number }> }>(
@@ -332,7 +332,67 @@ describe('Regeln', () => {
     const { id } = await call<AlbumJson>('POST', '/api/admin/albums', { title: 'X' }, 201);
     await call('POST', `/api/admin/albums/${id}/rules`, { field: 'farbe', value: 'rot' }, 400);
     await call('POST', `/api/admin/albums/${id}/rules`, { field: 'title', value: '   ' }, 400);
+    await call('POST', `/api/admin/albums/${id}/rules`, { condition: { match: 'all', conditions: [] } }, 400);
+    await call('POST', `/api/admin/albums/${id}/rules`, { condition: { match: 'vielleicht', conditions: [{ field: 'title', value: 'a' }] } }, 400);
+    let deep: object = { field: 'title', value: 'a' };
+    for (let i = 0; i < 5; i++) deep = { match: 'any', conditions: [deep, { field: 'title', value: 'b' }] };
+    const res = await ctx.app.inject({ method: 'POST', url: `/api/admin/albums/${id}/rules`, headers: auth, payload: { condition: deep } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Ebenen');
     await call('POST', `/api/admin/albums/${await albumId('Zion')}/rules`, { field: 'title', value: 'a' }, 409);
     await call('DELETE', `/api/admin/albums/${id}/rules/999`, undefined, 404);
+  });
+});
+
+describe('Verschachtelte Regeln', () => {
+  it('verknüpft Bedingungen mit UND, ODER und "enthält nicht"', async () => {
+    // (Titel enthält Predigt UND Interpret ist Pastor Meier) ODER (Ordner enthält 2024-03-10 UND Titel enthält nicht Predigt)
+    const condition = {
+      match: 'any',
+      conditions: [
+        { match: 'all', conditions: [{ field: 'title', op: 'contains', value: 'predigt' }, { field: 'artist', op: 'equals', value: 'Pastor Meier' }] },
+        { match: 'all', conditions: [{ field: 'path', op: 'contains', value: '2024-03-10' }, { field: 'title', op: 'not_contains', value: 'Predigt' }] },
+      ],
+    };
+    const preview = await call('POST', '/api/admin/rules/preview', { condition });
+    expect(preview.total).toBe(3);
+    const album = await call<AlbumJson & { rules: Array<{ id: number; condition: unknown }> }>(
+      'POST',
+      '/api/admin/albums',
+      { title: 'Mix', rules: [{ condition }] },
+      201,
+    );
+    expect(titles(album).sort()).toEqual(['Lied', 'Predigt Psalm 23', 'Predigt Römer 8']);
+    expect(album.rules[0]!.condition).toEqual(condition);
+
+    // Regel ändern: nur noch der erste Zweig
+    const updated = await call<AlbumJson>('PUT', `/api/admin/albums/${album.id}/rules/${album.rules[0]!.id}`, {
+      condition: { match: 'all', conditions: [condition.conditions[0]] },
+    });
+    // Gruppe mit einem Eintrag wird zur einfachen Bedingung aufgelöst
+    expect((updated as unknown as { rules: Array<{ condition: unknown }> }).rules[0]!.condition).toEqual(condition.conditions[0]);
+    expect(titles(updated).sort()).toEqual(['Predigt Psalm 23', 'Predigt Römer 8']);
+  });
+
+  it('übernimmt einfache Regeln aus Version 4', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gemeinde-'));
+    try {
+      const path = join(dir, 'library.db');
+      const old = new Database(path);
+      for (const sql of migrations.slice(0, 4)) old.exec(sql);
+      old.pragma('user_version = 4');
+      old.exec(`
+        INSERT INTO albums (id, key, kind, title, artist, folder, created_at) VALUES (1, 'manual:x', 'manual', 'P', '', '', 0);
+        INSERT INTO album_rules (album_id, field, op, value, move, created_at) VALUES (1, 'title', 'contains', 'Predigt', 1, 0);
+      `);
+      old.close();
+      const db = openDatabase(path);
+      expect(db.prepare('SELECT album_id, condition, move FROM album_rules').all()).toEqual([
+        { album_id: 1, condition: '{"field":"title","op":"contains","value":"Predigt"}', move: 1 },
+      ]);
+      db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
