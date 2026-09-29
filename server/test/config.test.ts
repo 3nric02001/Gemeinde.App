@@ -42,3 +42,15 @@ describe('Mehrere Musikordner', () => {
     expect(() => loadConfig({ ...base, NEXTCLOUD_MUSIC_PATH: ' , ;' })).toThrow('NEXTCLOUD_MUSIC_PATH fehlt');
   });
 });
+
+describe('TRUST_PROXY', () => {
+  const base = { NEXTCLOUD_URL: 'https://cloud', NEXTCLOUD_USER: 'u', NEXTCLOUD_PASSWORD: 'p', NEXTCLOUD_MUSIC_PATH: '/Musik' };
+  it('glaubt standardmäßig nur privaten Netzen', () => {
+    expect(loadConfig(base).trustProxy).toEqual(['loopback', 'linklocal', 'uniquelocal']);
+  });
+  it('versteht true, false und Adresslisten', () => {
+    expect(loadConfig({ ...base, TRUST_PROXY: 'true' }).trustProxy).toBe(true);
+    expect(loadConfig({ ...base, TRUST_PROXY: 'false' }).trustProxy).toBe(false);
+    expect(loadConfig({ ...base, TRUST_PROXY: '172.18.0.0/16, 10.0.0.5' }).trustProxy).toEqual(['172.18.0.0/16', '10.0.0.5']);
+  });
+});
