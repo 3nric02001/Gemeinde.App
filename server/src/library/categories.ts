@@ -320,3 +320,23 @@ export function listTagFields(db: DB) {
     samples: (samples.all(field.tag) as Array<{ value: string }>).map((s) => s.value),
   }));
 }
+
+/** Aktueller Inhalt eines Tag-Felds: alle Werte mit Anzahl Titel, häufigste zuerst */
+export function tagFieldValues(db: DB, tag: string, q: string | undefined, limit: number) {
+  const params: Record<string, unknown> = { tag: tag.toLowerCase(), limit };
+  let filter = '';
+  if (q && foldValue(q)) {
+    filter = "AND instr(vkey, @needle) > 0";
+    params.needle = foldValue(q);
+  }
+  const { total } = db
+    .prepare(`SELECT count(DISTINCT vkey) AS total FROM track_tags WHERE tag = @tag ${filter}`)
+    .get(params) as { total: number };
+  const items = db
+    .prepare(
+      `SELECT min(value) AS value, count(DISTINCT track_id) AS trackCount FROM track_tags WHERE tag = @tag ${filter}
+       GROUP BY vkey ORDER BY trackCount DESC, vkey LIMIT @limit`,
+    )
+    .all(params) as Array<{ value: string; trackCount: number }>;
+  return { total, items };
+}

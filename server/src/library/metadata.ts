@@ -1,5 +1,5 @@
 import { parseBuffer } from 'music-metadata';
-import { parsePath } from './pathMeta.js';
+import { fileStem, parsePath } from './pathMeta.js';
 
 export interface TrackMeta {
   title: string;
@@ -194,7 +194,7 @@ export async function extractMetadata(path: string, head: Buffer, mimeType?: str
     tags: collectTags(
       common as unknown as Record<string, unknown>,
       native as Record<string, Array<{ id: string; value: unknown }>>,
-      { artist, albumartist: albumArtist, album, year },
+      { artist, albumartist: albumArtist, album, year, filename: fileStem(path) },
     ),
     duration: duration && Number.isFinite(duration) ? Math.round(duration * 10) / 10 : undefined,
     compilation: common?.compilation === true,

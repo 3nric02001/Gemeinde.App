@@ -35,6 +35,7 @@ describe('extractMetadata', () => {
       ['artist', 'Chor'],
       ['artist', 'Band'],
       ['album', 'a'],
+      ['filename', 'b'],
       ['genre', 'Lied'],
       ['composer', 'Bach'],
       ['kategorie', 'Musik'],
@@ -43,6 +44,7 @@ describe('extractMetadata', () => {
     expect(vorbis.tags).toEqual([
       ['artist', 'A'],
       ['album', 'a'],
+      ['filename', 'b'],
       ['sprecher', 'Meier'],
     ]);
   });

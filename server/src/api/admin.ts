@@ -25,6 +25,7 @@ import {
   deleteCategory,
   listCategories,
   listTagFields,
+  tagFieldValues,
   MAX_FIELDS,
   MAX_GROUP_VALUES,
   MAX_GROUPS,
@@ -311,6 +312,29 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
     );
 
     admin.get('/api/admin/tag-fields', async () => ({ items: listTagFields(db) }));
+
+    // Aktueller Inhalt eines Tag-Felds, damit man beim Zuordnen sieht, was in den Dateien steht
+    admin.get(
+      '/api/admin/tag-fields/:tag/values',
+      {
+        schema: {
+          params: { type: 'object', required: ['tag'], properties: { tag: { type: 'string', minLength: 1, maxLength: 60 } } },
+          querystring: {
+            type: 'object',
+            properties: {
+              q: { type: 'string', maxLength: 200 },
+              limit: { type: 'integer', minimum: 1, maximum: 1000, default: 300 },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request) => {
+        const { tag } = request.params as { tag: string };
+        const { q, limit } = request.query as { q?: string; limit: number };
+        return tagFieldValues(db, tag, q, limit);
+      },
+    );
 
     admin.get(
       '/api/admin/track-albums',
