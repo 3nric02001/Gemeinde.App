@@ -474,6 +474,25 @@ describe('OIDC', () => {
     expect((await as(admin, { method: 'GET', url: '/api/admin/oidc' })).json()).toMatchObject({ enabled: false, publicUrlMissing: true });
   });
 
+  it('verträgt Issuer mit und ohne Schrägstrich am Ende (Authentik)', async () => {
+    await start();
+    const admin = await adminCookie();
+    idp.issuerPath = '/application/o/gemeinde/';
+    await setGroup(admin, 'musik', { enabled: true });
+    const test = async (issuer: string) => {
+      await configureOidc(admin, { issuer });
+      return as(admin, { method: 'POST', url: '/api/admin/oidc/test' });
+    };
+    // Genau wie bei Authentik angezeigt
+    expect((await test(`${idp.url}/application/o/gemeinde/`)).json()).toEqual({ issuer: idp.issuer });
+    // Ohne Schrägstrich eingegeben: klappt trotzdem, auch die Anmeldung
+    expect((await test(`${idp.url}/application/o/gemeinde`)).json()).toEqual({ issuer: idp.issuer });
+    expect((await oidcLogin()).location).toBe('/alben');
+    // Anbieter ohne Schrägstrich, Eingabe mit
+    idp.issuerPath = '/realms/gemeinde';
+    expect((await test(`${idp.url}/realms/gemeinde/`)).json()).toEqual({ issuer: idp.issuer });
+  });
+
   it('prüft die Einstellungen', async () => {
     await start();
     const admin = await adminCookie();
@@ -482,7 +501,7 @@ describe('OIDC', () => {
     expect((await put({ issuer: 'http://idp.example.org' })).statusCode).toBe(400);
     expect((await put({ issuer: 'kein link' })).statusCode).toBe(400);
     const saved = await put({ issuer: `${idp.url}/`, clientId: ' app ', clientSecret: 's', scopes: 'profile groups' });
-    expect(saved.json()).toMatchObject({ issuer: idp.url, clientId: 'app', scopes: 'openid profile groups', hasSecret: true });
+    expect(saved.json()).toMatchObject({ issuer: `${idp.url}/`, clientId: 'app', scopes: 'openid profile groups', hasSecret: true });
     // Ohne clientSecret bleibt das gespeicherte erhalten, leer löscht es
     expect((await put({ label: 'Anmelden' })).json().hasSecret).toBe(true);
     expect((await put({ clientSecret: '' })).json().hasSecret).toBe(false);

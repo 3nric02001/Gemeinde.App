@@ -47,7 +47,16 @@ export function validateIssuer(issuer: string): string {
     throw new AuthError(400, 'Die Issuer-URL ist keine gültige Adresse');
   }
   if (url.protocol !== 'https:' && !isLocalHttp(url)) throw new AuthError(400, 'Die Issuer-URL muss mit https:// beginnen');
-  return url.href.replace(/\/+$/, '');
+  // Wie eingegeben speichern: Manche Identity Provider (z. B. Authentik) führen den Issuer mit
+  // Schrägstrich am Ende, andere ohne; beim Abruf wird notfalls die andere Schreibweise versucht.
+  return url.href;
+}
+
+/** Dieselbe Adresse mit bzw. ohne Schrägstrich am Ende. */
+function toggleTrailingSlash(url: URL): URL {
+  const other = new URL(url.href);
+  other.pathname = other.pathname.endsWith('/') ? other.pathname.replace(/\/+$/, '') || '/' : `${other.pathname}/`;
+  return other;
 }
 
 /** Liest einen Claim, auch verschachtelt ("realm_access.roles"). */
@@ -95,14 +104,24 @@ export class OidcService {
     const key = JSON.stringify([settings.issuer, settings.clientId, settings.clientSecret]);
     if (this.discovered?.key !== key) {
       const issuer = new URL(settings.issuer);
-      const config = client
-        .discovery(
-          issuer,
+      const discover = (url: URL) =>
+        client.discovery(
+          url,
           settings.clientId,
           undefined,
           settings.clientSecret ? client.ClientSecretPost(settings.clientSecret) : client.None(),
-          isLocalHttp(issuer) ? { execute: [client.allowInsecureRequests] } : undefined,
-        )
+          isLocalHttp(url) ? { execute: [client.allowInsecureRequests] } : undefined,
+        );
+      const config = discover(issuer)
+        // Der Issuer in den Metadaten muss Zeichen für Zeichen passen; ein fehlender oder
+        // überzähliger Schrägstrich am Ende ist der häufigste Grund, dass er es nicht tut.
+        .catch((error: unknown) => {
+          const alternative = toggleTrailingSlash(issuer);
+          if (alternative.href === issuer.href) throw error;
+          return discover(alternative).catch(() => {
+            throw error;
+          });
+        })
         .catch((error: unknown) => {
           // Beim nächsten Versuch neu abfragen, statt den Fehler zu behalten.
           if (this.discovered?.config === config) this.discovered = undefined;
