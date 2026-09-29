@@ -1,0 +1,13 @@
+services:
+  gemeinde-app:
+    build: .
+    image: gemeinde-app:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - gemeinde-data:/data
+
+volumes:
+  gemeinde-data:
