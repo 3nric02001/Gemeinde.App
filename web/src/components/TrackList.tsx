@@ -3,6 +3,7 @@ import { trackCoverUrl, type Track } from '../api';
 import { albumLabel, formatTime } from '../format';
 import { isFavorite, savedProgress, toggleFavorite, useMe } from '../me';
 import { player, usePlayerSelect } from '../player';
+import { download, getOffline, removeDownloads, useOffline } from '../offline';
 import { navigate } from '../router';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
@@ -28,6 +29,9 @@ export function trackMenu(track: Track) {
       ? { label: 'Aus den Favoriten entfernen', onSelect: () => void toggleFavorite('track', track) }
       : { label: 'Zu den Favoriten', onSelect: () => void toggleFavorite('track', track) },
   ];
+  const offline = getOffline();
+  if (offline.ids.has(track.id)) items.push({ label: 'Offline-Kopie löschen', onSelect: () => void removeDownloads([track.id]) });
+  else if (offline.enabled && !offline.progress.has(track.id)) items.push({ label: 'Herunterladen', onSelect: () => download([track]) });
   if (track.albumId) items.push({ label: 'Zum Album', onSelect: () => navigate(`/album/${track.albumId}`) });
   items.push({ label: 'Zum Interpreten', onSelect: () => navigate(`/interpret/${encodeURIComponent(track.artist)}`) });
   return items;
@@ -37,6 +41,7 @@ export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordin
   const currentId = usePlayerSelect((s) => s.current?.id);
   const playing = usePlayerSelect((s) => s.playing);
   useMe(); // Herzen und Fortschritt aktuell halten
+  const offline = useOffline();
   const multiDisc = variant === 'album' && !ordinal && new Set(tracks.map((t) => t.discNo ?? 1)).size > 1;
 
   const play = (index: number) => {
@@ -83,6 +88,7 @@ export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordin
               <span class="track-main">
                 <span class="track-title">{track.title}</span>
                 <span class="track-sub">
+                  {offline.ids.has(track.id) && <Icon name="downloaded" size={14} class="track-offline" />}
                   {who}
                   {variant === 'list' && album ? `${who ? ' · ' : ''}${album}` : ''}
                 </span>

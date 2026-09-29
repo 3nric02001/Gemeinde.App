@@ -2628,3 +2628,43 @@ html[data-text='xlarge'] .now-playing {
 .scan-panel .admin-error {
   overflow-wrap: anywhere;
 }
+
+/* ---------- Offline hören ---------- */
+
+.download-button.is-on {
+  color: var(--text);
+}
+
+/* Fortschritt als Ring um den Pfeil; --p von 0 bis 1 */
+.download-button.is-loading::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: conic-gradient(currentColor calc(var(--p, 0) * 1turn), var(--line) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+}
+
+.download-button:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+.track-offline {
+  vertical-align: -2px;
+  margin-right: 4px;
+  color: var(--text);
+}
+
+.offline-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}

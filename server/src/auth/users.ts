@@ -364,7 +364,11 @@ export function setUserDisabled(db: DB, id: number, disabled: boolean): void {
   if (user.kind === 'local') throw new AuthError(400, 'Der lokale Admin kann nicht gesperrt werden');
   db.transaction(() => {
     db.prepare('UPDATE users SET disabled = ? WHERE id = ?').run(disabled ? 1 : 0, id);
-    if (disabled) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
+    if (disabled) {
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
+      // Offline gespeicherte Titel dieses Benutzers werden damit unbrauchbar.
+      db.prepare('UPDATE users SET offline_key = NULL WHERE id = ?').run(id);
+    }
   })();
 }
 

@@ -16,6 +16,18 @@ export function formatDuration(seconds: number): string {
   return m ? `${h} Std. ${m} Min.` : `${h} Std.`;
 }
 
+/** "12,3 MB" */
+export function formatBytes(bytes: number): string {
+  const units = ['Byte', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  return `${value.toLocaleString('de-DE', { maximumFractionDigits: unit < 2 ? 0 : 1 })} ${units[unit]}`;
+}
+
 export function plural(count: number, one: string, many: string): string {
   return `${count.toLocaleString('de-DE')} ${count === 1 ? one : many}`;
 }

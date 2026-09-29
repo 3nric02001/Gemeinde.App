@@ -10,6 +10,7 @@ import { Artist } from './pages/Artist';
 import { Artists } from './pages/Artists';
 import { Category, CategoryEntry } from './pages/Category';
 import { DateFolder } from './pages/DateFolder';
+import { Downloads } from './pages/Downloads';
 import { Dates } from './pages/Dates';
 import { Empty, Loading } from './pages/common';
 import { Favorites } from './pages/Favorites';
@@ -23,8 +24,13 @@ import { Tracks } from './pages/Tracks';
 import { player } from './player';
 import { match, navigate, onLinkClick, useLocation, type Location } from './router';
 
-function Page({ location }: { location: Location }) {
+/** Ohne Server gibt es nur, was auf dem Gerät liegt. */
+const OFFLINE_PAGES = new Set(['/heruntergeladen', '/warteschlange', '/mehr']);
+
+function Page({ location, offline }: { location: Location; offline: boolean }) {
   const { path, params } = location;
+  if (offline && !OFFLINE_PAGES.has(path)) return <Downloads />;
+  if (path === '/heruntergeladen') return <Downloads />;
   if (path === '/') return <Home />;
   if (path === '/suche') return <Search params={params} />;
   if (path === '/alben') return <Albums params={params} />;
@@ -80,6 +86,7 @@ export function App() {
 
 function Shell() {
   const location = useLocation();
+  const { offline } = useAuth();
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -104,7 +111,7 @@ function Shell() {
     <div class="shell" onClick={onLinkClick}>
       <Sidebar path={location.path} />
       <main class="main" id="main">
-        <Page key={location.path} location={location} />
+        <Page key={`${location.path}${offline ? ':offline' : ''}`} location={location} offline={Boolean(offline)} />
       </main>
       <PlayerBar onExpand={() => setExpanded(true)} />
       <TabBar path={location.path} />

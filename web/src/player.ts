@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { streamUrl, trackCoverUrl, type Track } from './api';
 import { countPlay, isLong, resumePosition, saveProgress } from './me';
+import { isDownloaded, readDownload, ready as offlineReady } from './offline';
 import { Queue, type QueueState, type RepeatMode } from './queue';
 
 /** Jeder Eintrag ist ein eigenes Objekt, damit derselbe Titel mehrfach in der Warteschlange stehen kann. */
@@ -55,6 +56,10 @@ export class Player {
   private queueCopy: Entry[] = [];
   private queueDirty = true;
   private rate = 1;
+  /** Entschlüsselte Offline-Kopie des aktuellen Titels; Zähler verwirft veraltete Ladevorgänge */
+  private blobUrl: string | undefined;
+  private sourceToken = 0;
+  private offlineChecked = false;
   /** Titel, der gerade im Audio-Element steckt, und wann sein Hörstand zuletzt gespeichert wurde */
   private loaded:
     | {
@@ -83,11 +88,12 @@ export class Player {
     audio.muted = saved.muted ?? false;
     this.rate = RATES.includes(saved.rate ?? 1) ? (saved.rate ?? 1) : 1;
     this.state = this.compute();
+    void offlineReady.then(() => (this.offlineChecked = true));
 
     const current = this.queue.current;
     if (current) {
       // Nach dem Neuladen an derselben Stelle weitermachen, aber nicht von selbst losspielen.
-      audio.src = streamUrl(current.track.id);
+      void this.setSource(current.track);
       this.loaded = { track: current.track, savedAt: Date.now(), recorded: true, heard: 0, counted: false };
       this.applyRate();
       if (saved.position) {
@@ -200,8 +206,10 @@ export class Player {
   reset(): void {
     this.saveProgress();
     this.audio.pause();
+    this.sourceToken++;
     this.audio.removeAttribute('src');
     this.audio.load();
+    this.releaseBlob();
     this.loaded = undefined;
     this.queue.set([]);
     this.queueDirty = true;
@@ -317,7 +325,7 @@ export class Player {
     if (!current) return;
     // Stand des bisherigen Titels sichern, bevor er ausgetauscht wird.
     if (this.loaded && this.loaded.track.id !== current.track.id) this.saveProgress();
-    this.audio.src = streamUrl(current.track.id);
+    const source = this.setSource(current.track);
     // Angefangene Predigt: an der gemerkten Stelle weiter
     const start = resumePosition(current.track);
     this.loaded = { track: current.track, savedAt: Date.now(), recorded: false, start, heard: 0, counted: false };
@@ -326,17 +334,49 @@ export class Player {
       this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = start), { once: true });
     }
     this.state = { ...this.state, error: undefined };
-    if (autoplay) void this.play();
+    // Den Stream sofort starten (iOS erlaubt play() nur direkt nach dem Tippen), die Offline-Kopie nach dem Entschlüsseln.
+    if (autoplay) void (source ? source.then((ok) => (ok ? this.play() : undefined)) : this.play());
     this.updateMediaSession();
     this.emit();
+  }
+
+  /**
+   * Quelle für den Titel setzen: die entschlüsselte Offline-Kopie, wenn vorhanden, sonst der Stream.
+   * Ist sicher keine Kopie da, geschieht das sofort (Rückgabe undefined), sonst per Promise
+   * (false, wenn inzwischen ein anderer Titel gewählt wurde).
+   */
+  private setSource(track: Track): Promise<boolean> | undefined {
+    const token = ++this.sourceToken;
+    this.releaseBlob();
+    if (this.offlineChecked && !isDownloaded(track.id)) {
+      this.audio.src = streamUrl(track.id);
+      return undefined;
+    }
+    return (async () => {
+      await offlineReady;
+      this.offlineChecked = true;
+      const blob = isDownloaded(track.id) ? await readDownload(track.id) : undefined;
+      if (token !== this.sourceToken) return false;
+      if (blob) this.audio.src = this.blobUrl = URL.createObjectURL(blob);
+      else this.audio.src = streamUrl(track.id);
+      return true;
+    })();
+  }
+
+  private releaseBlob(): void {
+    if (this.blobUrl) URL.revokeObjectURL(this.blobUrl);
+    this.blobUrl = undefined;
   }
 
   private async play(): Promise<void> {
     try {
       await this.audio.play();
     } catch (error) {
-      // Abgebrochen durch schnelles Weiterspringen ist kein Fehler.
-      if ((error as DOMException).name !== 'AbortError') this.emit({ error: 'Wiedergabe nicht möglich' });
+      // Abgebrochen durch schnelles Weiterspringen ist kein Fehler; ohne Erlaubnis zum Abspielen
+      // (Offline-Kopie war nicht schnell genug entschlüsselt) reicht ein Tippen auf Abspielen.
+      const name = (error as DOMException).name;
+      if (name === 'NotAllowedError') this.emit();
+      else if (name !== 'AbortError') this.emit({ error: 'Wiedergabe nicht möglich' });
     }
   }
 

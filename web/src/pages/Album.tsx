@@ -2,6 +2,7 @@ import type { AlbumDetail } from '../api';
 import { AlbumGrid } from '../components/AlbumCard';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
+import { DownloadButton } from '../components/DownloadButton';
 import { Menu } from '../components/Menu';
 import { TrackList } from '../components/TrackList';
 import { FavoriteButton } from '../components/FavoriteButton';
@@ -52,6 +53,7 @@ export function Album({ id }: { id: number }) {
           <Icon name="shuffle" size={18} /> Zufällig
         </button>
         <FavoriteButton kind="album" item={album} />
+        <DownloadButton tracks={album.tracks} />
         <Menu
           label="Weitere Aktionen für das Album"
           items={[

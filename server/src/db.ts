@@ -429,6 +429,11 @@ export const migrations: string[] = [
   ) WITHOUT ROWID;
   CREATE INDEX track_plays_track ON track_plays(track_id);
   `,
+  `
+  -- Schlüssel je Benutzer für offline gespeicherte Titel (AES-256, siehe offline.ts). NULL: noch keiner
+  -- oder zurückgesetzt, dann sind alte Offline-Kopien nicht mehr zu entschlüsseln.
+  ALTER TABLE users ADD COLUMN offline_key BLOB;
+  `,
 ];
 
 export function openDatabase(path: string): DB {
