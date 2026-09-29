@@ -82,7 +82,12 @@ export const ACCESS_SECTIONS: Array<{ path: string; label: string; Component: Fu
 
 /** Reiter der Verwaltung; Benutzer, Gruppen und Anmeldung nur für Admins. */
 export function AdminTabs({ path, admin }: { path: string; admin: boolean }) {
-  const tabs = [{ path: '/admin', label: 'Alben' }, { path: '/admin/kategorien', label: 'Kategorien' }, ...(admin ? ACCESS_SECTIONS : [])];
+  const tabs = [
+    { path: '/admin', label: 'Alben' },
+    { path: '/admin/kategorien', label: 'Kategorien' },
+    { path: '/admin/pruefen', label: 'Prüfen' },
+    ...(admin ? ACCESS_SECTIONS : []),
+  ];
   const active = tabs.find((t) => t.path === path)?.path ?? '/admin';
   return (
     <nav class="chips-row admin-tabs" aria-label="Bereiche der Verwaltung">
@@ -462,6 +467,7 @@ function LoginAdmin(_props: SectionProps) {
     <>
       <h1 class="page-title">Anmeldung</h1>
       <BrandingSettings />
+      <OfflineSettings />
       <OidcSettings />
       {user?.kind === 'local' && <PasswordForm />}
     </>
@@ -516,6 +522,82 @@ function BrandingSettings() {
           placeholder="Predigten und Musik unserer Gemeinde"
           value={form.welcome}
           onInput={(e) => setForm({ ...form, welcome: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+      {message && (
+        <p class={message.ok ? 'admin-ok' : 'admin-error'} role="status">
+          {message.text}
+        </p>
+      )}
+      <div class="actions">
+        <button type="submit" class="button-primary" disabled={busy}>
+          Speichern
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface OfflineView {
+  enabled: boolean;
+  days: number;
+}
+
+/** Offline hören: an/aus und wie lange Kopien ohne Serverkontakt gelten */
+function OfflineSettings() {
+  const [data, error, setData] = useLoad<OfflineView>('/api/admin/offline');
+  const [form, setForm] = useState<OfflineView | undefined>();
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | undefined>();
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setForm(data), [data]);
+
+  if (error) return <ErrorNote message={error} />;
+  if (!form) return <Loading />;
+
+  const submit = async (event: Event) => {
+    event.preventDefault();
+    if (data?.enabled && !form.enabled && !window.confirm('Alle offline gespeicherten Titel auf allen Geräten werden unbrauchbar. Fortfahren?')) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const saved = await adminRequest<OfflineView>('PUT', '/api/admin/offline', form);
+      setData(saved);
+      setMessage({ text: 'Gespeichert.', ok: true });
+    } catch (e) {
+      setMessage({ text: (e as Error).message, ok: false });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form class="admin-panel admin-form" onSubmit={submit}>
+      <h2>Offline hören</h2>
+      <p class="admin-hint">
+        Hörer können Alben und Titel in der App speichern und ohne Internet hören. Die Dateien liegen verschlüsselt im
+        Browser, lassen sich nicht als Datei herunterladen und werden beim Abmelden oder bei Sperrung gelöscht. Ganz
+        verhindern lässt sich ein Mitschnitt im Browser aber nie.
+      </p>
+      <label class="admin-check">
+        <input
+          type="checkbox"
+          checked={form.enabled}
+          onChange={(e) => setForm({ ...form, enabled: (e.target as HTMLInputElement).checked })}
+        />
+        <span>Herunterladen für offline erlauben</span>
+      </label>
+      <label class="field">
+        <span>
+          Gültig ohne Verbindung <em>(Tage, danach löscht die App die Kopien)</em>
+        </span>
+        <input
+          type="number"
+          min={1}
+          max={365}
+          required
+          value={form.days}
+          onInput={(e) => setForm({ ...form, days: Number((e.target as HTMLInputElement).value) })}
         />
       </label>
       {message && (

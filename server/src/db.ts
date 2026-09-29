@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileStem } from './library/pathMeta.js';
-import { foldValue } from './library/text.js';
+import { artistKey, artistNames, foldValue, sortKey } from './library/text.js';
 
 export type DB = Database.Database;
 
@@ -430,6 +430,49 @@ export const migrations: string[] = [
   CREATE INDEX track_plays_track ON track_plays(track_id);
   `,
   `
+  -- Schlüssel je Benutzer für offline gespeicherte Titel (AES-256, siehe offline.ts). NULL: noch keiner
+  -- oder zurückgesetzt, dann sind alte Offline-Kopien nicht mehr zu entschlüsseln.
+  ALTER TABLE users ADD COLUMN offline_key BLOB;
+  `,
+  // Smarte Zuordnung: Titel über die Nextcloud-Datei-ID wiedererkennen, Album je Titel merken,
+  // Sortierschlüssel (Umlaute, Zahlen) und das Datum, an dem eine Datei in die Nextcloud kam.
+  `
+  ALTER TABLE tracks ADD COLUMN file_id TEXT;
+  CREATE INDEX tracks_file_id ON tracks(file_id);
+  -- Upload-Zeit bzw. Änderungsdatum in der Nextcloud (ms); bis zum nächsten Scan das bisherige "Neu hinzugefügt".
+  ALTER TABLE tracks ADD COLUMN added_at INTEGER;
+  UPDATE tracks SET added_at = coalesce((SELECT created_at FROM albums WHERE id = tracks.album_id), scanned_at);
+  -- Schlüssel des automatischen Albums (library/albums.ts groupTracks), füllt rebuildAlbums.
+  ALTER TABLE tracks ADD COLUMN album_key TEXT;
+  -- 1: Albumname aus dem Tag, 0: aus dem Ordner abgeleitet, NULL: unbekannt (vor dem nächsten Lesen der Datei)
+  ALTER TABLE tracks ADD COLUMN album_tagged INTEGER;
+  -- Sortierschlüssel (library/text.ts sortKey) und die Sortier-Tags der Dateien für Alben
+  ALTER TABLE tracks ADD COLUMN sort_title TEXT NOT NULL DEFAULT '';
+  ALTER TABLE tracks ADD COLUMN sort_artist TEXT NOT NULL DEFAULT '';
+  ALTER TABLE tracks ADD COLUMN album_sort TEXT;
+  ALTER TABLE tracks ADD COLUMN album_artist_sort TEXT;
+  UPDATE tracks SET sort_title = sort_key(title), sort_artist = sort_key(artist);
+  CREATE INDEX tracks_sort ON tracks(sort_artist, sort_title);
+  ALTER TABLE albums ADD COLUMN sort_title TEXT NOT NULL DEFAULT '';
+  ALTER TABLE albums ADD COLUMN sort_artist TEXT NOT NULL DEFAULT '';
+  UPDATE albums SET sort_title = sort_key(title), sort_artist = sort_key(artist);
+  CREATE INDEX albums_sort_title ON albums(sort_title);
+  CREATE INDEX albums_sort_artist ON albums(sort_artist, year, sort_title);
+  CREATE INDEX albums_created ON albums(created_at);
+  -- Einmal alle Dateien neu lesen: Sortier-Tags, ob der Albumname aus dem Tag kommt, Sprecher aus dem Dateinamen.
+  UPDATE tracks SET etag = '';
+
+  -- Kategorie "Sprecher" aus den Predigt-Feldern; im Menü nur, wenn es schon Sprecher gibt.
+  INSERT INTO categories (name, slug, position, in_nav, created_at)
+    SELECT 'Sprecher', 'sprecher', coalesce((SELECT max(position) + 1 FROM categories), 0),
+           EXISTS (SELECT 1 FROM track_tags WHERE tag IN ('sprecher', 'speaker', 'prediger', 'predigerin', 'referent', 'referentin')),
+           unixepoch() * 1000
+    WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'sprecher');
+  INSERT INTO category_fields (category_id, tag)
+    SELECT c.id, t.value FROM categories c, json_each('["sprecher","speaker","prediger","predigerin","referent","referentin"]') t
+    WHERE c.slug = 'sprecher' AND NOT EXISTS (SELECT 1 FROM category_fields WHERE category_id = c.id);
+  `,
+  `
   -- Korrekturen einzelner Titel aus der Verwaltung (Titelname, Sprecher), je Pfad wie die übrigen
   -- Korrekturen. Der Scan übernimmt sie; tag_title hält den Namen aus der Datei fürs Zurücksetzen.
   ALTER TABLE tracks ADD COLUMN tag_title TEXT;
@@ -465,6 +508,11 @@ export function openDatabase(path: string): DB {
   db.pragma('busy_timeout = 5000');
   db.function('fold', { deterministic: true }, (value) => (typeof value === 'string' ? foldValue(value) : value));
   db.function('file_stem', { deterministic: true }, (value) => (typeof value === 'string' ? fileStem(value) : value));
+  db.function('sort_key', { deterministic: true }, (value) => (typeof value === 'string' ? sortKey(value) : ''));
+  // 1, wenn einer der Interpreten im Feld ("A feat. B") den Schlüssel hat
+  db.function('has_artist', { deterministic: true }, (value, key) =>
+    typeof value === 'string' && artistNames(value).some((name) => artistKey(name) === key) ? 1 : 0,
+  );
   migrate(db);
   return db;
 }

@@ -9,6 +9,9 @@ export const PAGE_CSP = [
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
   "connect-src 'self'",
+  // Service Worker für die Offline-Nutzung (web/sw/sw.js), nur von der eigenen Adresse
+  "worker-src 'self'",
+  "manifest-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
   "frame-ancestors 'none'",

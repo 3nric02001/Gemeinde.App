@@ -17,14 +17,21 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - **Start**: Begrüßung mit Vornamen, der neueste Gottesdienst groß oben, „Weiterhören“ (angefangene
   Predigten mit Fortschritt), „Zuletzt gehört“, weitere Gottesdienste, „Neue Musik“ (ohne Gottesdienste), eigene
   Favoriten, Genres als Kacheln und Jahrzehnte
-- **Gottesdienste**: Alben mit Datum im Ordnernamen heißen nach dem Anlass mit Wochentag und Datum
+- **Gottesdienste**: Alben mit Datum heißen nach dem Anlass mit Wochentag und Datum
   („Erntedank, So., 27.09.2026“) und bekommen ohne eigenes Bild ein Kalenderblatt als Cover.
   Sprecher und Bibelstelle kommen aus den Tags `Sprecher`/`Speaker`/`Prediger`/`Referent` bzw.
   `Bibelstelle`/`Bibeltext`/`Predigttext`/`Scripture` oder werden in der Verwaltung am Album gesetzt,
-  dort auch eine Beschreibung für Hörer
+  dort auch eine Beschreibung für Hörer. Fehlen die Tags, liest die App den Sprecher aus Dateinamen wie
+  `2026-09-27 Meier - Psalm 23.mp3` und die Bibelstelle aus Titel oder Dateiname („Psalm 23“, „Joh 3,16“,
+  „1. Kor 13,1-13“). Wer predigt, steht als Interpret am Gottesdienst („Mehr von Meier“), das Jahr kommt
+  aus dem Datum. Die Kategorie „Sprecher“ ist vorgegeben (im Menü, sobald es Sprecher gibt)
 - **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer
 - **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; findet auch eigene
-  Tag-Felder wie den Sprecher, Predigten neueste zuerst; ohne Suchbegriff Stöbern nach Genre
+  Tag-Felder wie den Sprecher, Predigten neueste zuerst; ohne Suchbegriff Stöbern nach Genre. Treffer im
+  Titel stehen vorn: bei Alben genauer Titel, dann Titelanfang, dann Interpret, dann Alben, in denen nur
+  ein Titel passt; bei Titeln zuerst die, die mit dem Suchbegriff beginnen
+- **Interpreten**: Schreibweisen werden zusammengefasst („Hillsong United“ = „Hillsong UNITED“), Gäste
+  aus „feat.“/„ft.“ stehen als eigene Interpreten in der Liste und finden den Titel
 - **Verdecktes Scoring**: Titel, die oft gehört werden, stehen in der Suche und im Genre-Vorschlag auf
   der Startseite weiter oben. Gezählt wird eine Wiedergabe nach 30 Sekunden tatsächlich gehörter Zeit
   (kurze Titel nach der Hälfte), je Person und Titel höchstens einmal in 6 Stunden, über alle Hörer
@@ -32,13 +39,21 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   ähnlicher Beliebtheit bleibt die gewohnte Reihenfolge (neueste Gottesdienste zuerst). Zahlen werden
   nirgends angezeigt; „Letzter Gottesdienst“, „Neu hinzugefügt“ und bewusst gewählte Sortierungen
   (Titel, Jahr, Neu hinzugefügt) bleiben unberührt
-- **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach
-- **Datum**: Jeder unterste Ordner, dessen Name ein Datum enthält, erscheint als eigenes „Album“ mit
-  Wochentag und Datum, neueste zuerst und nach Monaten gruppiert. Erkannt werden z. B.
-  `2026-09-27 Gottesdienst`, `20260927`, `27.09.2026`, `27.9.26` und `27. September 2026`. Das Datum
-  kommt aus dem Ordnernamen, nicht aus den Tags; Ordner ohne Datum im Namen stehen nur unter Alben.
-  Disc-Unterordner (`CD 1`, `CD 2`) zählen zum Elternordner. Interpreten sind weiter über Suche und
-  Links erreichbar.
+- **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach. Alben
+  zeigt zuerst nur Musik; Umschalter „Musik / Gottesdienste / Alle“ (über Suche, Genre oder Jahrzehnt
+  kommend: Alle). Sortiert wird wie im Telefonbuch: Umlaute bei ihrem Grundbuchstaben („Ärger“ bei A),
+  Zahlen nach Wert („2 Lieder“ vor „10 Gebote“), ein englisches „The“ am Anfang zählt nicht; Sortier-Tags
+  der Dateien (`ALBUMSORT`, `TSOA` …) haben Vorrang. „Neu hinzugefügt“ richtet sich danach, wann die
+  Dateien in die Nextcloud kamen (Upload-Zeit, sonst Änderungsdatum)
+- **Datum**: Jedes Album mit Datum erscheint hier mit Wochentag und Datum, neueste zuerst und nach
+  Monaten gruppiert, dieselben Einträge wie unter Alben → Gottesdienste. Erkannt werden z. B.
+  `2026-09-27 Gottesdienst`, `20260927`, `27.09.2026`, `27.9.26` und `27. September 2026`; fehlt das Jahr
+  (`30.11.`, `3. Mai`), gilt das eines übergeordneten Ordners (`Predigten/2025/30.11.`). Das Datum kommt
+  aus dem Albumordner, aus einem übergeordneten Ordner (`2026-09-27/Predigt` und `2026-09-27/Lobpreis`
+  sind ein Gottesdienst) oder aus den Dateinamen: Tragen in einem Ordner ohne Datum die meisten Dateien
+  eines im Namen (`Predigten 2026/2026-09-27 Meier - Psalm 23.mp3`), wird jedes Datum ein eigener
+  Gottesdienst. Disc-Unterordner (`CD 1`, `CD 2`) zählen zum Elternordner. Interpreten sind weiter über
+  Suche und Links erreichbar.
 - **Album- und Interpretenseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), „Mehr von …“
 - **Player**: Leiste unten mit Zufall, Wiederholen (alle/einen), Spulen und Lautstärke; Warteschlange
   mit „Als Nächstes spielen“ und „Zur Warteschlange hinzufügen“. Auf dem Handy Mini-Player über der
@@ -57,6 +72,25 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 Die Farben stehen als CSS-Variablen oben in `web/src/styles.css` und lassen sich dort zentral anpassen.
 Die Oberfläche ist mit Vite und Preact gebaut (ca. 17 KB JavaScript, gzip) und wird vom selben Server
 unter `/` ausgeliefert; es ist kein zweiter Container nötig.
+
+## Offline hören
+
+Die App ist eine installierbare Web-App (PWA). Ein Service Worker (`web/sw/sw.js`) hält die Oberfläche
+offline bereit. Mit dem Pfeil nach unten bei einem Album oder Gottesdienst (oder „Herunterladen“ im
+Titelmenü) speichert die App Titel samt Cover auf dem Gerät; „Mehr > Heruntergeladen“ zeigt sie mit
+Speicherbedarf. Ohne Verbindung zum Server startet die App direkt in dieser Ansicht.
+
+Schutz gegen das Weitergeben der Dateien (ganz verhindern lässt sich ein Mitschnitt im Browser nicht):
+
+- Es gibt keinen Datei-Download. Die Titel liegen in IndexedDB, in Stücken mit AES-256-GCM verschlüsselt.
+- Den Schlüssel gibt es je Benutzer vom Server (`GET /api/me/offline`). Die App legt ihn als nicht
+  exportierbaren Schlüssel ab; entschlüsselt wird nur im Speicher zum Abspielen.
+- Ohne Kontakt zum Server verfallen die Kopien nach 30 Tagen (einstellbar). Beim Abmelden, wenn der
+  Server die Sitzung nicht mehr kennt (Sperrung, Rolle entzogen) oder wenn Offline abgeschaltet wird,
+  löscht die App alles. Sperren und Abschalten verwerfen zusätzlich den Schlüssel auf dem Server.
+- Admins schalten Offline unter Verwaltung > Anmeldung > „Offline hören“ an oder aus und legen die Frist fest.
+
+iPhones geben Web-Apps nur begrenzt Speicher und räumen ihn nach längerer Nichtnutzung auf.
 
 ## Verwaltung: Alben zusammenstellen und korrigieren
 
@@ -86,8 +120,16 @@ von Hand pflegen. Die Verwaltung sehen nur Manager und Admins.
 
 Alle Eingriffe werden getrennt von den gescannten Daten gespeichert (nach Dateipfad bzw. Album) und
 bei jedem Scan wieder angewendet. Fehlt eine Datei eines eigenen Albums zeitweise in der Nextcloud,
-erscheint sie nach dem nächsten Scan wieder an ihrem Platz. Wird eine Datei umbenannt oder
-verschoben, muss sie im eigenen Album neu eingetragen werden.
+erscheint sie nach dem nächsten Scan wieder an ihrem Platz. Wird eine Datei in der Nextcloud umbenannt
+oder verschoben, erkennt der Scan sie an ihrer Datei-ID wieder: Sie behält ihren Platz in eigenen Alben,
+Favoriten, Weiterhören-Stellen und Beliebtheit. Ändert sich ein Album-Tag oder Ordnername, lebt das
+Album mit derselben ID weiter, wenn die meisten Titel dorthin gewandert sind; Favoriten, Korrekturen
+und herausgenommene Titel bleiben erhalten.
+
+**Prüfen** (Verwaltung → Prüfen) zeigt, wo die automatische Zuordnung vermutlich nicht passt: Ordner,
+die wegen unterschiedlicher Album-Tags in mehrere Alben zerfallen, Gottesdienste ohne Sprecher,
+Interpreten, die wie ein Datum oder Jahr aussehen oder fehlen, Interpreten in mehreren Schreibweisen
+und Musikalben ohne Bild.
 
 ## Verwaltung: Kategorien
 
@@ -106,7 +148,8 @@ Jede Kategorie mit „Im Menü anzeigen“ steht in der Seitenleiste und unter S
   zusammengefassten Werte.
 - **Vorschau**: Beim Einrichten zeigt die Verwaltung sofort, welche Werte mit wie vielen Titeln entstehen.
 
-Vorgegeben sind „Interpreten“ (im Menü) und „Genre“ (nicht im Menü). Die Filter nach Genre und Jahrzehnt
+Vorgegeben sind „Interpreten“ (im Menü), „Genre“ (nicht im Menü) und „Sprecher“ aus den Predigt-Feldern
+(im Menü, wenn es beim Update schon Sprecher gab). Die Filter nach Genre und Jahrzehnt
 sowie der Reiter „Datum“ bleiben davon unberührt. Beim ersten Start mit dieser Version liest der Scan alle
 Dateien einmal neu, um auch die übrigen Tag-Felder zu erfassen.
 
@@ -186,10 +229,14 @@ kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
   Antwortet die Nextcloud auf eine Anfrage 60 Sekunden lang nicht, wird sie abgebrochen, damit ein
   einzelner hängender Download den Scan nicht aufhält.
 - **Metadaten** kommen aus den Tags (MP3, FLAC, Ogg, Opus, …). Fehlt etwas, wird es aus dem Pfad
-  abgeleitet, z. B. `Interpret/Album (2021)/CD 2/03 - Titel.mp3`.
+  abgeleitet, z. B. `Interpret/Album (2021)/CD 2/03 - Titel.mp3`. Ordner, die nur ein Jahr oder ein Datum
+  sind, und der Ordner über einem Gottesdienst („Gottesdienste“) werden dabei nicht zum Interpreten.
+  Nach dem Update auf die Version mit Sortier-Tags und Datei-IDs liest der erste Scan alle Dateien einmal neu.
 - **Alben** werden pro Albumordner und Albumname gebildet. Disc-Ordner (`CD 1`, `Disc 2`) werden
   zusammengefasst, Sampler mit vielen Interpreten bleiben ein Album („Verschiedene Interpreten“),
-  Sammelordner mit Titeln aus mehreren Alben werden aufgeteilt. Als Albumcover dient `cover.jpg`,
+  Sammelordner mit Titeln aus mehreren Alben werden aufgeteilt. Titel ohne eigenen Album-Tag, Zusätze
+  wie „(Remastered)“ oder „[Deluxe]“ und einzelne Abweichler in einem Ordner, in dem ein Album klar
+  überwiegt (mindestens drei Titel und mehr als die Hälfte), zählen zu diesem Album. Als Albumcover dient `cover.jpg`,
   `folder.jpg`, `front.jpg` o. ä. im Albumordner, sonst das in die Dateien eingebettete Bild.
 - **Titelbilder**: In MP3 (ID3) und FLAC eingebettete Cover werden beim Scan gelesen und in der
   Datenbank abgelegt (gleiche Bilder nur einmal). Jeder Titel zeigt sein eigenes Bild, ohne eigenes
@@ -288,8 +335,8 @@ sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 | `GET /api/categories/:slug/values?q=` | Werte einer Kategorie mit Anzahl Titel |
 | `GET /api/tracks/:id/stream` | Audio streamen (unterstützt `Range`) |
 | `GET /api/artists?q=` | Interpreten mit Anzahl Alben und Titel |
-| `GET /api/dates?limit=&offset=` | Unterste Ordner mit Datum im Namen, neueste zuerst |
-| `GET /api/dates/folder?path=` | Ein Datumsordner mit seinen Titeln |
+| `GET /api/dates?limit=&offset=` | Alben mit Datum (Gottesdienste), neueste zuerst; wie `/api/albums?dated=true&sort=date` |
+| `GET /api/dates/folder?path=` | Album zu einem Ordnerpfad (für ältere Links auf `/datum/ordner`) samt Titeln |
 | `GET /api/facets` | Genres, Jahrzehnte und Gesamtzahlen für die Filterleiste |
 | `GET /api/scan` | Status des letzten Scans |
 | `POST /api/scan` | Scan starten (Manager, Admin) |
@@ -327,6 +374,7 @@ Verwaltung (Manager und Admins):
 | `POST /api/admin/categories/preview` | `{ fields, groups?, groupedOnly? }`: welche Werte entstehen würden |
 | `GET /api/admin/tag-fields` | Alle Tag-Felder der Bibliothek mit Anzahl Titel und Beispielwerten |
 | `GET /api/admin/tag-fields/:tag/values?q=&limit=` | Aktueller Inhalt eines Tag-Felds, häufigste Werte zuerst |
+| `GET /api/admin/quality` | Hinweise zur Datenqualität (aufgeteilte Ordner, fehlende Sprecher und Cover, auffällige Interpreten) |
 
 `PATCH /api/admin/albums/:id` nimmt außerdem `speaker`, `passage` und `description` (Predigt-Infos).
 

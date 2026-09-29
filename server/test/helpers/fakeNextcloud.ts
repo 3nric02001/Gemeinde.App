@@ -8,6 +8,10 @@ export const PASSWORD = 'app-passwort';
 interface FakeFile {
   data: Buffer;
   etag: string;
+  /** Nextcloud-Datei-ID, bleibt beim Verschieben gleich */
+  fileId: number;
+  /** Upload-Zeit in Sekunden (nc:upload_time) */
+  uploaded: number;
 }
 
 function escapeXml(value: string): string {
@@ -30,6 +34,11 @@ export class FakeNextcloud {
   readonly hangingFiles = new Set<string>();
   readonly requests: Array<{ method: string; path: string; range?: string }> = [];
   ignoreRange = false;
+  /** Ohne oc:fileid antworten (ältere oder andere WebDAV-Server) */
+  withoutFileIds = false;
+  private nextFileId = 1000;
+  /** Upload-Zeit für neu abgelegte Dateien, in Sekunden */
+  now = 1_780_000_000;
   private server: Server | undefined;
   url = '';
   readonly root: string;
@@ -38,8 +47,22 @@ export class FakeNextcloud {
     this.root = `/remote.php/dav/files/${USER}${musicPath}`;
   }
 
-  put(path: string, data: Buffer): void {
-    this.files.set(path, { data, etag: createHash('md5').update(data).update(path).digest('hex') });
+  put(path: string, data: Buffer, options: { uploaded?: number } = {}): void {
+    const before = this.files.get(path);
+    this.files.set(path, {
+      data,
+      etag: createHash('md5').update(data).update(path).digest('hex'),
+      fileId: before?.fileId ?? this.nextFileId++,
+      uploaded: options.uploaded ?? before?.uploaded ?? this.now,
+    });
+  }
+
+  /** Umbenennen oder Verschieben wie in der Nextcloud: Datei-ID und ETag bleiben. */
+  move(from: string, to: string): void {
+    const file = this.files.get(from);
+    if (!file) throw new Error(`${from} gibt es nicht`);
+    this.files.delete(from);
+    this.files.set(to, file);
   }
 
   delete(path: string): void {
@@ -126,12 +149,12 @@ export class FakeNextcloud {
       } else {
         const type = child.endsWith('.flac') ? 'audio/flac' : child.endsWith('.mp3') ? 'audio/mpeg' : 'image/jpeg';
         responses.push(
-          `<d:response><d:href>${href(child, false)}</d:href><d:propstat><d:prop><d:resourcetype/><d:getetag>&quot;${file.etag}&quot;</d:getetag><d:getcontentlength>${file.data.length}</d:getcontentlength><d:getcontenttype>${type}</d:getcontenttype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
+          `<d:response><d:href>${href(child, false)}</d:href><d:propstat><d:prop><d:resourcetype/><d:getetag>&quot;${file.etag}&quot;</d:getetag><d:getcontentlength>${file.data.length}</d:getcontentlength><d:getcontenttype>${type}</d:getcontenttype><d:getlastmodified>${new Date(file.uploaded * 1000).toUTCString()}</d:getlastmodified>${this.withoutFileIds ? '' : `<oc:fileid>${file.fileId}</oc:fileid>`}<nc:upload_time>${file.uploaded}</nc:upload_time></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
         );
       }
     }
     res.writeHead(207, { 'Content-Type': 'application/xml; charset=utf-8' });
-    res.end(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">${responses.join('')}</d:multistatus>`);
+    res.end(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">${responses.join('')}</d:multistatus>`);
   }
 
   private get(path: string, req: IncomingMessage, res: ServerResponse): void {

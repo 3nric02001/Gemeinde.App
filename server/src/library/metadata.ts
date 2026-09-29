@@ -16,6 +16,10 @@ export interface TrackMeta {
   picture: Picture | undefined;
   /** Alle Text-Tags als [Name, Wert], Name klein geschrieben; Grundlage für frei definierbare Kategorien */
   tags: Array<[string, string]>;
+  /** Sortier-Tags der Datei (TSOT, TSOP, TSOA, TSO2 bzw. TITLESORT …), falls gesetzt */
+  sort: { title?: string; artist?: string; album?: string; albumArtist?: string };
+  /** Albumname steht im Tag (sonst aus dem Ordner abgeleitet) */
+  albumTagged: boolean;
 }
 
 /** Standardfelder, die immer mit den aufbereiteten Werten (inkl. Pfad-Fallback) belegt werden */
@@ -208,6 +212,14 @@ export async function extractMetadata(path: string, head: Buffer, mimeType?: str
   const album = text(common?.album) ?? fromPath.album;
   const year = validYear(common?.year) ?? fromPath.year;
   const genre = normalizeGenre(common?.genre?.[0]);
+  const tags = collectTags(
+    common as unknown as Record<string, unknown>,
+    native as Record<string, Array<{ id: string; value: unknown }>>,
+    { artist, albumartist: albumArtist, album, year, filename: fileStem(path) },
+  );
+  // Sprecher aus dem Dateinamen ("2026-09-27 Meier - Psalm 23.mp3"), wenn kein Tag-Feld ihn nennt;
+  // so erscheint er auch in der Suche und in der Kategorie "Sprecher".
+  if (fromPath.speaker && !tags.some(([tag]) => SPEAKER_TAGS.includes(tag))) tags.push(['sprecher', fromPath.speaker]);
   return {
     title,
     artist,
@@ -217,11 +229,14 @@ export async function extractMetadata(path: string, head: Buffer, mimeType?: str
     discNo: common?.disk?.no ?? fromPath.discNo,
     year,
     genre,
-    tags: collectTags(
-      common as unknown as Record<string, unknown>,
-      native as Record<string, Array<{ id: string; value: unknown }>>,
-      { artist, albumartist: albumArtist, album, year, filename: fileStem(path) },
-    ),
+    tags,
+    albumTagged: text(common?.album) !== undefined,
+    sort: {
+      title: text(common?.titlesort),
+      artist: text(common?.artistsort),
+      album: text(common?.albumsort),
+      albumArtist: text(common?.albumartistsort),
+    },
     duration: duration && Number.isFinite(duration) ? Math.round(duration * 10) / 10 : undefined,
     compilation: common?.compilation === true,
     picture: pickPicture(common?.picture),

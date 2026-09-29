@@ -57,11 +57,13 @@ afterEach(async () => {
 });
 
 describe('Kategorien', () => {
-  it('bringt Interpreten und Genre als Vorgabe mit', async () => {
+  it('bringt Interpreten, Genre und Sprecher als Vorgabe mit', async () => {
     const { items } = await call('GET', '/api/categories');
     expect(items).toEqual([
       { id: 1, name: 'Interpreten', slug: 'interpreten', inNav: true },
       { id: 2, name: 'Genre', slug: 'genre', inNav: false },
+      // Im Menü erst, wenn beim Update schon Sprecher in den Tags standen
+      { id: 3, name: 'Sprecher', slug: 'sprecher', inNav: false },
     ]);
     // Mehrere Interpreten in einem Tag ("Kirchenchor; Gemeinde") werden einzeln geführt.
     expect((await values('interpreten')).map((v) => v.value)).toEqual(['Gemeinde', 'Hillsong United', 'Kirchenchor', 'Pastor Meier']);
@@ -109,7 +111,7 @@ describe('Kategorien', () => {
       { name: 'Art', fields: ['genre', 'kategorie'], groups: [{ label: 'Musik', values: ['Musik', 'Lied'] }] },
       201,
     );
-    expect(created).toMatchObject({ slug: 'art', inNav: true, fields: ['genre', 'kategorie'], position: 2 });
+    expect(created).toMatchObject({ slug: 'art', inNav: true, fields: ['genre', 'kategorie'], position: 3 });
 
     const list = await values('art');
     expect(list).toEqual([
@@ -134,12 +136,12 @@ describe('Kategorien', () => {
     expect(await values('kunstler-sprecher')).toHaveLength(4);
     await call('GET', '/api/categories/interpreten/values', undefined, 404);
 
-    const { items } = await call('PUT', '/api/admin/categories/order', { ids: [2, 1] });
-    expect(items.map((c: { id: number }) => c.id)).toEqual([2, 1]);
+    const { items } = await call('PUT', '/api/admin/categories/order', { ids: [2, 1, 3] });
+    expect(items.map((c: { id: number }) => c.id)).toEqual([2, 1, 3]);
     await call('PUT', '/api/admin/categories/order', { ids: [2] }, 400);
 
     await call('DELETE', '/api/admin/categories/2', undefined, 204);
-    expect((await call('GET', '/api/categories')).items).toHaveLength(1);
+    expect((await call('GET', '/api/categories')).items).toHaveLength(2);
     await call('DELETE', '/api/admin/categories/2', undefined, 404);
   });
 
@@ -172,7 +174,7 @@ describe('Kategorien', () => {
   });
 
   it('liest geänderte Tags beim nächsten Scan neu und behält die Kategorien', async () => {
-    await call('POST', '/api/admin/categories', { name: 'Sprecher', fields: ['sprecher'] }, 201);
+    // Die Kategorie "Sprecher" ist vorgegeben und liest die Predigt-Felder (Sprecher, Speaker, Prediger …).
     cloud.put('Predigten/2024-03-03/01 Psalm 23.mp3', mp3({ title: 'Psalm 23', artist: 'Pastor Meier', custom: { Sprecher: 'Pastorin Weber' } }));
     await ctx.scanner.scan();
     expect((await values('sprecher')).map((v) => v.value)).toEqual(['Pastorin Weber']);

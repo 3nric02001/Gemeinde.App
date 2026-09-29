@@ -11,6 +11,8 @@ export interface ScanStatus {
   read: number;
   added: number;
   updated: number;
+  /** Umbenannte oder verschobene Dateien, die Favoriten und Weiterhören behalten */
+  moved?: number;
   removed: number;
   failed: number;
   /** Fehlende Titel, die zur Sicherheit noch nicht entfernt wurden */
@@ -38,6 +40,7 @@ function summary(status: ScanStatus): string {
   const changes = [
     status.added && `${status.added.toLocaleString('de-DE')} neu`,
     status.updated && `${status.updated.toLocaleString('de-DE')} geändert`,
+    status.moved && `${status.moved.toLocaleString('de-DE')} verschoben`,
     status.removed && `${status.removed.toLocaleString('de-DE')} entfernt`,
   ].filter(Boolean);
   return `${plural(status.filesSeen, 'Titel', 'Titel')} in der Nextcloud${changes.length ? `, zuletzt ${changes.join(', ')}` : ''}.`;

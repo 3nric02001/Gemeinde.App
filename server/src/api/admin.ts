@@ -38,6 +38,7 @@ import {
   updateCategory,
   type CategoryInput,
 } from '../library/categories.js';
+import { libraryQuality } from '../library/quality.js';
 import { searchAlbums, type AlbumFilter } from '../library/queries.js';
 import { RULE_FIELDS, RULE_OPS } from '../library/rules.js';
 
@@ -385,6 +386,9 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
     );
 
     admin.get('/api/admin/tag-fields', async () => ({ items: listTagFields(db) }));
+
+    // Hinweise, wo die automatische Zuordnung vermutlich nicht passt (Verwaltung → Prüfen)
+    admin.get('/api/admin/quality', async () => libraryQuality(db));
 
     // Aktueller Inhalt eines Tag-Felds, damit man beim Zuordnen sieht, was in den Dateien steht
     admin.get(

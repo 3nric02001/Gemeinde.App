@@ -1,3 +1,5 @@
+import { findDate, isYearOnly, yearIn } from './dateText.js';
+
 /**
  * Leitet Metadaten aus der Ordnerstruktur ab. Das ist der Fallback für Dateien
  * ohne (vollständige) Tags und folgt den üblichen Konventionen:
@@ -14,6 +16,10 @@ export interface PathMeta {
   year?: number;
   /** Ordner, der das Album repräsentiert (Disc-Unterordner zusammengefasst) */
   albumFolder: string;
+  /** Datum im Dateinamen ("2026-09-27 Meier - Psalm 23.mp3"), JJJJ-MM-TT */
+  date?: string;
+  /** Sprecher bei Aufnahmen mit Datum: der Name vor " - " im Dateinamen */
+  speaker?: string;
 }
 
 export const AUDIO_EXTENSIONS = new Set(['mp3', 'flac', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'wma', 'aiff', 'aif']);
@@ -58,10 +64,36 @@ export function dirname(path: string): string {
   return index >= 0 ? path.slice(0, index) : '';
 }
 
-/** Ordner, dessen Inhalt als ein Album gilt: Disc-Unterordner zählen zum Elternordner. */
+/** Nächstes Jahr in einem Ordner oder darüber ("Predigten/2025/…"), für Daten ohne Jahr wie "1.10." */
+export function folderYear(dir: string): number | undefined {
+  for (let current = dir; current; current = dirname(current)) {
+    const year = yearIn(basename(current));
+    if (year) return year;
+  }
+  return undefined;
+}
+
+/** Datum im Namen eines Ordners; fehlt dort das Jahr, gilt das eines übergeordneten Ordners. */
+export function folderDate(folder: string): string | undefined {
+  return folder ? findDate(basename(folder), folderYear(dirname(folder)))?.date : undefined;
+}
+
+/** Datum einer Aufnahme: aus dem Albumordner, sonst aus dem Dateinamen */
+export function dateOfPath(path: string): string | undefined {
+  return folderDate(albumFolderOf(path)) ?? findDate(fileStem(path), folderYear(dirname(path)))?.date;
+}
+
+/**
+ * Ordner, dessen Inhalt als ein Album gilt: Disc-Unterordner zählen zum Elternordner, ebenso
+ * Unterordner eines Gottesdienstes ("2026-09-27/Predigt", "2026-09-27/Lobpreis"), solange sie
+ * selbst kein Datum und kein Jahr im Namen tragen.
+ */
 export function albumFolderOf(path: string): string {
-  const dir = dirname(path);
-  return DISC_FOLDER.test(basename(dir)) ? dirname(dir) : dir;
+  let dir = dirname(path);
+  if (DISC_FOLDER.test(basename(dir))) dir = dirname(dir);
+  const parent = dirname(dir);
+  if (parent && !findDate(basename(dir)) && !yearIn(basename(dir)) && folderDate(parent)) return parent;
+  return dir;
 }
 
 function clean(value: string): string {
@@ -80,12 +112,19 @@ export function parsePath(path: string): PathMeta {
   const dir = dirname(path);
   const albumFolder = albumFolderOf(path);
   const result: PathMeta = { title: '', albumFolder };
+  const datedFolder = folderDate(albumFolder) !== undefined;
 
   const discMatch = DISC_FOLDER.exec(basename(dir));
   if (discMatch) result.discNo = Number(discMatch[1]);
 
-  // Dateiname: [Disc-]Track, optional "Interpret - ", Titel
+  // Dateiname: [Datum] [Disc-]Track, optional "Interpret - ", Titel
   let stem = clean(basename(path).replace(/\.[^.]+$/, ''));
+  const dated = findDate(stem, folderYear(dir));
+  if (dated) {
+    const rest = clean(`${stem.slice(0, dated.index)} ${stem.slice(dated.index + dated.length)}`).replace(/^[\s._–-]+|[\s._–-]+$/g, '');
+    result.date = dated.date;
+    stem = rest || stem;
+  }
   const numbered = /^(?:(\d{1,2})[-.])?(\d{1,3})(?:\s*[-.]\s*|\s+)(.+)$/.exec(stem);
   if (numbered?.[3]) {
     if (numbered[1]) result.discNo = Number(numbered[1]);
@@ -96,6 +135,8 @@ export function parsePath(path: string): PathMeta {
   if (dash > 0) {
     result.artist = clean(stem.slice(0, dash));
     stem = stem.slice(dash + 3);
+    // Bei Aufnahmen mit Datum steht vor dem Bindestrich meist, wer predigt.
+    if (result.date || datedFolder) result.speaker = result.artist;
   }
   result.title = clean(stem) || basename(path);
 
@@ -106,14 +147,18 @@ export function parsePath(path: string): PathMeta {
   if (albumSegment) {
     let albumName = albumSegment;
     const folderDash = albumName.indexOf(' - ');
-    if (folderDash > 0 && !YEAR_PREFIX.test(albumName)) {
+    // "2026-09-27 - Erntedank" ist Datum und Anlass, kein Interpret
+    if (folderDash > 0 && !YEAR_PREFIX.test(albumName) && !findDate(albumName.slice(0, folderDash))) {
       result.artist ??= clean(albumName.slice(0, folderDash));
       albumName = albumName.slice(folderDash + 3);
     }
     const { name, year } = splitYear(albumName);
     result.album = name;
     if (year) result.year = year;
-    if (artistSegment) result.artist ??= clean(artistSegment);
+    // Der Ordner über einem Gottesdienst ("Gottesdienste", "2026") ist eine Sammlung, kein Interpret.
+    if (artistSegment && !datedFolder && !isYearOnly(artistSegment) && !findDate(artistSegment)) {
+      result.artist ??= clean(artistSegment);
+    }
   }
   return result;
 }

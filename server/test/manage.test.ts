@@ -205,6 +205,6 @@ describe('Datum-Seite', () => {
   it('zeigt den in der Verwaltung korrigierten Anlass', async () => {
     await send('PATCH', `/api/admin/albums/${albumId('2026-09-20')}`, { title: 'Gottesdienst mit Abendmahl' });
     const folders = (await get('/api/dates')).items;
-    expect(folders.find((f: any) => f.date === '2026-09-20')).toMatchObject({ name: '2026-09-20', title: 'Gottesdienst mit Abendmahl' });
+    expect(folders.find((f: any) => f.date === '2026-09-20')).toMatchObject({ title: 'Gottesdienst mit Abendmahl' });
   });
 });

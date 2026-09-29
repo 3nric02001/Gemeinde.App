@@ -8,6 +8,10 @@ export interface RemoteEntry {
   etag: string;
   size: number;
   contentType: string | undefined;
+  /** Nextcloud-Datei-ID; bleibt beim Umbenennen und Verschieben gleich */
+  fileId?: string;
+  /** Wann die Datei hochgeladen (Nextcloud 28+) bzw. zuletzt geändert wurde, in ms */
+  addedAt?: number;
 }
 
 export class WebDavError extends Error {
@@ -21,12 +25,15 @@ export class WebDavError extends Error {
 }
 
 const PROPFIND_BODY = `<?xml version="1.0" encoding="UTF-8"?>
-<d:propfind xmlns:d="DAV:">
+<d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
   <d:prop>
     <d:resourcetype/>
     <d:getetag/>
     <d:getcontentlength/>
     <d:getcontenttype/>
+    <d:getlastmodified/>
+    <oc:fileid/>
+    <nc:upload_time/>
   </d:prop>
 </d:propfind>`;
 
@@ -197,12 +204,19 @@ export class NextcloudClient {
       const path = href.slice(this.basePath.length).replace(/^\/+/, '');
       const resourcetype = okProps.resourcetype;
       const isDirectory = typeof resourcetype === 'object' && resourcetype !== null && 'collection' in resourcetype;
+      const fileId = okProps.fileid !== undefined && okProps.fileid !== '' ? String(okProps.fileid) : undefined;
+      // upload_time ist 0, wenn Nextcloud sie nicht kennt (ältere Dateien); dann gilt das Änderungsdatum.
+      const uploaded = Number(okProps.upload_time ?? 0) * 1000;
+      const modified = okProps.getlastmodified ? Date.parse(String(okProps.getlastmodified)) : NaN;
+      const addedAt = uploaded > 0 ? uploaded : Number.isFinite(modified) ? modified : undefined;
       entries.push({
         path,
         isDirectory,
         etag: String(okProps.getetag ?? '').replace(/"/g, ''),
         size: Number(okProps.getcontentlength ?? 0),
         contentType: okProps.getcontenttype ? String(okProps.getcontenttype) : undefined,
+        ...(fileId ? { fileId } : {}),
+        ...(addedAt !== undefined ? { addedAt } : {}),
       });
     }
     return entries;

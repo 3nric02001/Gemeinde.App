@@ -5,7 +5,7 @@ import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextclou
 import { rebuildAlbums } from './albums.js';
 import { extractMetadata, searchExtra, tagSpan, withSpeakerOverride, type TrackMeta } from './metadata.js';
 import { basename, coverRank, dirname, isAudioFile } from './pathMeta.js';
-import { foldValue } from './text.js';
+import { foldValue, sortKey } from './text.js';
 
 /** So viel vom Dateianfang lesen wir zuerst für Tags; reicht für ID3v2, FLAC und Ogg ohne großes Cover. */
 export const HEAD_BYTES = 256 * 1024;
@@ -32,6 +32,8 @@ export interface ScanStatus {
   read: number;
   added: number;
   updated: number;
+  /** Umbenannte oder verschobene Dateien, die ihre ID (und damit Favoriten, Weiterhören) behalten */
+  moved: number;
   removed: number;
   failed: number;
   /** Titel, die in der Nextcloud fehlen, aber zur Sicherheit nicht entfernt wurden */
@@ -72,6 +74,7 @@ export class LibraryScanner {
     read: 0,
     added: 0,
     updated: 0,
+    moved: 0,
     removed: 0,
     failed: 0,
     heldBack: 0,
@@ -117,6 +120,7 @@ export class LibraryScanner {
       read: 0,
       added: 0,
       updated: 0,
+      moved: 0,
       removed: 0,
       failed: 0,
       heldBack: 0,
@@ -192,27 +196,33 @@ export class LibraryScanner {
     const { files, covers, unreadable } = await this.walk();
     this.status.filesSeen = files.length;
 
-    const known = new Map(
-      (this.db.prepare('SELECT path, etag FROM tracks').all() as Array<{ path: string; etag: string }>).map((row) => [
-        row.path,
-        row.etag,
-      ]),
-    );
+    const rows = this.db.prepare('SELECT path, etag, file_id FROM tracks').all() as Array<{
+      path: string;
+      etag: string;
+      file_id: string | null;
+    }>;
+    const known = new Map(rows.map((row) => [row.path, row.etag]));
     const remotePaths = new Set(files.map((f) => f.path));
+    const moved = this.followMoves(files, rows, known, remotePaths);
     const changed = files.filter((file) => known.get(file.path) !== file.etag || !file.etag);
     this.status.toRead = changed.length;
     if (changed.length > 0) this.log.info({ files: files.length, toRead: changed.length }, 'Bibliotheks-Scan liest Dateien');
 
     const upsert = this.db.prepare(`
-      INSERT INTO tracks (path, etag, size, mime, title, tag_title, artist, album_artist, album, track_no, disc_no, year, genre, duration, compilation, cover_id, scanned_at)
+      INSERT INTO tracks (path, etag, size, mime, title, tag_title, artist, album_artist, album, track_no, disc_no, year, genre, duration,
+                          compilation, cover_id, scanned_at, file_id, added_at, sort_title, sort_artist, album_sort, album_artist_sort, album_tagged)
       VALUES (@path, @etag, @size, @mime, coalesce((SELECT title FROM track_overrides WHERE path = @path), @title), @title,
-              @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @coverId, @now)
+              @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @coverId,
+              @now, @fileId, coalesce(@addedAt, @now), @sortTitle, @sortArtist, @albumSort, @albumArtistSort, @albumTagged)
       ON CONFLICT(path) DO UPDATE SET
         etag = excluded.etag, size = excluded.size, mime = excluded.mime, title = excluded.title, tag_title = excluded.tag_title,
         artist = excluded.artist, album_artist = excluded.album_artist, album = excluded.album,
         track_no = excluded.track_no, disc_no = excluded.disc_no, year = excluded.year, genre = excluded.genre,
         duration = excluded.duration, compilation = excluded.compilation, cover_id = excluded.cover_id,
-        scanned_at = excluded.scanned_at
+        scanned_at = excluded.scanned_at, file_id = coalesce(excluded.file_id, tracks.file_id),
+        added_at = coalesce(@addedAt, tracks.added_at, excluded.added_at),
+        sort_title = excluded.sort_title, sort_artist = excluded.sort_artist,
+        album_sort = excluded.album_sort, album_artist_sort = excluded.album_artist_sort, album_tagged = excluded.album_tagged
       RETURNING id
     `);
     const clearTags = this.db.prepare('DELETE FROM track_tags WHERE track_id = ?');
@@ -249,6 +259,13 @@ export class LibraryScanner {
           compilation: meta.compilation ? 1 : 0,
           coverId,
           now,
+          fileId: entry.fileId ?? null,
+          addedAt: entry.addedAt ?? null,
+          sortTitle: sortKey(meta.sort.title ?? meta.title),
+          sortArtist: sortKey(meta.sort.artist ?? meta.artist),
+          albumSort: meta.sort.album ?? null,
+          albumArtistSort: meta.sort.albumArtist ?? null,
+          albumTagged: meta.albumTagged ? 1 : 0,
         }) as { id: number };
         clearTags.run(id);
         for (const [tag, value] of meta.tags) addTag.run(id, tag, value, foldValue(value));
@@ -257,6 +274,7 @@ export class LibraryScanner {
           (overrideSpeaker.get(entry.path) as { speaker: string | null } | undefined)?.speaker,
         );
         setSearchExtra.run(extra, id, extra);
+        if (moved.has(entry.path)) continue;
         if (known.has(entry.path)) this.status.updated++;
         else this.status.added++;
       }
@@ -281,6 +299,19 @@ export class LibraryScanner {
       }
     });
     flush(pending);
+
+    // Datei-ID und Upload-Datum auch bei unveränderten Dateien nachtragen (ältere Datenbanken, geänderte Werte).
+    const identify = this.db.prepare(
+      `UPDATE tracks SET file_id = coalesce(@fileId, file_id), added_at = coalesce(@addedAt, added_at)
+       WHERE path = @path AND (file_id IS NOT coalesce(@fileId, file_id) OR added_at IS NOT coalesce(@addedAt, added_at))`,
+    );
+    this.db.transaction(() => {
+      for (const file of files) {
+        if (file.fileId || file.addedAt !== undefined) {
+          identify.run({ path: file.path, fileId: file.fileId ?? null, addedAt: file.addedAt ?? null });
+        }
+      }
+    })();
 
     // Nur löschen, was sicher weg ist: Titel in unlesbaren Ordnern bleiben erhalten.
     const isUnderUnreadable = (path: string) => unreadable.some((dir) => path.startsWith(`${dir}/`));
@@ -323,6 +354,43 @@ export class LibraryScanner {
            AND source NOT IN (SELECT 'cover:' || id FROM covers)`,
       )
       .run();
+  }
+
+  /**
+   * Umbenannte oder verschobene Dateien erkennt der Scan an der Nextcloud-Datei-ID: Der Titel behält
+   * seine ID und damit Favoriten, Weiterhören, Beliebtheit und seinen Platz in eigenen Alben.
+   * Der Titel wird danach neu gelesen, weil sich aus dem Pfad abgeleitete Angaben ändern können.
+   */
+  private followMoves(
+    files: RemoteEntry[],
+    rows: Array<{ path: string; file_id: string | null }>,
+    known: Map<string, string>,
+    remotePaths: Set<string>,
+  ): Set<string> {
+    const byFileId = new Map(rows.filter((row) => row.file_id).map((row) => [row.file_id!, row.path]));
+    const moves: Array<[string, string]> = [];
+    for (const file of files) {
+      if (!file.fileId || known.has(file.path)) continue;
+      const before = byFileId.get(file.fileId);
+      if (before && before !== file.path && !remotePaths.has(before)) moves.push([before, file.path]);
+    }
+    if (!moves.length) return new Set();
+    const statements = [
+      'UPDATE tracks SET path = ?, etag = \'\' WHERE path = ?',
+      'UPDATE OR IGNORE manual_album_tracks SET path = ? WHERE path = ?',
+      'UPDATE OR IGNORE manual_album_removed SET path = ? WHERE path = ?',
+      'UPDATE OR IGNORE track_exclusions SET path = ? WHERE path = ?',
+    ].map((sql) => this.db.prepare(sql));
+    this.db.transaction(() => {
+      for (const [from, to] of moves) for (const statement of statements) statement.run(to, from);
+    })();
+    for (const [from, to] of moves) {
+      known.delete(from);
+      known.set(to, '');
+    }
+    this.status.moved = moves.length;
+    this.log.info({ moved: moves.length }, 'Umbenannte oder verschobene Dateien übernommen');
+    return new Set(moves.map(([, to]) => to));
   }
 
   private saveCovers(covers: Map<string, FolderCover>, isUnderUnreadable: (path: string) => boolean): void {

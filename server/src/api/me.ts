@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import { recordPlay } from '../library/popularity.js';
+import { getOfflineSettings, offlineKey } from '../offline.js';
 import { listenerHome, listFavorites, listProgress, saveProgress, setFavorite, type FavoriteKind } from '../library/listener.js';
 
 const favoriteParams = {
@@ -63,6 +64,14 @@ export async function registerMeRoutes(app: FastifyInstance, { db }: { db: DB })
       return reply.code(204).send();
     },
   );
+
+  // Schlüssel für offline gespeicherte Titel. Jeder erfolgreiche Abruf verlängert die Offline-Frist in der App.
+  app.get('/api/me/offline', async (request, reply) => {
+    reply.header('cache-control', 'no-store');
+    const settings = getOfflineSettings(db);
+    if (!settings.enabled) return { enabled: false, days: settings.days };
+    return { enabled: true, days: settings.days, ...offlineKey(db, userId(request)) };
+  });
 
   app.get('/api/me/home', async (request) => listenerHome(db, userId(request)));
 }
