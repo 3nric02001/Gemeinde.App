@@ -26,6 +26,8 @@ export class FakeNextcloud {
   readonly brokenFiles = new Set<string>();
   /** Dateien, deren Download nach den ersten Bytes stehen bleibt */
   readonly stalledFiles = new Set<string>();
+  /** Dateien, auf die gar keine Antwort kommt (nicht einmal die Header) */
+  readonly hangingFiles = new Set<string>();
   readonly requests: Array<{ method: string; path: string; range?: string }> = [];
   ignoreRange = false;
   private server: Server | undefined;
@@ -143,6 +145,7 @@ export class FakeNextcloud {
       res.writeHead(500).end();
       return;
     }
+    if (this.hangingFiles.has(path)) return;
     if (this.stalledFiles.has(path)) {
       res.writeHead(200, { 'Content-Type': type, 'Content-Length': file.data.length });
       res.write(file.data.subarray(0, 16));

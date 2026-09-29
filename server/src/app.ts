@@ -20,7 +20,7 @@ export interface AppContext {
   scanner: LibraryScanner;
 }
 
-export async function buildApp(config: Config, options: { fetch?: typeof fetch; logger?: boolean; requestTimeoutMs?: number } = {}): Promise<AppContext> {
+export async function buildApp(config: Config, options: { fetch?: typeof fetch; logger?: boolean; requestTimeoutMs?: number; streamTimeoutMs?: number } = {}): Promise<AppContext> {
   const app = Fastify({
     logger: options.logger === false ? false : { level: config.logLevel },
     // Hinter einem Reverse Proxy (Traefik, nginx) die echte Client-IP verwenden, aber nur,
@@ -41,7 +41,13 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
   registerSecurityHeaders(app);
   // Zuerst: Der Zugriffsschutz muss vor allen API-Routen stehen.
   await registerAuth(app, { db, oidc, publicUrl: config.publicUrl });
-  await registerRoutes(app, { db, client, scanner, thumbnails: new CoverThumbnails(db, client, app.log) });
+  await registerRoutes(app, {
+    db,
+    client,
+    scanner,
+    thumbnails: new CoverThumbnails(db, client, app.log),
+    streamTimeoutMs: options.streamTimeoutMs,
+  });
   await registerUserAdminRoutes(app, { db, oidc, publicUrl: config.publicUrl });
   app.get('/manifest.webmanifest', async (_request, reply) =>
     reply.type('application/manifest+json').header('cache-control', 'no-cache').send(manifest(getBranding(db))),

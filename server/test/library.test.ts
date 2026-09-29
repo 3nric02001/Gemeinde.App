@@ -289,6 +289,26 @@ describe('Inkrementeller Scan', () => {
     expect(status.lastError).toBe('Downloads/b.mp3: GET Downloads/b.mp3: Nextcloud hat nicht innerhalb von 1 s geantwortet');
   });
 
+  it('bricht einen Stream ab, wenn die Nextcloud gar nicht antwortet', async () => {
+    const quick = await buildApp(
+      loadConfig({
+        NEXTCLOUD_URL: cloud.url,
+        NEXTCLOUD_USER: USER,
+        NEXTCLOUD_PASSWORD: PASSWORD,
+        NEXTCLOUD_MUSIC_PATH: '/Musik Bibliothek',
+        DATABASE_PATH: ':memory:',
+      }),
+      { logger: false, streamTimeoutMs: 200 },
+    );
+    await quick.scanner.scan();
+    const { id } = quick.db.prepare("SELECT id FROM tracks WHERE path = 'Downloads/b.mp3'").get() as { id: number };
+    cloud.hangingFiles.add('Downloads/b.mp3');
+    const res = await quick.app.inject({ method: 'GET', url: `/api/tracks/${id}/stream`, headers: { cookie: sessionCookie(quick.db) } });
+    await quick.app.close();
+    expect(res.statusCode).toBe(504);
+    expect(res.json()).toEqual({ error: 'Nextcloud antwortet nicht' });
+  });
+
   it('meldet falsche Zugangsdaten und eine nicht erreichbare Nextcloud verständlich', async () => {
     const scanWith = async (env: Record<string, string>) => {
       const other = await buildApp(

@@ -82,6 +82,13 @@ describe('Weboberfläche', () => {
     expect(health.json()).toEqual({ status: 'ok' });
   });
 
+  it('meldet eine nicht erreichbare Datenbank im Healthcheck', async () => {
+    await start(dir);
+    ctx.db.close();
+    const health = await ctx.app.inject({ method: 'GET', url: '/api/health' });
+    expect(health.statusCode).toBe(503);
+  });
+
   it('läuft ohne gebaute Oberfläche als reine API', async () => {
     await start(join(dir, 'fehlt'));
     expect((await inject({ method: 'GET', url: '/' })).statusCode).toBe(404);
