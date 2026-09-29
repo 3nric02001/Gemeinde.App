@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 FROM node:26-bookworm-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
