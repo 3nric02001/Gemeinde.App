@@ -42,6 +42,10 @@ export interface AlbumFields {
   artist?: string | null;
   year?: number | null;
   genre?: string | null;
+  /** Angaben zur Predigt, überschreiben die Werte aus den Tags */
+  speaker?: string | null;
+  passage?: string | null;
+  description?: string | null;
   hidden?: boolean;
 }
 
@@ -82,26 +86,30 @@ function cleanText(value: string | null | undefined): string | null | undefined 
   return trimmed ? trimmed : null;
 }
 
+const TEXT_FIELDS = ['title', 'artist', 'genre', 'speaker', 'passage', 'description'] as const;
+
 function writeOverride(db: DB, key: string, fields: AlbumFields): void {
-  const current = (db.prepare('SELECT title, artist, year, genre, hidden FROM album_overrides WHERE key = ?').get(key) as
-    | { title: string | null; artist: string | null; year: number | null; genre: string | null; hidden: number }
-    | undefined) ?? { title: null, artist: null, year: null, genre: null, hidden: 0 };
-  const next = {
+  const current = (db
+    .prepare('SELECT title, artist, year, genre, speaker, passage, description, hidden FROM album_overrides WHERE key = ?')
+    .get(key) as Record<(typeof TEXT_FIELDS)[number], string | null> & { year: number | null; hidden: number } | undefined) ?? {
+    title: null, artist: null, year: null, genre: null, speaker: null, passage: null, description: null, hidden: 0,
+  };
+  const next: Record<string, unknown> = {
     key,
-    title: fields.title !== undefined ? cleanText(fields.title) ?? null : current.title,
-    artist: fields.artist !== undefined ? cleanText(fields.artist) ?? null : current.artist,
     year: fields.year !== undefined ? fields.year : current.year,
-    genre: fields.genre !== undefined ? cleanText(fields.genre) ?? null : current.genre,
     hidden: fields.hidden !== undefined ? (fields.hidden ? 1 : 0) : current.hidden,
   };
-  if (!next.title && !next.artist && next.year === null && !next.genre && !next.hidden) {
+  for (const field of TEXT_FIELDS) next[field] = fields[field] !== undefined ? cleanText(fields[field]) ?? null : current[field];
+  if (TEXT_FIELDS.every((field) => !next[field]) && next.year === null && !next.hidden) {
     db.prepare('DELETE FROM album_overrides WHERE key = ?').run(key);
     return;
   }
   db.prepare(
-    `INSERT INTO album_overrides (key, title, artist, year, genre, hidden) VALUES (@key, @title, @artist, @year, @genre, @hidden)
+    `INSERT INTO album_overrides (key, title, artist, year, genre, speaker, passage, description, hidden)
+     VALUES (@key, @title, @artist, @year, @genre, @speaker, @passage, @description, @hidden)
      ON CONFLICT(key) DO UPDATE SET title = excluded.title, artist = excluded.artist, year = excluded.year,
-       genre = excluded.genre, hidden = excluded.hidden`,
+       genre = excluded.genre, speaker = excluded.speaker, passage = excluded.passage, description = excluded.description,
+       hidden = excluded.hidden`,
   ).run(next);
 }
 
@@ -115,8 +123,18 @@ export function albumDetail(db: DB, id: number) {
   const album = getAlbum(db, id, { includeHidden: true });
   if (!album) throw new CurationError(404, 'Album nicht gefunden');
   const row = findAlbum(db, id);
-  const override = db.prepare('SELECT title, artist, year, genre FROM album_overrides WHERE key = ?').get(row.key) as
-    | { title: string | null; artist: string | null; year: number | null; genre: string | null }
+  const override = db
+    .prepare('SELECT title, artist, year, genre, speaker, passage, description FROM album_overrides WHERE key = ?')
+    .get(row.key) as
+    | {
+        title: string | null;
+        artist: string | null;
+        year: number | null;
+        genre: string | null;
+        speaker: string | null;
+        passage: string | null;
+        description: string | null;
+      }
     | undefined;
   // Herausgenommene Titel eines automatischen Albums, damit sie sich wiederherstellen lassen.
   const excluded =
@@ -161,6 +179,9 @@ export function albumDetail(db: DB, id: number) {
       artist: override?.artist ?? null,
       year: override?.year ?? null,
       genre: override?.genre ?? null,
+      speaker: override?.speaker ?? null,
+      passage: override?.passage ?? null,
+      description: override?.description ?? null,
     },
     excluded,
     missing,

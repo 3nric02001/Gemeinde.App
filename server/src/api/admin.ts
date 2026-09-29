@@ -53,6 +53,9 @@ const albumFields = {
   artist: nullableText(200),
   year: { type: ['integer', 'null'], minimum: 1000, maximum: 2999 },
   genre: nullableText(100),
+  speaker: nullableText(200),
+  passage: nullableText(200),
+  description: nullableText(2000),
   hidden: { type: 'boolean' },
 } as const;
 

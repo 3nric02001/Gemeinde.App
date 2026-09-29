@@ -1,6 +1,7 @@
 import fastifyCookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
+import { getBranding } from '../branding.js';
 import { OidcService } from '../auth/oidc.js';
 import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_MS, sessionUser, type SessionUser } from '../auth/sessions.js';
 import { AuthError, changePassword, checkLocalLogin, hasRole, upsertOidcUser, type Role } from '../auth/users.js';
@@ -14,7 +15,7 @@ declare module 'fastify' {
 const OIDC_STATE_COOKIE = 'gemeinde_oidc';
 
 /** Pfade, die nur der Admin nutzen darf; alles andere unter /api/admin reicht für Manager. */
-const ADMIN_ONLY = ['/api/admin/users', '/api/admin/groups', '/api/admin/oidc'];
+const ADMIN_ONLY = ['/api/admin/users', '/api/admin/groups', '/api/admin/oidc', '/api/admin/branding'];
 
 /** Welche Rolle eine Anfrage braucht; undefined heißt öffentlich. */
 export function requiredRole(method: string, path: string): Role | undefined {
@@ -158,6 +159,7 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
       return {
         user: user ? { id: user.id, name: user.name, role: user.role, kind: user.kind } : null,
         oidc: oidc.isReady(settings) ? { label: settings.label } : null,
+        branding: getBranding(db),
       };
     });
 

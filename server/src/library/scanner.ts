@@ -3,7 +3,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { setMeta, type DB } from '../db.js';
 import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextcloud/webdav.js';
 import { rebuildAlbums } from './albums.js';
-import { extractMetadata, tagSpan, type TrackMeta } from './metadata.js';
+import { extractMetadata, searchExtra, tagSpan, type TrackMeta } from './metadata.js';
 import { coverRank, dirname, isAudioFile } from './pathMeta.js';
 import { foldValue } from './text.js';
 
@@ -194,6 +194,7 @@ export class LibraryScanner {
     `);
     const clearTags = this.db.prepare('DELETE FROM track_tags WHERE track_id = ?');
     const addTag = this.db.prepare('INSERT INTO track_tags (track_id, tag, value, vkey) VALUES (?, ?, ?, ?)');
+    const setSearchExtra = this.db.prepare('UPDATE tracks SET search_extra = ? WHERE id = ? AND search_extra IS NOT ?');
     const saveCover = this.db.prepare(`
       INSERT INTO covers (hash, mime, data) VALUES (?, ?, ?)
       ON CONFLICT(hash) DO UPDATE SET mime = excluded.mime
@@ -227,6 +228,8 @@ export class LibraryScanner {
         }) as { id: number };
         clearTags.run(id);
         for (const [tag, value] of meta.tags) addTag.run(id, tag, value, foldValue(value));
+        const extra = searchExtra(meta.tags);
+        setSearchExtra.run(extra, id, extra);
         if (known.has(entry.path)) this.status.updated++;
         else this.status.added++;
       }

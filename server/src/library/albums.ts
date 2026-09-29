@@ -1,5 +1,6 @@
 import type { DB } from '../db.js';
-import { UNKNOWN_ARTIST } from './metadata.js';
+import { parseFolderDate } from './dates.js';
+import { PASSAGE_TAGS, SPEAKER_TAGS, UNKNOWN_ARTIST } from './metadata.js';
 import { evaluateRules } from './rules.js';
 import { albumFolderOf, basename, dirname } from './pathMeta.js';
 
@@ -81,10 +82,16 @@ interface Override {
   artist: string | null;
   year: number | null;
   genre: string | null;
+  speaker: string | null;
+  passage: string | null;
+  description: string | null;
   hidden: number;
 }
 
-const COMPARED = ['title', 'artist', 'year', 'genre', 'folder', 'cover', 'coverId', 'count', 'duration', 'hidden'] as const;
+const COMPARED = [
+  'title', 'artist', 'year', 'genre', 'folder', 'cover', 'coverId', 'count', 'duration', 'hidden',
+  'date', 'speaker', 'passage', 'description',
+] as const;
 
 export const MANUAL_KEY_PREFIX = 'manual:';
 
@@ -130,7 +137,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       ]),
     );
     const overrides = new Map(
-      (db.prepare('SELECT key, title, artist, year, genre, hidden FROM album_overrides').all() as Array<
+      (db.prepare('SELECT key, title, artist, year, genre, speaker, passage, description, hidden FROM album_overrides').all() as Array<
         Override & { key: string }
       >).map((row) => [row.key, row]),
     );
@@ -141,6 +148,18 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     );
 
     const rules = evaluateRules(db, tracks);
+
+    // Sprecher und Bibelstelle aus eigenen Tag-Feldern, je Titel der erste Wert.
+    const sermonTag = (tags: string[]) => {
+      const values = new Map<number, string>();
+      const rows = db
+        .prepare(`SELECT track_id, value FROM track_tags WHERE tag IN (SELECT value FROM json_each(?)) ORDER BY rowid`)
+        .all(JSON.stringify(tags)) as Array<{ track_id: number; value: string }>;
+      for (const row of rows) if (!values.has(row.track_id)) values.set(row.track_id, row.value);
+      return values;
+    };
+    const speakers = sermonTag(SPEAKER_TAGS);
+    const passages = sermonTag(PASSAGE_TAGS);
 
     // Automatische Alben: Titel nach Ordner und Albumname gruppieren.
     const drafts = new Map<string, AlbumDraft>();
@@ -158,11 +177,18 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
 
     const derive = (draft: AlbumDraft, cover: string | undefined) => {
       const override = overrides.get(draft.key);
+      const tagTitle = mostCommon(draft.tracks.map((t) => t.album));
+      // Datum aus dem Albumordner ("2026-09-27 Erntedank"), sonst aus dem Albumnamen; nur bei automatischen Alben.
+      const date = draft.folder ? (parseFolderDate(basename(draft.folder)) ?? (tagTitle ? parseFolderDate(tagTitle) : undefined)) : undefined;
       return {
         key: draft.key,
-        title: override?.title ?? mostCommon(draft.tracks.map((t) => t.album)) ?? draft.title,
+        title: override?.title ?? tagTitle ?? draft.title,
         artist: override?.artist ?? (draft.tracks.length ? albumArtist(draft.tracks) : UNKNOWN_ARTIST),
-        year: override?.year ?? mostCommon(draft.tracks.map((t) => t.year)) ?? null,
+        year: override?.year ?? mostCommon(draft.tracks.map((t) => t.year)) ?? (date ? Number(date.slice(0, 4)) : null),
+        date: date ?? null,
+        speaker: override?.speaker ?? mostCommon(draft.tracks.map((t) => speakers.get(t.id))) ?? null,
+        passage: override?.passage ?? mostCommon(draft.tracks.map((t) => passages.get(t.id))) ?? null,
+        description: override?.description ?? null,
         genre: override?.genre ?? mostCommon(draft.tracks.map((t) => t.genre)) ?? null,
         folder: draft.folder,
         cover: cover ?? null,
@@ -176,23 +202,28 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     };
 
     const upsertAuto = db.prepare(`
-      INSERT INTO albums (key, title, artist, year, genre, folder, cover_path, cover_id, track_count, duration, hidden, created_at)
-      VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @coverId, @count, @duration, @hidden, @now)
+      INSERT INTO albums (key, title, artist, year, genre, folder, cover_path, cover_id, track_count, duration, hidden, created_at,
+                          date, speaker, passage, description)
+      VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @coverId, @count, @duration, @hidden, @now,
+              @date, @speaker, @passage, @description)
       ON CONFLICT(key) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, year = excluded.year, genre = excluded.genre,
         folder = excluded.folder, cover_path = excluded.cover_path, cover_id = excluded.cover_id,
-        track_count = excluded.track_count, duration = excluded.duration, hidden = excluded.hidden
+        track_count = excluded.track_count, duration = excluded.duration, hidden = excluded.hidden,
+        date = excluded.date, speaker = excluded.speaker, passage = excluded.passage, description = excluded.description
       RETURNING id
     `);
     const updateManual = db.prepare(`
       UPDATE albums SET title = @title, artist = @artist, year = @year, genre = @genre, folder = @folder,
-        cover_path = @cover, cover_id = @coverId, track_count = @count, duration = @duration, hidden = @hidden
+        cover_path = @cover, cover_id = @coverId, track_count = @count, duration = @duration, hidden = @hidden,
+        date = @date, speaker = @speaker, passage = @passage, description = @description
       WHERE id = @id
     `);
 
     const existing = db
       .prepare(
-        `SELECT id, key, kind, title, artist, year, genre, folder, cover_path AS cover, cover_id AS coverId, track_count AS count, duration, hidden
+        `SELECT id, key, kind, title, artist, year, genre, folder, cover_path AS cover, cover_id AS coverId, track_count AS count, duration, hidden,
+                date, speaker, passage, description
          FROM albums`,
       )
       .all() as Array<AlbumRow & Record<string, unknown>>;

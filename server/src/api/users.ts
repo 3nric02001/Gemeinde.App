@@ -3,6 +3,7 @@ import type { DB } from '../db.js';
 import type { OidcService, OidcSettings } from '../auth/oidc.js';
 import { deleteGroup, deleteUser, listGroups, listUsers, ROLES, saveGroup, setUserDisabled, type Role } from '../auth/users.js';
 import { authErrorHandler, redirectUri } from './auth.js';
+import { getBranding, saveBranding, type Branding } from '../branding.js';
 
 const idParam = {
   type: 'object',
@@ -29,6 +30,21 @@ export async function registerUserAdminRoutes(
     admin.setErrorHandler(authErrorHandler);
 
     admin.get('/api/admin/users', async () => ({ items: listUsers(db) }));
+
+    admin.get('/api/admin/branding', async () => getBranding(db));
+    admin.put(
+      '/api/admin/branding',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            properties: { name: { type: 'string', maxLength: 60 }, welcome: { type: 'string', maxLength: 300 } },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request) => saveBranding(db, request.body as Partial<Branding>),
+    );
 
     admin.patch(
       '/api/admin/users/:id',

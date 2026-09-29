@@ -22,7 +22,8 @@ const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 
 const DISC_FOLDER = /^(?:cd|disc|disk|dvd|seite|side)[\s._-]*(\d{1,2})$/i;
 const YEAR_SUFFIX = /^(.*?)[\s._-]*[([]((?:19|20)\d{2})[)\]]$/;
-const YEAR_PREFIX = /^((?:19|20)\d{2})[\s._-]+(.+)$/;
+// Nicht bei einem Datum wie "2026-09-27 Erntedank": das bleibt als Ganzes der Albumname.
+const YEAR_PREFIX = /^((?:19|20)\d{2})[\s._-]+(?!\d)(.+)$/;
 
 export function extension(path: string): string {
   const name = basename(path);
