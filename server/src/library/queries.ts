@@ -25,12 +25,16 @@ export interface AlbumFilter {
   year?: number;
   decade?: number;
   sort: 'title' | 'artist' | 'year' | 'recent';
+  /** Nur für den Admin-Bereich: ausgeblendete Alben mitliefern */
+  includeHidden?: boolean;
+  kind?: 'auto' | 'manual';
   limit: number;
   offset: number;
 }
 
 const TRACK_COLUMNS = `
-  t.id, t.title, t.artist, t.album_artist AS albumArtist, t.album, t.album_id AS albumId,
+  t.id, t.title, t.artist, t.album_artist AS albumArtist,
+  coalesce((SELECT title FROM albums WHERE id = t.album_id), t.album) AS album, t.album_id AS albumId,
   t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType,
   (t.cover_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
@@ -38,7 +42,7 @@ const TRACK_COLUMNS = `
 `;
 const ALBUM_COLUMNS = `
   a.id, a.title, a.artist, a.year, a.genre, a.track_count AS trackCount, a.duration,
-  (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover
+  (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover, a.kind
 `;
 
 /**
@@ -78,8 +82,10 @@ function sql(where: Where): string {
   return where.clauses.length ? `WHERE ${where.clauses.join(' AND ')}` : '';
 }
 
-function coerceHasCover<T extends { hasCover: number | boolean }>(row: T): T {
-  return { ...row, hasCover: Boolean(row.hasCover) };
+function coerceHasCover<T extends { hasCover: number | boolean; hidden?: number | boolean }>(row: T): T {
+  return row.hidden === undefined
+    ? { ...row, hasCover: Boolean(row.hasCover) }
+    : { ...row, hasCover: Boolean(row.hasCover), hidden: Boolean(row.hidden) };
 }
 
 export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, unknown>> {
@@ -95,7 +101,7 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
     where.params.artist = filter.artist;
   }
   if (filter.albumId) {
-    where.clauses.push('t.album_id = @albumId');
+    where.clauses.push('t.id IN (SELECT track_id FROM album_tracks WHERE album_id = @albumId)');
     where.params.albumId = filter.albumId;
   }
   commonFilters(where, 't', filter);
@@ -125,17 +131,24 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
   const fts = filter.q ? toFtsQuery(filter.q) : undefined;
   if (filter.q && !fts) return { items: [], total: 0, limit: filter.limit, offset: filter.offset };
   if (fts) {
-    // Album trifft, wenn Titel, Interpret, Album oder Genre eines seiner Titel passt.
+    // Album trifft, wenn sein eigener Titel oder Titel, Interpret, Album oder Genre eines seiner Titel passt.
     where.clauses.push(
-      'a.id IN (SELECT t.album_id FROM tracks t WHERE t.id IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH @fts))',
+      `(a.id IN (SELECT rowid FROM albums_fts WHERE albums_fts MATCH @fts)
+        OR a.id IN (SELECT album_id FROM album_tracks WHERE track_id IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH @fts)))`,
     );
     where.params.fts = fts;
   }
   if (filter.artist) {
     where.clauses.push(
-      '(a.artist = @artist COLLATE NOCASE OR a.id IN (SELECT album_id FROM tracks WHERE artist = @artist COLLATE NOCASE))',
+      `(a.artist = @artist COLLATE NOCASE OR a.id IN (
+        SELECT at.album_id FROM album_tracks at JOIN tracks t ON t.id = at.track_id WHERE t.artist = @artist COLLATE NOCASE))`,
     );
     where.params.artist = filter.artist;
+  }
+  if (!filter.includeHidden) where.clauses.push('a.hidden = 0');
+  if (filter.kind) {
+    where.clauses.push('a.kind = @kind');
+    where.params.kind = filter.kind;
   }
   commonFilters(where, 'a', filter);
 
@@ -144,24 +157,31 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
   };
   const items = (
     db
-      .prepare(`SELECT ${ALBUM_COLUMNS} FROM albums a ${sql(where)} ORDER BY ${ALBUM_SORT[filter.sort]} LIMIT @limit OFFSET @offset`)
+      .prepare(
+        `SELECT ${ALBUM_COLUMNS}${filter.includeHidden ? ', a.hidden' : ''} FROM albums a ${sql(where)} ORDER BY ${ALBUM_SORT[filter.sort]} LIMIT @limit OFFSET @offset`,
+      )
       .all({ ...where.params, limit: filter.limit, offset: filter.offset }) as Array<{ hasCover: number }>
   ).map(coerceHasCover);
   return { items, total, limit: filter.limit, offset: filter.offset };
 }
 
-export function getAlbum(db: DB, id: number): Record<string, unknown> | undefined {
-  const album = db.prepare(`SELECT ${ALBUM_COLUMNS} FROM albums a WHERE a.id = ?`).get(id) as
-    | { hasCover: number }
+export function getAlbum(
+  db: DB,
+  id: number,
+  options: { includeHidden?: boolean } = {},
+): (Record<string, unknown> & { tracks: Array<Record<string, unknown>> }) | undefined {
+  const album = db.prepare(`SELECT ${ALBUM_COLUMNS}, a.hidden FROM albums a WHERE a.id = ?`).get(id) as
+    | { hasCover: number; hidden: number }
     | undefined;
-  if (!album) return undefined;
+  if (!album || (album.hidden && !options.includeHidden)) return undefined;
   const tracks = db
     .prepare(
-      `SELECT ${TRACK_COLUMNS} FROM tracks t WHERE t.album_id = ?
-       ORDER BY coalesce(t.disc_no, 1), t.track_no IS NULL, t.track_no, t.path`,
+      `SELECT ${TRACK_COLUMNS} FROM album_tracks at JOIN tracks t ON t.id = at.track_id
+       WHERE at.album_id = ? ORDER BY at.position`,
     )
     .all(id) as Array<{ hasCover: number }>;
-  return { ...coerceHasCover(album), tracks: tracks.map(coerceHasCover) };
+  const { hidden, ...rest } = coerceHasCover(album);
+  return { ...rest, ...(options.includeHidden ? { hidden } : {}), tracks: tracks.map(coerceHasCover) };
 }
 
 /** Titel in der angegebenen Reihenfolge */
@@ -245,7 +265,7 @@ export function getFacets(db: DB) {
     .all();
   const totals = db
     .prepare(
-      `SELECT (SELECT count(*) FROM tracks) AS tracks, (SELECT count(*) FROM albums) AS albums,
+      `SELECT (SELECT count(*) FROM tracks) AS tracks, (SELECT count(*) FROM albums WHERE hidden = 0) AS albums,
               (SELECT coalesce(sum(duration), 0) FROM tracks) AS duration`,
     )
     .get();

@@ -3,8 +3,8 @@
 Minimalistischer Musikplayer für die Gemeinde, der seine Musik direkt aus einer Nextcloud liest.
 Alben und Suchfilter entstehen automatisch aus Tags und Ordnerstruktur.
 
-Dieser Stand enthält die **Musikbibliothek** (Backend) und die **Weboberfläche** zum Hören.
-Login (OIDC), Benutzer- und Gruppenverwaltung folgen.
+Dieser Stand enthält die **Musikbibliothek** (Backend), die **Weboberfläche** zum Hören und eine
+**Verwaltung** für Alben. Login (OIDC), Benutzer- und Gruppenverwaltung folgen.
 
 ![Album in der Weboberfläche](docs/screenshots/desktop-album.png)
 
@@ -33,6 +33,25 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 Die Farben stehen als CSS-Variablen oben in `web/src/styles.css` und lassen sich dort zentral anpassen.
 Die Oberfläche ist mit Vite und Preact gebaut (ca. 17 KB JavaScript, gzip) und wird vom selben Server
 unter `/` ausgeliefert; es ist kein zweiter Container nötig.
+
+## Verwaltung: Alben zusammenstellen und korrigieren
+
+Unter `/admin` (Link „Verwaltung“ in der Seitenleiste bzw. unten auf der Startseite) lassen sich Alben
+von Hand pflegen. Bis zum Login per OIDC meldet man sich dort mit dem `ADMIN_TOKEN` an.
+
+- **Eigene Alben**, z. B. „Predigten 2024“: Titel über die Suche hinzufügen, per Pfeil umsortieren,
+  entfernen. Ein Titel kann in beliebig vielen Alben stehen. Interpret, Jahr, Genre und Cover
+  ergeben sich aus den Titeln, lassen sich aber überschreiben.
+- **Automatische Alben korrigieren**: Titel, Interpret, Jahr und Genre ändern (und wieder auf
+  „automatisch“ zurücksetzen), einzelne Titel herausnehmen und zurückholen oder das ganze Album
+  für Hörer ausblenden.
+- **Verschieben statt kopieren**: Titel in einem automatischen Album auswählen und „Zu eigenem Album
+  hinzufügen“. Mit „herausnehmen“ verschwinden sie aus dem bisherigen Album, sonst stehen sie in beiden.
+
+Alle Eingriffe werden getrennt von den gescannten Daten gespeichert (nach Dateipfad bzw. Album) und
+bei jedem Scan wieder angewendet. Fehlt eine Datei eines eigenen Albums zeitweise in der Nextcloud,
+erscheint sie nach dem nächsten Scan wieder an ihrem Platz. Wird eine Datei umbenannt oder
+verschoben, muss sie im eigenen Album neu eingetragen werden.
 
 ## So funktioniert es
 
@@ -71,8 +90,9 @@ docker compose up -d --build
 curl localhost:3000/api/health
 ```
 
-Die Datenbank liegt im Volume `gemeinde-data` (`/data` im Container). Sie lässt sich jederzeit
-löschen; der nächste Scan baut sie aus der Nextcloud neu auf. Für den Betrieb im Internet gehört
+Die Datenbank liegt im Volume `gemeinde-data` (`/data` im Container). Die Bibliothek selbst baut
+jeder Scan aus der Nextcloud neu auf, eigene Alben und Korrekturen aus der Verwaltung gibt es aber
+nur in dieser Datenbank: Das Volume gehört deshalb ins Backup. Für den Betrieb im Internet gehört
 ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 
 | Variable | Standard | Bedeutung |
@@ -81,7 +101,7 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `NEXTCLOUD_USER` | – | Service-Account |
 | `NEXTCLOUD_PASSWORD` | – | App-Passwort des Service-Accounts |
 | `NEXTCLOUD_MUSIC_PATH` | – (Pflicht) | Ordner, der gescannt wird, relativ zu den Dateien des Service-Accounts, z. B. `/Gemeinde/Medien/Musik`. Nur dieser Ordner und seine Unterordner kommen in die Bibliothek. |
-| `ADMIN_TOKEN` | – | Erlaubt `POST /api/scan`; ohne Token ist der manuelle Scan gesperrt |
+| `ADMIN_TOKEN` | – | Anmeldung für die Verwaltung und `POST /api/scan`; ohne Token sind beide gesperrt |
 | `SCAN_INTERVAL_MINUTES` | `60` | Automatischer Scan, `0` = aus |
 | `SCAN_CONCURRENCY` | `4` | Parallele Zugriffe auf die Nextcloud beim Scan |
 | `DATABASE_PATH` | `/data/library.db` | Pfad der SQLite-Datei |
@@ -107,7 +127,22 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `POST /api/scan` | Scan starten (`Authorization: Bearer <ADMIN_TOKEN>`) |
 | `GET /api/health` | Healthcheck |
 
-Alle Listen liefern `{ items, total, limit, offset }`.
+Alle Listen liefern `{ items, total, limit, offset }`. Alben haben `kind: "auto" | "manual"`.
+
+Verwaltung (alle mit `Authorization: Bearer <ADMIN_TOKEN>`):
+
+| Methode und Pfad | Zweck |
+| --- | --- |
+| `GET /api/admin/albums?q=&kind=auto\|manual` | Alle Alben inkl. ausgeblendeter |
+| `POST /api/admin/albums` | Eigenes Album anlegen: `{ title, artist?, year?, genre?, trackIds?, move? }` |
+| `GET /api/admin/albums/:id` | Album mit Korrekturen, herausgenommenen und fehlenden Titeln |
+| `PATCH /api/admin/albums/:id` | `{ title?, artist?, year?, genre?, hidden? }`; `null` setzt auf automatisch zurück |
+| `DELETE /api/admin/albums/:id` | Eigenes Album löschen (die Titel bleiben) |
+| `POST /api/admin/albums/:id/tracks` | Titel anhängen: `{ trackIds, move? }`; `move` nimmt sie aus ihrem automatischen Album |
+| `PUT /api/admin/albums/:id/tracks` | Inhalt und Reihenfolge eines eigenen Albums setzen: `{ trackIds }` |
+| `DELETE /api/admin/albums/:id/tracks/:trackId` | Titel entfernen (bei automatischen Alben: herausnehmen) |
+| `POST /api/admin/albums/:id/tracks/:trackId/restore` | Herausgenommenen Titel zurückholen |
+| `GET /api/admin/track-albums?ids=1,2` | In welchen Alben die Titel stehen |
 
 ## Entwicklung
 
@@ -120,12 +155,13 @@ NEXTCLOUD_URL=… NEXTCLOUD_USER=… NEXTCLOUD_PASSWORD=… NEXTCLOUD_MUSIC_PATH
 
 cd web
 npm install
-npm test            # Warteschlange, Formatierung, Titelliste
+npm test            # Warteschlange, Formatierung, Titelliste, Verwaltung
 npm run dev         # Oberfläche mit Hot Reload, /api geht an localhost:3000
 ```
 
 Ohne Nextcloud ausprobieren: `cd web && npm run build && cd ../server && npm run demo` startet den
-Server mit einer simulierten Nextcloud und ein paar Beispielalben unter http://localhost:3000.
+Server mit einer simulierten Nextcloud und ein paar Beispielalben unter http://localhost:3000
+(Verwaltung unter `/admin`, Token `demo`).
 
 Die Tests erzeugen winzige MP3- und FLAC-Dateien im Speicher und starten einen WebDAV-Server,
 der sich wie Nextcloud verhält. Echte Musikdateien sind dafür nicht nötig.

@@ -27,6 +27,10 @@ export function Sidebar({ path }: { path: string }) {
           </li>
         ))}
       </ul>
+      <a class={`sidebar-admin${path.startsWith('/admin') ? ' is-active' : ''}`} href="/admin">
+        <Icon name="settings" size={20} />
+        <span>Verwaltung</span>
+      </a>
     </nav>
   );
 }

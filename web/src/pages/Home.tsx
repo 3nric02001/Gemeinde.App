@@ -66,7 +66,7 @@ export function Home() {
       {facets.data && (
         <p class="stats">
           {plural(facets.data.totals.albums, 'Album', 'Alben')} · {plural(facets.data.totals.tracks, 'Titel', 'Titel')} ·{' '}
-          {formatDuration(facets.data.totals.duration)}
+          {formatDuration(facets.data.totals.duration)} · <a href="/admin">Verwaltung</a>
         </p>
       )}
     </div>

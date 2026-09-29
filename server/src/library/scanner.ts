@@ -240,9 +240,22 @@ export class LibraryScanner {
     })();
     this.status.removed = gone.length;
 
-    rebuildAlbums(this.db, covers);
+    this.saveCovers(covers, isUnderUnreadable);
+    rebuildAlbums(this.db);
     // Bilder, auf die kein Titel mehr zeigt, wegräumen.
     this.db.prepare('DELETE FROM covers WHERE id NOT IN (SELECT cover_id FROM tracks WHERE cover_id IS NOT NULL)').run();
+  }
+
+  private saveCovers(covers: Map<string, string>, isUnderUnreadable: (path: string) => boolean): void {
+    const upsert = this.db.prepare(
+      'INSERT INTO folder_covers (folder, path) VALUES (?, ?) ON CONFLICT(folder) DO UPDATE SET path = excluded.path',
+    );
+    const remove = this.db.prepare('DELETE FROM folder_covers WHERE folder = ?');
+    const known = this.db.prepare('SELECT folder, path FROM folder_covers').all() as Array<{ folder: string; path: string }>;
+    this.db.transaction(() => {
+      for (const { folder, path } of known) if (!covers.has(folder) && !isUnderUnreadable(path)) remove.run(folder);
+      for (const [folder, path] of covers) upsert.run(folder, path);
+    })();
   }
 
   /** Liest den Dateianfang; ist der Tag-Block (z. B. wegen eines großen Covers) länger, wird nachgeladen. */

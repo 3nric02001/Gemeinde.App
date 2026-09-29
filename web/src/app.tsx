@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { Admin } from './admin/Admin';
 import { NowPlaying } from './components/NowPlaying';
 import { Sidebar, TabBar } from './components/Nav';
 import { PlayerBar } from './components/PlayerBar';
@@ -26,6 +27,7 @@ function Page({ location }: { location: Location }) {
   if (path === '/datum') return <Dates />;
   if (path === '/datum/ordner' && params.get('pfad')) return <DateFolder path={params.get('pfad')!} />;
   if (path === '/warteschlange') return <QueuePage />;
+  if (path === '/admin' || path.startsWith('/admin/')) return <Admin location={location} />;
   const album = match('/album/:id', path);
   if (album && /^\d+$/.test(album.id!)) return <Album id={Number(album.id)} />;
   const artist = match('/interpret/:name', path);

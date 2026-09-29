@@ -79,9 +79,9 @@ for (const [folder, titles, colors] of services) {
 
 const config = loadConfig({
   NEXTCLOUD_URL: cloud.url, NEXTCLOUD_USER: USER, NEXTCLOUD_PASSWORD: PASSWORD, NEXTCLOUD_MUSIC_PATH: '/Musik',
-  DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000',
+  DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000', ADMIN_TOKEN: 'demo',
 });
 const { app, scanner } = await buildApp(config, { logger: false });
 await scanner.scan();
 await app.listen({ port: 3000, host: '127.0.0.1' });
-console.log('Demo läuft auf http://localhost:3000');
+console.log('Demo läuft auf http://localhost:3000 (Verwaltung unter /admin, Token: demo)');

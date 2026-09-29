@@ -49,6 +49,12 @@ describe('Titelliste', () => {
     expect(screen.getByText('CD 2')).toBeTruthy();
   });
 
+  it('nummeriert eigene Alben fortlaufend statt nach Tracknummer', () => {
+    render(<TrackList tracks={[track(7, 'A', 1), track(3, 'B', 2)]} variant="album" ordinal />);
+    expect(screen.queryByText('CD 2')).toBeNull();
+    expect([...document.querySelectorAll('.track-no')].map((el) => el.textContent)).toEqual(['1', '2']);
+  });
+
   it('bietet "Als Nächstes spielen" im Menü an', () => {
     const playNext = vi.spyOn(player, 'playNext').mockImplementation(() => {});
     const t = track(1, 'Macht hoch die Tür');
