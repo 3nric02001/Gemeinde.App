@@ -1,4 +1,5 @@
 import type { DB } from '../db.js';
+import type { CategoryFilter } from './categories.js';
 
 export interface Page<T> {
   items: T[];
@@ -14,6 +15,8 @@ export interface TrackFilter {
   year?: number;
   decade?: number;
   albumId?: number;
+  /** Nur Titel mit einem bestimmten Wert einer Kategorie */
+  category?: CategoryFilter;
   limit: number;
   offset: number;
 }
@@ -28,6 +31,7 @@ export interface AlbumFilter {
   /** Nur für den Admin-Bereich: ausgeblendete Alben mitliefern */
   includeHidden?: boolean;
   kind?: 'auto' | 'manual';
+  category?: CategoryFilter;
   limit: number;
   offset: number;
 }
@@ -78,6 +82,14 @@ function commonFilters(where: Where, alias: string, filter: { artist?: string; g
   }
 }
 
+/** Titel-IDs, die in einem der Felder der Kategorie einen der Werte tragen */
+function categoryTracks(where: Where, category: CategoryFilter): string {
+  where.params.catFields = JSON.stringify(category.fields);
+  where.params.catKeys = JSON.stringify(category.vkeys);
+  return `SELECT track_id FROM track_tags WHERE tag IN (SELECT value FROM json_each(@catFields))
+    AND vkey IN (SELECT value FROM json_each(@catKeys))`;
+}
+
 function sql(where: Where): string {
   return where.clauses.length ? `WHERE ${where.clauses.join(' AND ')}` : '';
 }
@@ -104,6 +116,7 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
     where.clauses.push('t.id IN (SELECT track_id FROM album_tracks WHERE album_id = @albumId)');
     where.params.albumId = filter.albumId;
   }
+  if (filter.category) where.clauses.push(`t.id IN (${categoryTracks(where, filter.category)})`);
   commonFilters(where, 't', filter);
 
   const { total } = db.prepare(`SELECT count(*) AS total FROM tracks t ${sql(where)}`).get(where.params) as {
@@ -149,6 +162,9 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
   if (filter.kind) {
     where.clauses.push('a.kind = @kind');
     where.params.kind = filter.kind;
+  }
+  if (filter.category) {
+    where.clauses.push(`a.id IN (SELECT album_id FROM album_tracks WHERE track_id IN (${categoryTracks(where, filter.category)}))`);
   }
   commonFilters(where, 'a', filter);
 

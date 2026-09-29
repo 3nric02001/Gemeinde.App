@@ -14,6 +14,82 @@ export interface TrackMeta {
   compilation: boolean;
   /** Eingebettetes Cover, falls vorhanden */
   picture: Picture | undefined;
+  /** Alle Text-Tags als [Name, Wert], Name klein geschrieben; Grundlage für frei definierbare Kategorien */
+  tags: Array<[string, string]>;
+}
+
+/** Standardfelder, die immer mit den aufbereiteten Werten (inkl. Pfad-Fallback) belegt werden */
+const CORE_TAGS = new Set(['title', 'artist', 'albumartist', 'album', 'genre', 'year']);
+/** Keine Kategorie-Kandidaten: technische, sehr lange oder je Titel eindeutige Felder */
+const SKIPPED_TAGS = new Set([
+  'title', 'artists', 'picture', 'track', 'disk', 'lyrics', 'comment', 'description', 'encodedby', 'encodersettings', 'encoder', 'isrc',
+  'barcode', 'catalognumber', 'musicbrainz_recordingid', 'musicbrainz_trackid', 'musicbrainz_albumid',
+  'musicbrainz_artistid', 'musicbrainz_albumartistid', 'musicbrainz_releasegroupid', 'musicbrainz_workid',
+  'musicbrainz_releasetrackid', 'acoustid_id', 'acoustid_fingerprint', 'replaygain_track_gain', 'replaygain_track_peak',
+  'replaygain_album_gain', 'replaygain_album_peak', 'compilation', 'gapless', 'bpm', 'titlesort', 'artistsort',
+  'albumsort', 'albumartistsort', 'composersort', 'date', 'originaldate', 'releasedate', 'originalyear',
+  'tracknumber', 'tracktotal', 'totaltracks', 'discnumber', 'disctotal', 'totaldiscs', 'vendor', 'itunsmpb', 'itunnorm',
+  'waveformatextensible', 'notes', 'averagelevel', 'peaklevel', 'podcast', 'podcasturl', 'podcastid', 'podcastkeywords',
+]);
+const MAX_TAG_VALUE = 200;
+const MAX_TAGS = 60;
+
+/** Mehrfachwerte ("Lobpreis; Chor") aufteilen, leere und überlange verwerfen */
+function tagValues(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw : [raw];
+  const out: string[] = [];
+  for (const item of list) {
+    if (typeof item !== 'string' && typeof item !== 'number') continue;
+    for (const part of String(item).replace(/\0/g, ';').split(';')) {
+      const value = part.trim();
+      if (value && value.length <= MAX_TAG_VALUE) out.push(value);
+    }
+  }
+  return out;
+}
+
+/**
+ * Name eines eigenen Tag-Felds oder undefined für Standardfelder, die schon über `common` kommen.
+ * ID3: nur TXXX-Felder; Vorbis/APE: alle Felder; MP4: nur "----:"-Felder.
+ */
+function customTagName(format: string, id: string): string | undefined {
+  let name: string | undefined;
+  if (format.startsWith('ID3v2')) name = /^TXXX:(.+)$/i.exec(id)?.[1];
+  else if (format === 'vorbis' || format.startsWith('APE')) name = id;
+  else if (format === 'iTunes') name = /^----:[^:]*:(.+)$/.exec(id)?.[1];
+  name = name?.trim().toLowerCase();
+  return name && name.length <= 60 ? name : undefined;
+}
+
+/** Sammelt Tags aus den vereinheitlichten Feldern und eigenen Feldern (TXXX, Vorbis, APE, iTunes). */
+function collectTags(
+  common: Record<string, unknown> | undefined,
+  native: Record<string, Array<{ id: string; value: unknown }>> | undefined,
+  core: Record<string, string | number | undefined>,
+): Array<[string, string]> {
+  const seen = new Set<string>();
+  const tags: Array<[string, string]> = [];
+  const add = (name: string | undefined, values: string[]) => {
+    if (!name || SKIPPED_TAGS.has(name)) return;
+    for (const value of values) {
+      const key = `${name}\u0000${value.toLowerCase()}`;
+      if (seen.has(key) || tags.length >= MAX_TAGS) continue;
+      seen.add(key);
+      tags.push([name, value]);
+    }
+  };
+  for (const [name, value] of Object.entries(core)) add(name, tagValues(value));
+  for (const [name, value] of Object.entries(common ?? {})) {
+    if (CORE_TAGS.has(name) && name !== 'genre') continue;
+    add(name, name === 'genre' ? tagValues(value).map((g) => normalizeGenre(g) ?? '').filter(Boolean) : tagValues(value));
+  }
+  for (const [format, frames] of Object.entries(native ?? {})) {
+    for (const frame of frames) {
+      const name = customTagName(format, frame.id);
+      if (name && !CORE_TAGS.has(name)) add(name, tagValues(frame.value));
+    }
+  }
+  return tags;
 }
 
 export interface Picture {
@@ -89,25 +165,37 @@ function validYear(year: number | undefined): number | undefined {
 export async function extractMetadata(path: string, head: Buffer, mimeType?: string): Promise<TrackMeta> {
   const fromPath = parsePath(path);
   let common: Awaited<ReturnType<typeof parseBuffer>>['common'] | undefined;
+  let native: Awaited<ReturnType<typeof parseBuffer>>['native'] | undefined;
   let duration: number | undefined;
   try {
     const parsed = await parseBuffer(head, { mimeType, path }, { duration: false, skipCovers: false });
     common = parsed.common;
+    native = parsed.native;
     duration = parsed.format.duration;
   } catch {
     common = undefined;
   }
 
   const artist = text(common?.artist) ?? text(common?.albumartist) ?? fromPath.artist ?? UNKNOWN_ARTIST;
+  const title = text(common?.title) ?? fromPath.title;
+  const albumArtist = text(common?.albumartist);
+  const album = text(common?.album) ?? fromPath.album;
+  const year = validYear(common?.year) ?? fromPath.year;
+  const genre = normalizeGenre(common?.genre?.[0]);
   return {
-    title: text(common?.title) ?? fromPath.title,
+    title,
     artist,
-    albumArtist: text(common?.albumartist),
-    album: text(common?.album) ?? fromPath.album,
+    albumArtist,
+    album,
     trackNo: common?.track?.no ?? fromPath.trackNo,
     discNo: common?.disk?.no ?? fromPath.discNo,
-    year: validYear(common?.year) ?? fromPath.year,
-    genre: normalizeGenre(common?.genre?.[0]),
+    year,
+    genre,
+    tags: collectTags(
+      common as unknown as Record<string, unknown>,
+      native as Record<string, Array<{ id: string; value: unknown }>>,
+      { artist, albumartist: albumArtist, album, year },
+    ),
     duration: duration && Number.isFinite(duration) ? Math.round(duration * 10) / 10 : undefined,
     compilation: common?.compilation === true,
     picture: pickPicture(common?.picture),

@@ -117,3 +117,59 @@ export async function adminRequest<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' |
   if (method !== 'GET' && !url.endsWith('/preview')) clearCache();
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
+
+/** Kategorie mit Zuordnung, wie die Verwaltung sie bearbeitet */
+export interface AdminCategory {
+  id: number;
+  name: string;
+  slug: string;
+  position: number;
+  inNav: boolean;
+  /** Nur zusammengefasste Werte zeigen */
+  groupedOnly: boolean;
+  /** Tag-Felder, aus denen die Werte kommen */
+  fields: string[];
+  /** Zusammengefasste Werte: label <- values */
+  groups: Array<{ label: string; values: string[] }>;
+}
+
+export interface TagField {
+  tag: string;
+  trackCount: number;
+  valueCount: number;
+  samples: string[];
+}
+
+/** Lesbare Namen der gängigen Tag-Felder; eigene Felder (TXXX) erscheinen mit ihrem Namen */
+export const TAG_LABELS: Record<string, string> = {
+  artist: 'Interpret',
+  albumartist: 'Album-Interpret',
+  album: 'Album',
+  genre: 'Genre',
+  year: 'Jahr',
+  composer: 'Komponist',
+  conductor: 'Dirigent',
+  lyricist: 'Texter',
+  grouping: 'Gruppierung',
+  label: 'Label',
+  language: 'Sprache',
+  mood: 'Stimmung',
+  subtitle: 'Untertitel',
+  work: 'Werk',
+  movement: 'Satz',
+  remixer: 'Remixer',
+  producer: 'Produzent',
+  publisher: 'Verlag',
+  copyright: 'Copyright',
+  originalartist: 'Original-Interpret',
+  originalalbum: 'Original-Album',
+};
+
+export const tagLabel = (tag: string) => TAG_LABELS[tag] ?? tag;
+
+/** "Musik, Lied" -> ["Musik", "Lied"] */
+export const splitValues = (text: string) =>
+  text
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);

@@ -19,6 +19,19 @@ import {
   updateAlbum,
   type AlbumFields,
 } from '../library/curation.js';
+import {
+  categoryValues,
+  createCategory,
+  deleteCategory,
+  listCategories,
+  listTagFields,
+  MAX_FIELDS,
+  MAX_GROUP_VALUES,
+  MAX_GROUPS,
+  orderCategories,
+  updateCategory,
+  type CategoryInput,
+} from '../library/categories.js';
 import { searchAlbums, type AlbumFilter } from '../library/queries.js';
 import { RULE_FIELDS, RULE_OPS } from '../library/rules.js';
 
@@ -60,6 +73,26 @@ const ruleParam = {
   properties: { id: { type: 'integer', minimum: 1 }, ruleId: { type: 'integer', minimum: 1 } },
 } as const;
 type RuleRequest = FastifyRequest<{ Params: { id: number; ruleId: number } }>;
+
+const categoryFields = {
+  name: { type: 'string', minLength: 1, maxLength: 60 },
+  fields: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 60 }, minItems: 1, maxItems: MAX_FIELDS },
+  groups: {
+    type: 'array',
+    maxItems: MAX_GROUPS,
+    items: {
+      type: 'object',
+      required: ['label', 'values'],
+      properties: {
+        label: { type: 'string', maxLength: 100 },
+        values: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: MAX_GROUP_VALUES },
+      },
+      additionalProperties: false,
+    },
+  },
+  inNav: { type: 'boolean' },
+  groupedOnly: { type: 'boolean' },
+} as const;
 
 type IdRequest = FastifyRequest<{ Params: { id: number } }>;
 type TrackRequest = FastifyRequest<{ Params: { id: number; trackId: number } }>;
@@ -224,6 +257,71 @@ export async function registerAdminRoutes(
     admin.post('/api/admin/rules/preview', { schema: { body: ruleBody } }, async (request) =>
       previewRule(db, toCondition(request.body)),
     );
+
+    admin.get('/api/admin/categories', async () => ({ items: listCategories(db) }));
+
+    admin.post(
+      '/api/admin/categories',
+      {
+        schema: {
+          body: { type: 'object', required: ['name', 'fields'], properties: categoryFields, additionalProperties: false },
+        },
+      },
+      async (request, reply) =>
+        reply.code(201).send(createCategory(db, request.body as CategoryInput & { name: string; fields: string[] })),
+    );
+
+    admin.patch(
+      '/api/admin/categories/:id',
+      { schema: { params: idParam, body: { type: 'object', properties: categoryFields, additionalProperties: false } } },
+      async (request: IdRequest) => updateCategory(db, request.params.id, request.body as CategoryInput),
+    );
+
+    admin.delete('/api/admin/categories/:id', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
+      deleteCategory(db, request.params.id);
+      return reply.code(204).send();
+    });
+
+    admin.put(
+      '/api/admin/categories/order',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            required: ['ids'],
+            properties: { ids: { type: 'array', items: { type: 'integer', minimum: 1 }, maxItems: 100 } },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request) => ({ items: orderCategories(db, (request.body as { ids: number[] }).ids) }),
+    );
+
+    // Werte einer (noch nicht gespeicherten) Kategorie, während man sie einrichtet
+    admin.post(
+      '/api/admin/categories/preview',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            required: ['fields'],
+            properties: { fields: categoryFields.fields, groups: categoryFields.groups, groupedOnly: categoryFields.groupedOnly },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request) => {
+        const body = request.body as { fields: string[]; groups?: CategoryInput['groups']; groupedOnly?: boolean };
+        const values = categoryValues(db, {
+          fields: body.fields.map((f) => f.toLowerCase()),
+          groups: (body.groups ?? []).filter((g) => g.label.trim()),
+          groupedOnly: body.groupedOnly ?? false,
+        });
+        return { total: values.length, items: values.slice(0, 200) };
+      },
+    );
+
+    admin.get('/api/admin/tag-fields', async () => ({ items: listTagFields(db) }));
 
     admin.get(
       '/api/admin/track-albums',

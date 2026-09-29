@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { foldValue } from './library/text.js';
 
 export type DB = Database.Database;
 
@@ -200,6 +201,63 @@ export const migrations: string[] = [
   ALTER TABLE album_rules_new RENAME TO album_rules;
   CREATE INDEX album_rules_album ON album_rules(album_id);
   `,
+  // Frei definierbare Kategorien ("Interpreten", "Musik" ...): alle Tags je Titel und die Zuordnung der Kategorien dazu.
+  `
+  -- Jeder Tag-Wert eines Titels, auch eigene Felder (TXXX, Vorbis). vkey ist der Vergleichsschlüssel (fold).
+  CREATE TABLE track_tags (
+    track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    tag      TEXT NOT NULL,
+    value    TEXT NOT NULL,
+    vkey     TEXT NOT NULL
+  );
+  CREATE INDEX track_tags_track ON track_tags(track_id);
+  CREATE INDEX track_tags_tag ON track_tags(tag, vkey);
+  -- Vorbelegung aus den bekannten Spalten, bis der nächste Scan alle Felder liest.
+  INSERT INTO track_tags (track_id, tag, value, vkey) SELECT id, 'artist', artist, fold(artist) FROM tracks;
+  INSERT INTO track_tags (track_id, tag, value, vkey)
+    SELECT id, 'albumartist', album_artist, fold(album_artist) FROM tracks WHERE album_artist IS NOT NULL;
+  INSERT INTO track_tags (track_id, tag, value, vkey) SELECT id, 'album', album, fold(album) FROM tracks WHERE album IS NOT NULL;
+  INSERT INTO track_tags (track_id, tag, value, vkey) SELECT id, 'genre', genre, fold(genre) FROM tracks WHERE genre IS NOT NULL;
+  INSERT INTO track_tags (track_id, tag, value, vkey)
+    SELECT id, 'year', CAST(year AS TEXT), CAST(year AS TEXT) FROM tracks WHERE year IS NOT NULL;
+  UPDATE tracks SET etag = '';
+
+  CREATE TABLE categories (
+    id           INTEGER PRIMARY KEY,
+    name         TEXT NOT NULL,
+    slug         TEXT NOT NULL UNIQUE,
+    position     INTEGER NOT NULL,
+    in_nav       INTEGER NOT NULL DEFAULT 1,
+    -- 1: nur die zusammengefassten Werte zeigen, alle anderen ausblenden
+    grouped_only INTEGER NOT NULL DEFAULT 0,
+    created_at   INTEGER NOT NULL
+  );
+  -- Aus welchen Tag-Feldern eine Kategorie ihre Werte nimmt
+  CREATE TABLE category_fields (
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    tag         TEXT NOT NULL,
+    PRIMARY KEY (category_id, tag)
+  ) WITHOUT ROWID;
+  -- Zusammengefasste Werte: "Musik" <- Musik, Lied
+  CREATE TABLE category_groups (
+    id          INTEGER PRIMARY KEY,
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    label       TEXT NOT NULL,
+    position    INTEGER NOT NULL
+  );
+  CREATE INDEX category_groups_category ON category_groups(category_id);
+  CREATE TABLE category_group_values (
+    group_id INTEGER NOT NULL REFERENCES category_groups(id) ON DELETE CASCADE,
+    value    TEXT NOT NULL,
+    vkey     TEXT NOT NULL,
+    PRIMARY KEY (group_id, vkey)
+  ) WITHOUT ROWID;
+
+  INSERT INTO categories (id, name, slug, position, in_nav, created_at) VALUES
+    (1, 'Interpreten', 'interpreten', 0, 1, unixepoch() * 1000),
+    (2, 'Genre', 'genre', 1, 0, unixepoch() * 1000);
+  INSERT INTO category_fields (category_id, tag) VALUES (1, 'artist'), (1, 'albumartist'), (2, 'genre');
+  `,
 ];
 
 export function openDatabase(path: string): DB {
@@ -210,6 +268,7 @@ export function openDatabase(path: string): DB {
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
+  db.function('fold', { deterministic: true }, (value) => (typeof value === 'string' ? foldValue(value) : value));
   migrate(db);
   return db;
 }

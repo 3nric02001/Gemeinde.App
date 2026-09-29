@@ -8,9 +8,13 @@ import { useApi } from '../hooks';
 import { player } from '../player';
 import { ErrorNote, Loading } from './common';
 
-export function Artist({ name }: { name: string }) {
-  const albums = useApi<Page<Album>>(`/api/albums${query({ artist: name, sort: 'year', limit: 200 })}`);
-  const tracks = useApi<Page<Track>>(`/api/tracks${query({ artist: name, limit: 500 })}`);
+/**
+ * Alben und Titel zu einem Wert, z. B. ein Interpret oder "Musik" aus einer eigenen Kategorie.
+ * `filter` sind die Query-Parameter für /api/albums und /api/tracks.
+ */
+export function Collection({ eyebrow, name, filter }: { eyebrow: string; name: string; filter: Record<string, string> }) {
+  const albums = useApi<Page<Album>>(`/api/albums${query({ ...filter, sort: 'year', limit: 200 })}`);
+  const tracks = useApi<Page<Track>>(`/api/tracks${query({ ...filter, limit: 500 })}`);
   if (albums.error) return <ErrorNote message={albums.error} />;
   if (!albums.data || !tracks.data) return <Loading />;
   const all = tracks.data.items;
@@ -22,7 +26,7 @@ export function Artist({ name }: { name: string }) {
           {initials(name)}
         </span>
         <div class="hero-text">
-          <span class="eyebrow">Interpret</span>
+          <span class="eyebrow">{eyebrow}</span>
           <h1>{name}</h1>
           <p class="hero-meta">
             {plural(albums.data.total, 'Album', 'Alben')} · {plural(tracks.data.total, 'Titel', 'Titel')}
@@ -56,4 +60,8 @@ export function Artist({ name }: { name: string }) {
       )}
     </div>
   );
+}
+
+export function Artist({ name }: { name: string }) {
+  return <Collection eyebrow="Interpret" name={name} filter={{ artist: name }} />;
 }

@@ -1,3 +1,5 @@
+import { categoryUrl } from '../api';
+import { useCategories } from '../hooks';
 import { Icon, type IconName } from './Icon';
 
 const items: Array<{ href: string; label: string; icon: IconName; match: (path: string) => boolean }> = [
@@ -9,6 +11,8 @@ const items: Array<{ href: string; label: string; icon: IconName; match: (path: 
 ];
 
 export function Sidebar({ path }: { path: string }) {
+  // Eigene Kategorien aus der Verwaltung stehen nach den festen Einträgen.
+  const categories = useCategories(path).filter((c) => c.inNav);
   return (
     <nav class="sidebar" aria-label="Hauptnavigation">
       <a class="brand" href="/">
@@ -26,6 +30,18 @@ export function Sidebar({ path }: { path: string }) {
             </a>
           </li>
         ))}
+        {categories.map((category) => {
+          const href = categoryUrl(category.slug);
+          const active = path === href || path.startsWith(`${href}/`);
+          return (
+            <li key={category.id}>
+              <a href={href} class={active ? 'is-active' : ''} aria-current={active ? 'page' : undefined}>
+                <Icon name="tag" size={22} />
+                <span>{category.name}</span>
+              </a>
+            </li>
+          );
+        })}
       </ul>
       <a class={`sidebar-admin${path.startsWith('/admin') ? ' is-active' : ''}`} href="/admin">
         <Icon name="settings" size={20} />
