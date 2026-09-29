@@ -121,6 +121,25 @@ describe('Eingebettete Cover', () => {
     expect(again.statusCode).toBe(304);
   });
 
+  it('nimmt nur Rasterbilder als Cover, nie SVG oder HTML', async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+    cloud.put('Boese/Svg/01.mp3', mp3({ title: 'Svg', artist: 'Boese', album: 'Svg', picture: { data: svg, mime: 'image/svg+xml' } }));
+    cloud.put('Boese/Html/01.mp3', mp3({ title: 'Html', artist: 'Boese', album: 'Html', picture: { data: svg, mime: 'text/html' } }));
+    await ctx.scanner.scan();
+    for (const title of ['Svg', 'Html']) {
+      const found = await album(title);
+      expect(found.hasCover, title).toBe(false);
+      expect((await image(`/api/tracks/${found.tracks[0]!.id}/cover`)).status, title).toBe(404);
+    }
+  });
+
+  it('schützt Cover-Antworten vor Ausführung im Browser', async () => {
+    const advent = await album('Advent');
+    const res = await inject({ method: 'GET', url: `/api/albums/${advent.id}/cover` });
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['content-security-policy']).toContain('sandbox');
+  });
+
   it('räumt Bilder auf, die keinem Titel mehr gehören', async () => {
     cloud.delete('Sampler/Mix/02.mp3');
     await ctx.scanner.scan();

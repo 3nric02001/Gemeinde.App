@@ -385,6 +385,10 @@ export const migrations: string[] = [
   CREATE INDEX listening_recent ON listening(user_id, updated_at);
   CREATE INDEX listening_track ON listening(track_id);
   `,
+  `
+  -- Eingebettete Bilder, die kein Rasterbild sind (z. B. SVG), nicht mehr ausliefern.
+  DELETE FROM covers WHERE mime NOT IN ('image/jpeg', 'image/png', 'image/webp', 'image/gif');
+  `,
 ];
 
 export function openDatabase(path: string): DB {

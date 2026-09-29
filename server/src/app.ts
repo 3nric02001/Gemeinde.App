@@ -10,6 +10,7 @@ import { openDatabase, type DB } from './db.js';
 import { relocateLibrary } from './library/relocate.js';
 import { LibraryScanner } from './library/scanner.js';
 import { NextcloudClient } from './nextcloud/webdav.js';
+import { registerSecurityHeaders } from './http/security.js';
 import { registerWeb } from './web.js';
 
 export interface AppContext {
@@ -32,6 +33,7 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
   await ensureLocalAdmin(db, { password: config.adminPassword, reset: config.resetAdminPassword }, app.log);
   const oidc = new OidcService(db);
 
+  registerSecurityHeaders(app);
   // Zuerst: Der Zugriffsschutz muss vor allen API-Routen stehen.
   await registerAuth(app, { db, oidc, publicUrl: config.publicUrl });
   await registerRoutes(app, { db, client, scanner });
