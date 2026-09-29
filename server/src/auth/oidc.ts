@@ -140,7 +140,25 @@ export class OidcService {
       const config = await this.configuration(settings);
       return { issuer: config.serverMetadata().issuer };
     } catch (error) {
-      throw new AuthError(502, `Identity Provider nicht erreichbar: ${(error as Error).message}`);
+      const reported = await this.reportedIssuer(settings.issuer);
+      const hint =
+        reported && reported !== settings.issuer
+          ? ` (eingetragen: ${settings.issuer}, der Identity Provider meldet: ${reported})`
+          : '';
+      throw new AuthError(502, `Identity Provider nicht erreichbar: ${(error as Error).message}${hint}`);
+    }
+  }
+
+  /** Issuer laut Discovery-Dokument, damit eine Abweichung in der Fehlermeldung sichtbar wird. */
+  private async reportedIssuer(issuer: string): Promise<string | undefined> {
+    try {
+      const res = await fetch(`${issuer.replace(/\/+$/, '')}/.well-known/openid-configuration`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = (await res.json()) as { issuer?: unknown };
+      return typeof data.issuer === 'string' ? data.issuer : undefined;
+    } catch {
+      return undefined;
     }
   }
 

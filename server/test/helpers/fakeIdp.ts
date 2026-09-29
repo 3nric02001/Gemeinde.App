@@ -30,8 +30,11 @@ export class FakeIdp {
   private jwk: JWK | undefined;
   private readonly codes = new Map<string, PendingCode>();
 
+  /** Issuer, den das Discovery-Dokument meldet, falls er nicht zur Adresse passen soll */
+  issuerOverride: string | undefined;
+
   get issuer(): string {
-    return this.url + this.issuerPath;
+    return this.issuerOverride ?? this.url + this.issuerPath;
   }
 
   async start(): Promise<void> {

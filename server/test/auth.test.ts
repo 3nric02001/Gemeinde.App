@@ -491,6 +491,11 @@ describe('OIDC', () => {
     // Anbieter ohne Schrägstrich, Eingabe mit
     idp.issuerPath = '/realms/gemeinde';
     expect((await test(`${idp.url}/realms/gemeinde/`)).json()).toEqual({ issuer: idp.issuer });
+    // Echte Abweichung (z. B. anderer Host): Fehlermeldung nennt beide Werte
+    idp.issuerOverride = 'https://auth.example.org/realms/gemeinde';
+    const failed = await test(`${idp.url}/realms/gemeinde`);
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json().error).toContain('meldet: https://auth.example.org/realms/gemeinde');
   });
 
   it('prüft die Einstellungen', async () => {
