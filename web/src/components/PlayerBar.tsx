@@ -1,3 +1,4 @@
+import { trackCoverUrl } from '../api';
 import { player, usePlayerSelect } from '../player';
 import { Controls, Volume } from './Controls';
 import { Cover } from './Cover';
@@ -16,7 +17,7 @@ export function PlayerBar({ onExpand }: { onExpand: () => void }) {
       <div class="player-now" onClick={() => track && onExpand()}>
         {track ? (
           <>
-            <Cover albumId={track.albumId} title={track.album ?? track.title} class="cover-bar" />
+            <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} class="cover-bar" />
             <div class="player-meta">
               <a
                 class="player-title"

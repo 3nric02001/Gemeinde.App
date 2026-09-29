@@ -76,6 +76,20 @@ const migrations: string[] = [
     value TEXT NOT NULL
   );
   `,
+  // Eingebettete Cover aus den Musikdateien, gleiche Bilder nur einmal gespeichert.
+  `
+  CREATE TABLE covers (
+    id    INTEGER PRIMARY KEY,
+    hash  TEXT NOT NULL UNIQUE,
+    mime  TEXT NOT NULL,
+    data  BLOB NOT NULL
+  );
+  ALTER TABLE tracks ADD COLUMN cover_id INTEGER REFERENCES covers(id) ON DELETE SET NULL;
+  ALTER TABLE albums ADD COLUMN cover_id INTEGER REFERENCES covers(id) ON DELETE SET NULL;
+  CREATE INDEX tracks_cover ON tracks(cover_id);
+  -- Bisher wurden Cover beim Scan übersprungen: alle Titel beim nächsten Scan einmal neu lesen.
+  UPDATE tracks SET etag = '';
+  `,
 ];
 
 export function openDatabase(path: string): DB {

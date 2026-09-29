@@ -7,12 +7,15 @@ import type { NextcloudClient } from '../nextcloud/webdav.js';
 import {
   getAlbum,
   getAlbumCover,
+  getCoverImage,
   getFacets,
+  getTrackCover,
   getTrackFile,
   listArtists,
   searchAlbums,
   searchTracks,
   type AlbumFilter,
+  type CoverSource,
 } from '../library/queries.js';
 
 export interface RouteDeps {
@@ -86,6 +89,22 @@ async function proxyFile(
   return reply.send(Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream));
 }
 
+async function sendCover(
+  deps: RouteDeps,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  source: CoverSource | undefined,
+): Promise<FastifyReply> {
+  if (!source) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
+  if ('path' in source) return proxyFile(deps, request, reply, source.path, null);
+  const image = getCoverImage(deps.db, source.coverId);
+  if (!image) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
+  const etag = `"${image.hash.slice(0, 32)}"`;
+  reply.header('etag', etag).header('cache-control', 'private, max-age=86400');
+  if (request.headers['if-none-match'] === etag) return reply.code(304).send();
+  return reply.type(image.mime).send(image.data);
+}
+
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   const { db, scanner } = deps;
 
@@ -129,9 +148,11 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   });
 
   app.get('/api/albums/:id/cover', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
-    const cover = getAlbumCover(db, request.params.id);
-    if (!cover) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
-    return proxyFile(deps, request, reply, cover, null);
+    return sendCover(deps, request, reply, getAlbumCover(db, request.params.id));
+  });
+
+  app.get('/api/tracks/:id/cover', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
+    return sendCover(deps, request, reply, getTrackCover(db, request.params.id));
   });
 
   app.get('/api/tracks/:id/stream', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
