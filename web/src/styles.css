@@ -2986,6 +2986,8 @@ html[data-text='xlarge'] .now-playing {
 .admin-group .track-sub,
 .admin-user .track-sub {
   white-space: normal;
+}
+
 /* ---------- Offline hören ---------- */
 
 .download-button.is-on {
