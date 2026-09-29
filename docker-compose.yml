@@ -15,6 +15,9 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+      # Docker in einer Proxmox-LXC kann das AppArmor-Profil docker-default nicht laden.
+      # Auf einer VM oder direkt auf dem Host kann diese Zeile entfernt werden.
+      - apparmor=unconfined
 
 volumes:
   gemeinde-data:
