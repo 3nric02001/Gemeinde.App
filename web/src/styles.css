@@ -196,6 +196,135 @@ h2 {
   display: none;
 }
 
+/* ---------- Schriftgröße (Mehr → Schriftgröße) ----------
+   zoom vergrößert Text, Cover und Abstände gemeinsam; Player-Leiste und Tab-Leiste bleiben,
+   damit ihre festen Höhen zum Seitenabstand passen. */
+html[data-text='large'] .main,
+html[data-text='large'] .now-playing {
+  zoom: 1.15;
+}
+
+html[data-text='xlarge'] .main,
+html[data-text='xlarge'] .now-playing {
+  zoom: 1.3;
+}
+
+/* ---------- Mehr, Profil, Favoriten ---------- */
+
+.page-narrow {
+  max-width: 720px;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.profile-text {
+  display: grid;
+}
+
+.profile-text strong {
+  font-size: 18px;
+}
+
+.profile-text span {
+  color: var(--muted);
+}
+
+.more-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.more-list + .more-list,
+.shelf + .more-list {
+  margin-top: 36px;
+}
+
+.more-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.more-row:hover {
+  text-decoration: none;
+  background: var(--surface);
+}
+
+.more-row span {
+  flex: 1;
+}
+
+.more-chevron {
+  color: var(--muted);
+  transform: rotate(180deg);
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.segmented button.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.segmented-sample {
+  font-weight: 800;
+  line-height: 1;
+}
+
+.segmented-normal {
+  font-size: 14px;
+}
+
+.segmented-large {
+  font-size: 17px;
+}
+
+.segmented-xlarge {
+  font-size: 20px;
+}
+
 /* ---------- Überschriften, Abschnitte ---------- */
 
 .page-head {
@@ -255,6 +384,107 @@ h2 {
   margin-top: 48px;
 }
 
+/* Hinweis "Zum Home-Bildschirm" */
+.install-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
+.install-hint > div {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+}
+
+.install-steps {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.install-steps strong {
+  color: var(--text);
+}
+
+.inline-icon {
+  vertical-align: -3px;
+}
+
+/* Startseite: letzter Gottesdienst */
+.latest {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  margin-bottom: 28px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.latest-link {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: 1;
+  min-width: 0;
+}
+
+.latest-link:hover {
+  text-decoration: none;
+}
+
+.cover.latest-cover {
+  width: 112px;
+  box-shadow: var(--shadow);
+}
+
+.latest-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.latest-title {
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.latest-sub {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.latest-play {
+  flex-shrink: 0;
+}
+
+@media (max-width: 760px) {
+  .latest {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .latest {
+    padding: 14px;
+  }
+
+  .cover.latest-cover {
+    width: 88px;
+  }
+
+  .latest-play {
+    justify-content: center;
+  }
+}
+
 /* ---------- Cover und Karten ---------- */
 
 .cover {
@@ -286,6 +516,84 @@ h2 {
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--cover-text);
+}
+
+/* Angaben zur Predigt über der Titelliste */
+.sermon-info {
+  display: grid;
+  gap: 10px;
+  max-width: 680px;
+  margin: 4px 0 20px;
+}
+
+.sermon-info dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+}
+
+.sermon-info dt {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.sermon-info dd {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sermon-info p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Angehört-Balken unter langen Titeln (Predigten) */
+.track-progress {
+  display: block;
+  height: 3px;
+  margin-top: 5px;
+  max-width: 180px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.track-progress i {
+  display: block;
+  height: 100%;
+  background: var(--text);
+}
+
+.cover-date {
+  background: var(--surface-2);
+}
+
+/* Kalenderblatt für Gottesdienste ohne Bild: Monat klein, Tag groß */
+.cover-cal {
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+  color: var(--text);
+}
+
+.cover-cal small {
+  font-size: 11cqw;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cover-cal b {
+  font-size: 40cqw;
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 .cover-sm {
@@ -1130,11 +1438,46 @@ h2 {
   margin-top: auto;
 }
 
-.now-meta {
-  display: grid;
+.now-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: 100%;
   max-width: 420px;
+}
+
+.now-meta {
+  display: grid;
+  flex: 1;
+  min-width: 0;
   text-align: left;
+}
+
+.now-meta > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now-album {
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line);
+}
+
+.now-extra {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: auto;
+}
+
+.now-extra:empty {
+  display: none;
 }
 
 .now-title {
@@ -1156,8 +1499,36 @@ h2 {
 }
 
 .now-playing .volume {
-  width: 100%;
-  margin-bottom: auto;
+  flex: 1;
+  width: auto;
+}
+
+/* ---------- Tempo und Favoriten ---------- */
+
+.rate-button {
+  min-width: 44px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.rate-button.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.favorite.is-on {
+  color: var(--text);
+}
+
+.skip-button {
+  color: var(--text);
 }
 
 .controls-large {
@@ -1273,7 +1644,8 @@ h2 {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   height: 44px;
   padding: 0 14px;
   border-radius: var(--radius);
@@ -1284,8 +1656,18 @@ h2 {
   font-weight: 400;
 }
 
+.field textarea {
+  height: auto;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  resize: vertical;
+}
+
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: 0;
   border-color: var(--text);
 }
@@ -1309,7 +1691,11 @@ h2 {
   display: grid;
   grid-template-columns: 2fr 2fr 1fr 1fr;
   gap: 14px;
-  margin-bottom: 16px;
+}
+
+.admin-fields .field,
+.admin-fields input {
+  min-width: 0;
 }
 
 .admin-list,
@@ -1844,7 +2230,7 @@ h2 {
     align-content: center;
     gap: 2px;
     color: var(--muted);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
   }
 
@@ -2071,6 +2457,13 @@ h2 {
   margin-bottom: 0;
 }
 
+.login-welcome {
+  margin: -8px 0 20px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
 .login-brand {
   display: flex;
   align-items: center;
@@ -2159,6 +2552,10 @@ h2 {
   display: grid;
   gap: 14px;
   max-width: 640px;
+}
+
+.admin-form-wide {
+  max-width: 1040px;
 }
 
 .admin-form h2 {

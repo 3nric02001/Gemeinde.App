@@ -15,6 +15,10 @@ export interface Track {
   mimeType: string | null;
   /** Eigenes eingebettetes Bild oder Albumcover vorhanden */
   hasCover?: boolean;
+  /** Datum aus dem Ordnernamen des Albums (JJJJ-MM-TT), z. B. bei Gottesdiensten */
+  albumDate?: string | null;
+  /** Sprecher aus dem Tag "Sprecher" o. ä. */
+  speaker?: string | null;
 }
 
 export interface Album {
@@ -28,6 +32,11 @@ export interface Album {
   hasCover: boolean;
   /** "manual" für vom Admin zusammengestellte Alben */
   kind?: 'auto' | 'manual';
+  /** Datum aus dem Ordnernamen (JJJJ-MM-TT), z. B. "2026-09-27 Erntedank" */
+  date?: string | null;
+  speaker?: string | null;
+  passage?: string | null;
+  description?: string | null;
 }
 
 export interface AlbumDetail extends Album {
@@ -43,6 +52,10 @@ export interface DatedFolder {
   trackCount: number;
   duration: number;
   coverTrackId: number | null;
+  albumId: number | null;
+  speaker: string | null;
+  passage: string | null;
+  description: string | null;
 }
 
 export interface DatedFolderDetail extends DatedFolder {

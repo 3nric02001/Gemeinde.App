@@ -51,41 +51,48 @@ function albumsByIds(db: DB, ids: number[]): Record<string, unknown>[] {
   return ids.map((id) => byId.get(id)).filter((album) => album !== undefined);
 }
 
-/** Hörstand speichern; `position` am Ende des Titels heißt "fertig gehört". */
-export function saveProgress(db: DB, userId: number, trackId: number, position: number): boolean {
+/**
+ * Hörstand speichern; `position` am Ende des Titels heißt "fertig gehört".
+ * `duration` ist die Länge laut Browser, die gilt vor der aus dem Scan.
+ */
+export function saveProgress(db: DB, userId: number, trackId: number, position: number, duration?: number): boolean {
   if (!db.prepare('SELECT 1 FROM tracks WHERE id = ?').get(trackId)) return false;
   db.prepare(
-    `INSERT INTO listening (user_id, track_id, position, updated_at) VALUES (?, ?, ?, ?)
-     ON CONFLICT(user_id, track_id) DO UPDATE SET position = excluded.position, updated_at = excluded.updated_at`,
-  ).run(userId, trackId, Math.max(0, position), Date.now());
+    `INSERT INTO listening (user_id, track_id, position, duration, updated_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, track_id) DO UPDATE SET position = excluded.position,
+       duration = coalesce(excluded.duration, listening.duration), updated_at = excluded.updated_at`,
+  ).run(userId, trackId, Math.max(0, position), duration && duration > 0 ? duration : null, Date.now());
   return true;
 }
 
-/** Gespeicherte Stellen langer Titel, die noch nicht zu Ende gehört sind: trackId -> Sekunden */
-export function listProgress(db: DB, userId: number): Array<{ trackId: number; position: number }> {
+/** Länge eines gehörten Titels: vom Browser gemessen, sonst aus dem Scan */
+const LENGTH = 'coalesce(l.duration, t.duration)';
+
+/** Gespeicherte Stellen langer Titel, die noch nicht zu Ende gehört sind */
+export function listProgress(db: DB, userId: number): Array<{ trackId: number; position: number; duration: number }> {
   return db
     .prepare(
-      `SELECT l.track_id AS trackId, l.position FROM listening l JOIN tracks t ON t.id = l.track_id
-       WHERE l.user_id = ? AND t.duration >= ? AND l.position > 0 AND l.position < t.duration - ?
+      `SELECT l.track_id AS trackId, l.position, ${LENGTH} AS duration FROM listening l JOIN tracks t ON t.id = l.track_id
+       WHERE l.user_id = ? AND ${LENGTH} >= ? AND l.position > 0 AND l.position < ${LENGTH} - ?
        ORDER BY l.updated_at DESC LIMIT 500`,
     )
-    .all(userId, RESUME_MIN_DURATION, FINISHED_MARGIN) as Array<{ trackId: number; position: number }>;
+    .all(userId, RESUME_MIN_DURATION, FINISHED_MARGIN) as Array<{ trackId: number; position: number; duration: number }>;
 }
 
 /** Für die Startseite: angefangene lange Titel und die zuletzt gehörten Alben. */
 export function listenerHome(db: DB, userId: number) {
   const unfinished = db
     .prepare(
-      `SELECT l.track_id AS id, l.position FROM listening l JOIN tracks t ON t.id = l.track_id
-       WHERE l.user_id = ? AND t.duration >= ? AND l.position >= 15 AND l.position < t.duration - ?
+      `SELECT l.track_id AS id, l.position, ${LENGTH} AS duration FROM listening l JOIN tracks t ON t.id = l.track_id
+       WHERE l.user_id = ? AND ${LENGTH} >= ? AND l.position >= 15 AND l.position < ${LENGTH} - ?
        ORDER BY l.updated_at DESC LIMIT 6`,
     )
-    .all(userId, RESUME_MIN_DURATION, FINISHED_MARGIN) as Array<{ id: number; position: number }>;
-  const positions = new Map(unfinished.map((row) => [row.id, row.position]));
+    .all(userId, RESUME_MIN_DURATION, FINISHED_MARGIN) as Array<{ id: number; position: number; duration: number }>;
+  const rows = new Map(unfinished.map((row) => [row.id, row]));
   const resume = getTracksByIds(
     db,
     unfinished.map((row) => row.id),
-  ).map((track) => ({ ...track, position: positions.get(track.id as number) }));
+  ).map((track) => ({ ...track, position: rows.get(track.id as number)!.position, duration: rows.get(track.id as number)!.duration }));
 
   const recentIds = (
     db

@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { query } from '../src/api';
-import { formatDuration, formatLongDate, formatMonth, formatShortDate, formatTime, initials } from '../src/format';
+import {
+  albumLabel,
+  albumSubtitle,
+  albumTitle,
+  formatDuration,
+  formatLongDate,
+  formatMonth,
+  formatShortDate,
+  formatTime,
+  initials,
+  withoutDate,
+} from '../src/format';
 import { folderSubtitle } from '../src/pages/Dates';
 import { match } from '../src/router';
 
@@ -26,10 +37,28 @@ describe('Formatierung', () => {
   });
 
   it('zeigt unter dem Datum den Rest des Ordnernamens', () => {
-    const folder = { folder: 'x', date: '2026-09-27', trackCount: 3, duration: 0, coverTrackId: null };
+    const folder = {
+      folder: 'x', date: '2026-09-27', trackCount: 3, duration: 0, coverTrackId: null,
+      albumId: null, speaker: null, passage: null, description: null,
+    };
     expect(folderSubtitle({ ...folder, name: '2026-09-27 Erntedank' })).toBe('Erntedank');
     expect(folderSubtitle({ ...folder, name: 'GD 27.09.2026' })).toBe('GD');
     expect(folderSubtitle({ ...folder, name: '2026-09-27' })).toBe('3 Titel');
+    expect(folderSubtitle({ ...folder, name: '2026-09-27', speaker: 'Pastor Meier' })).toBe('Pastor Meier');
+  });
+
+  it('benennt Gottesdienste nach Anlass und Datum statt nach dem Ordner', () => {
+    expect(withoutDate('27. September 2026 Erntedank')).toBe('Erntedank');
+    expect(withoutDate('13.09.2026 Taufgottesdienst')).toBe('Taufgottesdienst');
+    expect(withoutDate('Feiert Jesus! 20')).toBe('Feiert Jesus! 20');
+    expect(albumTitle('2026-09-27 Erntedank', '2026-09-27')).toBe('Erntedank');
+    expect(albumTitle('2026-09-20', '2026-09-20')).toBe('Sonntag, 20.09.2026');
+    expect(albumTitle('Adventskonzert', null)).toBe('Adventskonzert');
+    expect(albumLabel('2026-09-27 Erntedank', '2026-09-27')).toBe('Erntedank, So., 27.09.2026');
+    expect(albumLabel('2026-09-20', '2026-09-20')).toBe('So., 20.09.2026');
+    expect(albumSubtitle({ title: '2026-09-27 Erntedank', artist: 'MBG', year: 2026, date: '2026-09-27' })).toBe('So., 27.09.2026');
+    expect(albumSubtitle({ title: '2026-09-20', artist: 'MBG', year: 2026, date: '2026-09-20' })).toBe('MBG');
+    expect(albumSubtitle({ title: 'Unser Gott', artist: 'Outbreakband', year: 2018 })).toBe('Outbreakband · 2018');
   });
 
   it('bildet Initialen für Platzhalter', () => {

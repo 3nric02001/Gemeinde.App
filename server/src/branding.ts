@@ -24,3 +24,26 @@ export function saveBranding(db: DB, branding: Partial<Branding>): Branding {
   setMeta(db, 'branding', JSON.stringify({ name: next.name.trim(), welcome: next.welcome.trim() }));
   return getBranding(db);
 }
+
+/**
+ * Web-App-Manifest für "Zum Home-Bildschirm": vom Server, damit das Symbol den eingestellten
+ * Gemeindenamen trägt. Öffentlich, weil der Browser es ohne Anmeldung abruft.
+ */
+export function manifest(branding: Branding) {
+  return {
+    name: branding.name,
+    short_name: branding.name.length > 14 ? branding.name.slice(0, 14).trim() : branding.name,
+    description: branding.welcome || 'Predigten und Musik der Gemeinde',
+    lang: 'de',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#ffffff',
+    theme_color: '#ffffff',
+    icons: [
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  };
+}

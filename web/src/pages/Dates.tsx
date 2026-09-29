@@ -3,7 +3,7 @@ import type { DatedFolder, DatedFolderDetail } from '../api';
 import { getJson, query, trackCoverUrl } from '../api';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
-import { formatLongDate, formatMonth, formatShortDate, plural } from '../format';
+import { formatLongDate, formatMonth, formatShortDate, plural, withoutDate } from '../format';
 import { usePaged } from '../hooks';
 import { player } from '../player';
 import { Empty, ErrorNote, Loading } from './common';
@@ -15,12 +15,9 @@ export async function playFolder(folder: string, shuffle = false) {
   player.playList(detail.tracks, 0, { shuffle });
 }
 
-/** Zusatzzeile unter dem Datum: Ordnername ohne das Datum, sonst die Anzahl Titel */
+/** Zusatzzeile unter dem Datum: Ordnername ohne das Datum, sonst Sprecher oder die Anzahl Titel */
 export function folderSubtitle(folder: DatedFolder): string {
-  const rest = folder.name
-    .replace(/(?:19|20)\d{2}[-_.\s]?\d{2}[-_.\s]?\d{2}|\d{1,2}\.\s?\d{1,2}\.\s?(?:19|20)?\d{2}/, '')
-    .replace(/^[\s._-]+|[\s._-]+$/g, '');
-  return rest || plural(folder.trackCount, 'Titel', 'Titel');
+  return withoutDate(folder.name) || folder.speaker || plural(folder.trackCount, 'Titel', 'Titel');
 }
 
 function DateCard({ folder }: { folder: DatedFolder }) {
@@ -29,7 +26,8 @@ function DateCard({ folder }: { folder: DatedFolder }) {
       <a class="card-link" href={folderHref(folder.folder)}>
         <Cover
           src={folder.coverTrackId ? trackCoverUrl({ id: folder.coverTrackId }) : undefined}
-          title={String(Number(folder.date.slice(8)))}
+          title={folder.name}
+          date={folder.date}
         />
         <span class="card-title">{formatShortDate(folder.date)}</span>
         <span class="card-sub">{folderSubtitle(folder)}</span>

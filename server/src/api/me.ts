@@ -36,13 +36,17 @@ export async function registerMeRoutes(app: FastifyInstance, { db }: { db: DB })
         body: {
           type: 'object',
           required: ['position'],
-          properties: { position: { type: 'number', minimum: 0, maximum: 1e6 } },
+          properties: {
+            position: { type: 'number', minimum: 0, maximum: 1e6 },
+            duration: { type: 'number', minimum: 0, maximum: 1e6 },
+          },
           additionalProperties: false,
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: number }; Body: { position: number } }>, reply) => {
-      if (!saveProgress(db, userId(request), request.params.id, request.body.position)) {
+    async (request: FastifyRequest<{ Params: { id: number }; Body: { position: number; duration?: number } }>, reply) => {
+      const { position, duration } = request.body;
+      if (!saveProgress(db, userId(request), request.params.id, position, duration)) {
         return reply.code(404).send({ error: 'Titel nicht gefunden' });
       }
       return reply.code(204).send();

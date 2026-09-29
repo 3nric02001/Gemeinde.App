@@ -156,7 +156,7 @@ describe('Weiterhören', () => {
     expect((await save(sermon, 754.5)).statusCode).toBe(204);
     expect((await save(99999, 1)).statusCode).toBe(404);
 
-    expect((await get('/api/me/progress')).items).toEqual([{ trackId: sermon, position: 754.5 }]);
+    expect((await get('/api/me/progress')).items).toEqual([{ trackId: sermon, position: 754.5, duration: 2400 }]);
     const home = await get('/api/me/home');
     expect(home.resume.map((t: any) => [t.id, t.position])).toEqual([[sermon, 754.5]]);
     expect(home.recent.map((a: any) => a.title)).toEqual(['2026-09-20', 'Let There Be Light']);
@@ -166,6 +166,16 @@ describe('Weiterhören', () => {
     expect((await get('/api/me/progress')).items).toEqual([]);
     expect((await get('/api/me/home')).resume).toEqual([]);
     expect((await get('/api/me/home')).recent).toHaveLength(2);
+  });
+
+  it('nimmt die Länge vom Browser, wenn der Scan sie nicht genau kennt', async () => {
+    // Der Scan liest nur den Dateianfang; ohne Xing-Header ist die Länge dann geschätzt.
+    const sermon = trackId('Predigt Psalm 23');
+    await inject({ method: 'PUT', url: `/api/me/progress/${sermon}`, payload: { position: 300, duration: 1800 } });
+    expect((await get('/api/me/progress')).items).toEqual([{ trackId: sermon, position: 300, duration: 1800 }]);
+    // Spätere Meldungen ohne Länge behalten die gemessene
+    await inject({ method: 'PUT', url: `/api/me/progress/${sermon}`, payload: { position: 320 } });
+    expect((await get('/api/me/progress')).items[0]).toMatchObject({ position: 320, duration: 1800 });
   });
 });
 

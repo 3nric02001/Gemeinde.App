@@ -30,6 +30,14 @@ const paths = {
     'M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5-2.1-1.6ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z',
   tag: 'M3 4a1 1 0 0 1 1-1h7.6l9.4 9.4-8.6 8.6L3 11.6V4Zm4.5 1.8a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Z',
   logout: 'M5 3h8v2H5v14h8v2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm11 4.6 4.4 4.4-4.4 4.4-1.4-1.4 2-2H9v-2h7.6l-2-2L16 7.6Z',
+  heart:
+    'M12 20.3 10.6 19C5.6 14.5 2.5 11.7 2.5 8.2 2.5 5.4 4.7 3.2 7.5 3.2c1.6 0 3.1.7 4.1 1.9l.4.5.4-.5a5.3 5.3 0 0 1 4.1-1.9c2.8 0 5 2.2 5 5 0 3.5-3.1 6.3-8.1 10.8L12 20.3Z',
+  heartOutline:
+    'M16.5 3.2c2.8 0 5 2.2 5 5 0 3.5-3.1 6.3-8.1 10.8L12 20.3 10.6 19C5.6 14.5 2.5 11.7 2.5 8.2c0-2.8 2.2-5 5-5 1.6 0 3.1.7 4.1 1.9l.4.5.4-.5a5.3 5.3 0 0 1 4.1-1.9Zm0 2c-1.2 0-2.3.6-3 1.5L12 8.5l-1.5-1.8c-.7-.9-1.8-1.5-3-1.5-1.7 0-3 1.3-3 3 0 2.6 2.6 5 7.5 9.4 4.9-4.4 7.5-6.8 7.5-9.4 0-1.7-1.3-3-3-3Z',
+  user: 'M12 3a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 11c4.4 0 8 2.2 8 5v2H4v-2c0-2.8 3.6-5 8-5Z',
+  menu: 'M4 6h16v2H4zM4 11h16v2H4zM4 16h16v2H4z',
+  download: 'M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V3ZM5 18h14v2H5z',
+  textSize: 'M3 19 8.3 5h2.4L16 19h-2.3l-1.3-3.6H6.6L5.3 19H3Zm4.3-5.6h4.4L9.5 7.3l-2.2 6.1ZM17 19l2.6-7h1.6l2.6 7h-1.6l-.6-1.7h-2.4l-.6 1.7H17Zm2.6-3h1.6l-.8-2.4-.8 2.4Z',
   music: 'M20 3v12.5a3.5 3.5 0 1 1-2-3.16V7.3l-8 1.6v8.6A3.5 3.5 0 1 1 8 14.34V5.2L20 3Z',
 } as const;
 
@@ -39,6 +47,31 @@ export function Icon({ name, size = 24, class: className }: { name: IconName; si
   return (
     <svg class={className} width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d={paths[name]} />
+    </svg>
+  );
+}
+
+/** Kreispfeil mit Sekundenzahl: 15 s zurück bzw. 30 s vor */
+export function SkipIcon({ seconds, size = 24 }: { seconds: number; size?: number }) {
+  const back = seconds < 0;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d={back ? 'M4.6 9.2A8 8 0 1 1 4 12' : 'M19.4 9.2A8 8 0 1 0 20 12'}
+        stroke="currentColor"
+        stroke-width="1.9"
+        stroke-linecap="round"
+      />
+      <path
+        d={back ? 'M3.6 4.6v5h5' : 'M20.4 4.6v5h-5'}
+        stroke="currentColor"
+        stroke-width="1.9"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <text x="12" y="15.3" text-anchor="middle" font-size="8" font-weight="800" fill="currentColor">
+        {Math.abs(seconds)}
+      </text>
     </svg>
   );
 }

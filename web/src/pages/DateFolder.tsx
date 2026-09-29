@@ -4,7 +4,8 @@ import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { Menu } from '../components/Menu';
 import { TrackList } from '../components/TrackList';
-import { formatDuration, formatLongDate, plural } from '../format';
+import { SermonInfo } from '../components/SermonInfo';
+import { formatDuration, formatLongDate, plural, withoutDate } from '../format';
 import { useApi } from '../hooks';
 import { player } from '../player';
 import { ErrorNote, Loading } from './common';
@@ -20,6 +21,7 @@ export function DateFolder({ path }: { path: string }) {
         <Cover
           src={data.coverTrackId ? trackCoverUrl({ id: data.coverTrackId }) : undefined}
           title={data.name}
+          date={data.date}
           class="cover-hero"
           eager
         />
@@ -28,7 +30,7 @@ export function DateFolder({ path }: { path: string }) {
             <a href="/datum">Datum</a>
           </span>
           <h1>{formatLongDate(data.date)}</h1>
-          <p class="hero-sub">{data.name}</p>
+          {withoutDate(data.name) && <p class="hero-sub">{withoutDate(data.name)}</p>}
           <p class="hero-meta">
             {plural(data.trackCount, 'Titel', 'Titel')}, {formatDuration(data.duration)}
           </p>
@@ -49,6 +51,7 @@ export function DateFolder({ path }: { path: string }) {
           ]}
         />
       </div>
+      <SermonInfo speaker={data.speaker} passage={data.passage} description={data.description} />
       <TrackList tracks={tracks} />
     </div>
   );

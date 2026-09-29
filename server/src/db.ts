@@ -377,6 +377,8 @@ export const migrations: string[] = [
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     track_id   INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
     position   REAL NOT NULL,
+    -- Länge, die der Browser gemessen hat; genauer als der Scan, der nur den Dateianfang liest
+    duration   REAL,
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, track_id)
   ) WITHOUT ROWID;

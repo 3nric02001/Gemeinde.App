@@ -88,12 +88,17 @@ describe('Verwaltung', () => {
 });
 
 describe('Anmeldung', () => {
-  it('bietet das Gemeinde-Konto an und den lokalen Admin als Ausweg', async () => {
+  it('bietet das Gemeinde-Konto an und den lokalen Admin nur über /?admin als Ausweg', async () => {
     await signedInAs(null, { label: 'Mit Gemeinde-Konto anmelden' });
     render(<Login />);
     expect(screen.getByText('Mit Gemeinde-Konto anmelden')).toBeTruthy();
     expect(screen.queryByLabelText('Passwort')).toBeNull();
+    expect(screen.queryByText('Als lokaler Admin anmelden')).toBeNull();
+    cleanup();
 
+    window.history.replaceState(null, '', '/?admin');
+    render(<Login />);
+    window.history.replaceState(null, '', '/');
     fireEvent.click(screen.getByText('Als lokaler Admin anmelden'));
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       json({ user: { id: 1, name: 'Administrator', role: 'admin', kind: 'local' } }),

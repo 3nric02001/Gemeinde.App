@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { streamUrl, trackCoverUrl, type Track } from './api';
+import { isLong, resumePosition, saveProgress } from './me';
 import { Queue, type QueueState, type RepeatMode } from './queue';
 
 /** Jeder Eintrag ist ein eigenes Objekt, damit derselbe Titel mehrfach in der Warteschlange stehen kann. */
@@ -21,14 +22,20 @@ export interface PlayerState {
   muted: boolean;
   shuffle: boolean;
   repeat: RepeatMode;
+  /** Wiedergabetempo für lange Titel (Predigten); Musik läuft immer normal */
+  rate: number;
   error: string | undefined;
 }
+
+export const RATES = [1, 1.25, 1.5, 1.75, 2];
+/** Wie oft der Hörstand langer Titel beim Server landet */
+const PROGRESS_INTERVAL_MS = 15_000;
 
 const STORAGE_KEY = 'gemeinde.player';
 let nextKey = 1;
 const entry = (track: Track): Entry => ({ key: nextKey++, track });
 
-function load(): { queue?: QueueState<Entry>; volume?: number; muted?: boolean; position?: number } {
+function load(): { queue?: QueueState<Entry>; volume?: number; muted?: boolean; position?: number; rate?: number } {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
   } catch {
@@ -45,6 +52,9 @@ export class Player {
   /** Kopie der Warteschlange, nur bei Änderungen neu, damit Abonnenten sie vergleichen können */
   private queueCopy: Entry[] = [];
   private queueDirty = true;
+  private rate = 1;
+  /** Titel, der gerade im Audio-Element steckt, und wann sein Hörstand zuletzt gespeichert wurde */
+  private loaded: { track: Track; savedAt: number; recorded: boolean; start?: number } | undefined;
 
   constructor(audio: HTMLAudioElement = new Audio()) {
     this.audio = audio;
@@ -58,12 +68,15 @@ export class Player {
     }
     audio.volume = saved.volume ?? 1;
     audio.muted = saved.muted ?? false;
+    this.rate = RATES.includes(saved.rate ?? 1) ? (saved.rate ?? 1) : 1;
     this.state = this.compute();
 
     const current = this.queue.current;
     if (current) {
       // Nach dem Neuladen an derselben Stelle weitermachen, aber nicht von selbst losspielen.
       audio.src = streamUrl(current.track.id);
+      this.loaded = { track: current.track, savedAt: Date.now(), recorded: true };
+      this.applyRate();
       if (saved.position) {
         audio.addEventListener('loadedmetadata', () => (audio.currentTime = saved.position!), { once: true });
       }
@@ -76,6 +89,16 @@ export class Player {
     }
     audio.addEventListener('waiting', () => this.emit({ loading: true }));
     audio.addEventListener('ended', () => this.advance(true));
+    audio.addEventListener('durationchange', () => this.applyRate());
+    // Hörstand: beim Start (für "Zuletzt gehört"), bei Pause und bei langen Titeln regelmäßig
+    audio.addEventListener('playing', () => {
+      if (this.loaded && !this.loaded.recorded) this.saveProgress();
+    });
+    audio.addEventListener('pause', () => this.saveProgress());
+    audio.addEventListener('timeupdate', () => {
+      const loaded = this.loaded;
+      if (loaded && !audio.paused && this.long() && Date.now() - loaded.savedAt > PROGRESS_INTERVAL_MS) this.saveProgress();
+    });
     audio.addEventListener('error', () => {
       if (!audio.src) return;
       this.emit({ error: 'Titel konnte nicht geladen werden' });
@@ -156,6 +179,44 @@ export class Player {
     if (Number.isFinite(seconds)) this.audio.currentTime = Math.max(0, seconds);
   }
 
+  /** Relativ springen, z. B. 15 Sekunden zurück oder 30 vor */
+  skip(seconds: number): void {
+    if (!this.queue.current) return;
+    const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : Infinity;
+    this.seek(Math.min(duration - 0.5, Math.max(0, this.audio.currentTime + seconds)));
+  }
+
+  /** Nächstes Tempo (1× bis 2×); gilt für lange Titel wie Predigten */
+  cycleRate(): void {
+    this.rate = RATES[(RATES.indexOf(this.rate) + 1) % RATES.length]!;
+    this.applyRate();
+    this.emit();
+  }
+
+  /** Lange Titel (Predigten) bekommen Sprünge, Tempo und Weiterhören */
+  private long(): boolean {
+    const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : this.queue.current?.track.duration;
+    return isLong(duration);
+  }
+
+  private applyRate(): void {
+    const rate = this.long() ? this.rate : 1;
+    this.audio.defaultPlaybackRate = rate;
+    this.audio.playbackRate = rate;
+  }
+
+  private saveProgress(): void {
+    const loaded = this.loaded;
+    let position = this.audio.currentTime;
+    if (!loaded || !Number.isFinite(position) || (position === 0 && loaded.recorded)) return;
+    // Der Sprung an die gemerkte Stelle kann noch ausstehen: dann die nicht mit 0 überschreiben.
+    if (!loaded.recorded && loaded.start !== undefined && position < 1) position = loaded.start;
+    const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : loaded.track.duration;
+    loaded.savedAt = Date.now();
+    loaded.recorded = true;
+    saveProgress({ id: loaded.track.id, duration }, this.audio.ended ? (duration ?? position) : position);
+  }
+
   setVolume(volume: number): void {
     this.audio.volume = Math.min(1, Math.max(0, volume));
     if (volume > 0) this.audio.muted = false;
@@ -192,7 +253,16 @@ export class Player {
   private loadCurrent(autoplay: boolean): void {
     const current = this.queue.current;
     if (!current) return;
+    // Stand des bisherigen Titels sichern, bevor er ausgetauscht wird.
+    if (this.loaded && this.loaded.track.id !== current.track.id) this.saveProgress();
     this.audio.src = streamUrl(current.track.id);
+    // Angefangene Predigt: an der gemerkten Stelle weiter
+    const start = resumePosition(current.track);
+    this.loaded = { track: current.track, savedAt: Date.now(), recorded: false, start };
+    this.applyRate();
+    if (start !== undefined) {
+      this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = start), { once: true });
+    }
     this.state = { ...this.state, error: undefined };
     if (autoplay) void this.play();
     this.updateMediaSession();
@@ -224,6 +294,7 @@ export class Player {
       muted: audio.muted,
       shuffle: this.queue.shuffle,
       repeat: this.queue.repeat,
+      rate: this.rate,
       error: this.state?.error,
       ...patch,
     };
@@ -249,6 +320,7 @@ export class Player {
             volume: this.audio.volume,
             muted: this.audio.muted,
             position: this.audio.currentTime,
+            rate: this.rate,
           }),
         );
       } catch {
@@ -266,6 +338,8 @@ export class Player {
       ['nexttrack', () => this.next()],
       ['previoustrack', () => this.previous()],
       ['seekto', (details) => this.seek(details.seekTime ?? 0)],
+      ['seekbackward', (details) => this.skip(-(details.seekOffset ?? 15))],
+      ['seekforward', (details) => this.skip(details.seekOffset ?? 30)],
     ];
     for (const [action, handler] of handlers) {
       try {

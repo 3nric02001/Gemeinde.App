@@ -1,6 +1,7 @@
 import type { Album } from '../api';
 import { coverUrl, getJson, type AlbumDetail } from '../api';
 import { player } from '../player';
+import { albumSubtitle, albumTitle } from '../format';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
 
@@ -10,17 +11,18 @@ export async function playAlbum(albumId: number, options: { shuffle?: boolean; s
 }
 
 export function AlbumCard({ album, subtitle }: { album: Album; subtitle?: string }) {
+  const title = albumTitle(album.title, album.date);
   return (
     <div class="card">
       <a class="card-link" href={`/album/${album.id}`}>
-        <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} />
-        <span class="card-title">{album.title}</span>
-        <span class="card-sub">{subtitle ?? [album.artist, album.year].filter(Boolean).join(' · ')}</span>
+        <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} />
+        <span class="card-title">{title}</span>
+        <span class="card-sub">{subtitle ?? albumSubtitle(album)}</span>
       </a>
       <button
         class="card-play"
         type="button"
-        aria-label={`${album.title} abspielen`}
+        aria-label={`${title} abspielen`}
         onClick={() => void playAlbum(album.id)}
       >
         <Icon name="play" size={22} />

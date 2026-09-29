@@ -59,3 +59,50 @@ export function hashHue(text: string): number {
   for (const char of text) hash = (hash * 31 + char.codePointAt(0)!) | 0;
   return Math.abs(hash) % 360;
 }
+
+const MONTH_WORDS =
+  'jan|januar|jänner|feb|februar|mär|mar|märz|maerz|apr|april|mai|jun|juni|jul|juli|aug|august|sep|sept|september|okt|oktober|nov|november|dez|dezember';
+/** Dieselben Schreibweisen, die der Server in Ordnernamen als Datum erkennt */
+const DATE_IN_NAME = new RegExp(
+  [
+    String.raw`(?<!\d)(?:19|20)\d{2}[-_.\s]?\d{2}[-_.\s]?\d{2}(?!\d)`,
+    String.raw`(?<!\d)\d{1,2}\.\s?\d{1,2}\.\s?(?:19|20)?\d{2}(?!\d)`,
+    String.raw`(?<!\d)\d{1,2}\.?\s*(?:${MONTH_WORDS})\.?\s*(?:19|20)\d{2}(?!\d)`,
+  ].join('|'),
+  'i',
+);
+
+/** Name ohne das Datum darin: "2026-09-27 Erntedank" -> "Erntedank", "2026-09-20" -> "" */
+export function withoutDate(name: string): string {
+  return name.replace(DATE_IN_NAME, ' ').replace(/^[\s._–-]+|[\s._–-]+$/g, '').replace(/\s{2,}/g, ' ');
+}
+
+/** "So., 27.09.2026" für Listen */
+export function formatCompactDate(iso: string): string {
+  const date = dateOnly(iso);
+  // Wochentage selbst, weil die Kurzform je nach Browser mit oder ohne Punkt kommt.
+  return `${WEEKDAYS[date.getDay()]}, ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+}
+const WEEKDAYS = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
+
+/**
+ * Anzeigename eines Albums: bei Gottesdiensten (Datum im Ordnernamen) der Anlass ohne Datum,
+ * z. B. "Erntedank"; ohne Anlass das Datum selbst ("Sonntag, 20.09.2026").
+ */
+export function albumTitle(title: string, date: string | null | undefined): string {
+  if (!date) return title;
+  return withoutDate(title) || formatShortDate(date);
+}
+
+/** Album eines Titels in Listen: "Erntedank, So., 27.09.2026" bzw. nur das Datum */
+export function albumLabel(album: string | null, date: string | null | undefined): string | null {
+  if (!album || !date) return album;
+  const rest = withoutDate(album);
+  return rest ? `${rest}, ${formatCompactDate(date)}` : formatCompactDate(date);
+}
+
+/** Zeile unter einem Albumtitel: bei Gottesdiensten das Datum (wenn der Titel es nicht schon zeigt), sonst Interpret · Jahr */
+export function albumSubtitle(album: { title: string; artist: string; year: number | null; date?: string | null }): string {
+  if (album.date) return withoutDate(album.title) ? formatCompactDate(album.date) : album.artist;
+  return [album.artist, album.year].filter(Boolean).join(' · ');
+}

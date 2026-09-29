@@ -28,7 +28,7 @@ export function Search({ params }: { params: URLSearchParams }) {
           ref={input}
           type="search"
           value={text}
-          placeholder="Titel, Alben, Interpreten"
+          placeholder="Titel, Alben, Interpreten, Sprecher"
           aria-label="Suche"
           enterKeyHint="search"
           autocomplete="off"
@@ -47,7 +47,7 @@ export function Search({ params }: { params: URLSearchParams }) {
 
 function Results({ q }: { q: string }) {
   const tracks = useApi<Page<Track>>(`/api/tracks${query({ q, limit: 20 })}`);
-  const albums = useApi<Page<Album>>(`/api/albums${query({ q, limit: 12, sort: 'artist' })}`);
+  const albums = useApi<Page<Album>>(`/api/albums${query({ q, limit: 12, sort: 'date' })}`);
   const artists = useApi<Page<Artist>>(`/api/artists${query({ q, limit: 6 })}`);
 
   const done = !tracks.loading && !albums.loading && !artists.loading;

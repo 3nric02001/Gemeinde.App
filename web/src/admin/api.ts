@@ -11,6 +11,9 @@ export interface AlbumFields {
   artist: string | null;
   year: number | null;
   genre: string | null;
+  speaker: string | null;
+  passage: string | null;
+  description: string | null;
 }
 
 export interface AdminAlbumDetail extends AlbumDetail {

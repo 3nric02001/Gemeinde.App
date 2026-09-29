@@ -14,9 +14,17 @@ Admin, Manager und Hörer.
 Bedienung wie bei Spotify oder Apple Music, Farben schlicht schwarz auf weiß wie auf
 mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 
-- **Start**: Genres als Kacheln, „Neu hinzugefügt“, Alben des häufigsten Genres, Jahrzehnte
-- **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; ohne Suchbegriff
-  Stöbern nach Genre
+- **Start**: Begrüßung mit Vornamen, der neueste Gottesdienst groß oben, „Weiterhören“ (angefangene
+  Predigten mit Fortschritt), „Zuletzt gehört“, „Neu hinzugefügt“, Gottesdienste nach Datum, eigene
+  Favoriten, Genres als Kacheln und Jahrzehnte
+- **Gottesdienste**: Alben mit Datum im Ordnernamen heißen nach dem Anlass mit Wochentag und Datum
+  („Erntedank, So., 27.09.2026“) und bekommen ohne eigenes Bild ein Kalenderblatt als Cover.
+  Sprecher und Bibelstelle kommen aus den Tags `Sprecher`/`Speaker`/`Prediger`/`Referent` bzw.
+  `Bibelstelle`/`Bibeltext`/`Predigttext`/`Scripture` oder werden in der Verwaltung am Album gesetzt,
+  dort auch eine Beschreibung für Hörer
+- **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer
+- **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; findet auch eigene
+  Tag-Felder wie den Sprecher, Predigten neueste zuerst; ohne Suchbegriff Stöbern nach Genre
 - **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach
 - **Datum**: Jeder unterste Ordner, dessen Name ein Datum enthält, erscheint als eigenes „Album“ mit
   Wochentag und Datum, neueste zuerst und nach Monaten gruppiert. Erkannt werden z. B.
@@ -27,7 +35,15 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - **Album- und Interpretenseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), „Mehr von …“
 - **Player**: Leiste unten mit Zufall, Wiederholen (alle/einen), Spulen und Lautstärke; Warteschlange
   mit „Als Nächstes spielen“ und „Zur Warteschlange hinzufügen“. Auf dem Handy Mini-Player über der
-  Tab-Leiste, der sich zu „Jetzt läuft“ aufklappt.
+  Tab-Leiste, der sich zu „Jetzt läuft“ aufklappt (nach unten wischen schließt, Link zum Album;
+  auf iPhone/iPad ohne Lautstärkeregler, dafür gibt es die Tasten).
+- **Predigt-Player**: Titel ab 10 Minuten bekommen 15 s zurück / 30 s vor statt Zufall und
+  Wiederholen, ein Tempo von 1× bis 2× und merken sich je Hörer die Stelle zum Weiterhören
+  (auch geräteübergreifend, auf dem Server gespeichert).
+- **Mehr** (Handy-Tab bzw. Name unten in der Seitenleiste): Profil, Favoriten, Kategorien,
+  Textgröße (Normal, Groß, Sehr groß), Installationshinweis, Verwaltung und Abmelden
+- **Als App installieren**: Web-App-Manifest und Icons; Android/Chrome bieten die Installation an,
+  für iPhone steht die Anleitung auf der Startseite und unter „Mehr“.
 - Steuerung über Sperrbildschirm und Medientasten (Media Session), Leertaste spielt/pausiert, `/`
   öffnet die Suche. Warteschlange und Position überstehen ein Neuladen.
 
@@ -37,7 +53,7 @@ unter `/` ausgeliefert; es ist kein zweiter Container nötig.
 
 ## Verwaltung: Alben zusammenstellen und korrigieren
 
-Unter `/admin` (Link „Verwaltung“ in der Seitenleiste bzw. unten auf der Startseite) lassen sich Alben
+Unter `/admin` (Link „Verwaltung“ in der Seitenleiste bzw. unter „Mehr“) lassen sich Alben
 von Hand pflegen. Die Verwaltung sehen nur Manager und Admins.
 
 - **Eigene Alben**, z. B. „Predigten 2024“: Titel über die Suche hinzufügen, per Pfeil umsortieren,
@@ -91,7 +107,9 @@ Dateien einmal neu, um auch die übrigen Tag-Felder zu erfassen.
 
 ## Anmeldung, Benutzer und Rollen
 
-Die ganze App (auch der Player) ist nur nach Anmeldung erreichbar.
+Die ganze App (auch der Player) ist nur nach Anmeldung erreichbar. Die Anmeldeseite zeigt den Namen
+der Gemeinde und einen Begrüßungstext (Verwaltung → Anmeldung). Ist OIDC eingerichtet, sehen Hörer
+nur „Mit Gemeinde-Konto anmelden“; die Anmeldung des lokalen Admins steht unter `/?admin`.
 
 - **Lokaler Admin** `admin`: Das Passwort kommt aus `ADMIN_PASSWORD`. Ein neuer oder geänderter
   Wert gilt nach dem nächsten Neustart (`docker compose up -d`), auch wenn die Datenbank schon
@@ -240,6 +258,18 @@ Verwaltung (Manager und Admins):
 | `GET /api/admin/tag-fields` | Alle Tag-Felder der Bibliothek mit Anzahl Titel und Beispielwerten |
 | `GET /api/admin/tag-fields/:tag/values?q=&limit=` | Aktueller Inhalt eines Tag-Felds, häufigste Werte zuerst |
 
+`PATCH /api/admin/albums/:id` nimmt außerdem `speaker`, `passage` und `description` (Predigt-Infos).
+
+Persönliches des angemeldeten Hörers:
+
+| Methode und Pfad | Zweck |
+| --- | --- |
+| `GET /api/me/favorites` | Favorisierte Titel und Alben, neueste zuerst |
+| `PUT/DELETE /api/me/favorites/:kind/:id` | Favorit setzen oder entfernen (`kind`: `track` oder `album`) |
+| `GET /api/me/progress` | Gespeicherte Stellen angefangener langer Titel |
+| `PUT /api/me/progress/:id` | Hörstand melden: `{ position, duration? }` |
+| `GET /api/me/home` | „Weiterhören“ und „Zuletzt gehört“ für die Startseite |
+
 Eine `condition` ist entweder eine Bedingung `{ field: title|artist|album|genre|path, op: contains|not_contains|starts|equals, value }`
 oder eine Gruppe `{ match: "all" | "any", conditions: [...] }` (UND bzw. ODER, beliebig verschachtelt, bis zu 4 Ebenen
 und 30 Bedingungen). Statt `condition` geht für eine einzelne Bedingung auch `{ field, op, value }` direkt.
@@ -250,7 +280,7 @@ Anmeldung und Benutzer:
 
 | Methode und Pfad | Zweck |
 | --- | --- |
-| `GET /api/auth/status` | Angemeldeter Benutzer (oder `null`) und ob OIDC eingerichtet ist |
+| `GET /api/auth/status` | Angemeldeter Benutzer (oder `null`), ob OIDC eingerichtet ist, Name und Begrüßung der Gemeinde |
 | `POST /api/auth/login` | Lokaler Admin: `{ username, password }` |
 | `POST /api/auth/logout` | Abmelden |
 | `POST /api/auth/password` | Passwort des lokalen Admins ändern: `{ current, next }` |
@@ -264,6 +294,7 @@ Anmeldung und Benutzer:
 | `DELETE /api/admin/groups/:name` | Gruppe entfernen (nur Admin) |
 | `GET/PUT /api/admin/oidc` | OIDC-Einstellungen; das Secret wird nie ausgeliefert (nur Admin) |
 | `POST /api/admin/oidc/test` | Discovery des Identity Providers testen (nur Admin) |
+| `GET/PUT /api/admin/branding` | `{ name, welcome }` für Anmeldeseite, Seitentitel und App-Manifest (nur Admin) |
 
 ## Entwicklung
 
@@ -276,13 +307,13 @@ NEXTCLOUD_URL=… NEXTCLOUD_USER=… NEXTCLOUD_PASSWORD=… NEXTCLOUD_MUSIC_PATH
 
 cd web
 npm install
-npm test            # Warteschlange, Formatierung, Titelliste, Verwaltung, Anmeldung
+npm test            # Warteschlange, Formatierung, Titelliste, Player, Favoriten, Verwaltung, Anmeldung
 npm run dev         # Oberfläche mit Hot Reload, /api geht an localhost:3000
 ```
 
 Ohne Nextcloud ausprobieren: `cd web && npm run build && cd ../server && npm run demo` startet den
 Server mit einer simulierten Nextcloud und ein paar Beispielalben unter http://localhost:3000
-(lokaler Admin `admin` / `demo`; „Mit Gemeinde-Konto anmelden“ meldet über einen simulierten Identity
+(lokaler Admin unter http://localhost:3000/?admin mit `admin` / `demo`; „Mit Gemeinde-Konto anmelden“ meldet über einen simulierten Identity
 Provider Anna mit der Rolle Manager an).
 
 Die Tests erzeugen winzige MP3- und FLAC-Dateien im Speicher und starten einen WebDAV-Server,
