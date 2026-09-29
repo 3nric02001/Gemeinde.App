@@ -20,5 +20,9 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 
 await app.listen({ host: config.host, port: config.port });
+app.log.info(
+  { nextcloud: config.nextcloud.url, user: config.nextcloud.user, musicPath: config.nextcloud.musicPath || '/' },
+  'Gescannter Musikordner',
+);
 // Beim Start einmal abgleichen, damit neue Dateien seit dem letzten Lauf sofort da sind.
 void scanner.scan();

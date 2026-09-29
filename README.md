@@ -8,8 +8,11 @@ Benutzer- und Gruppenverwaltung folgen.
 
 ## So funktioniert es
 
-- Ein **Service-Account** in der Nextcloud (mit App-Passwort) gibt den Musikordner frei.
-  Der Server liest ihn per WebDAV; Nutzer brauchen keinen Nextcloud-Zugang.
+- Ein **Service-Account** in der Nextcloud (mit App-Passwort) liest genau den Ordner, der in
+  `NEXTCLOUD_MUSIC_PATH` steht, samt Unterordnern; alles andere im Account bleibt unberührt.
+  Ein mit dem Service-Account geteilter Ordner erscheint in dessen Dateien und kann direkt
+  angegeben werden. Nutzer brauchen keinen Nextcloud-Zugang. Den genauen Pfad zeigt die
+  Nextcloud-Weboberfläche des Service-Accounts in der Brotkrumen-Navigation.
 - Der **Scan** läuft beim Start und danach im eingestellten Intervall. Er ist inkrementell:
   Nur neue Dateien und solche mit geändertem ETag werden gelesen, und davon nur die ersten 256 KB
   für die Tags. Gelöschte Dateien verschwinden aus der Bibliothek; Ordner, die gerade nicht lesbar
@@ -45,7 +48,7 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `NEXTCLOUD_URL` | – | Basis-URL der Nextcloud |
 | `NEXTCLOUD_USER` | – | Service-Account |
 | `NEXTCLOUD_PASSWORD` | – | App-Passwort des Service-Accounts |
-| `NEXTCLOUD_MUSIC_PATH` | `/Music` | Musikordner im Account |
+| `NEXTCLOUD_MUSIC_PATH` | – (Pflicht) | Ordner, der gescannt wird, relativ zu den Dateien des Service-Accounts, z. B. `/Gemeinde/Medien/Musik`. Nur dieser Ordner und seine Unterordner kommen in die Bibliothek. |
 | `ADMIN_TOKEN` | – | Erlaubt `POST /api/scan`; ohne Token ist der manuelle Scan gesperrt |
 | `SCAN_INTERVAL_MINUTES` | `60` | Automatischer Scan, `0` = aus |
 | `SCAN_CONCURRENCY` | `4` | Parallele Zugriffe auf die Nextcloud beim Scan |

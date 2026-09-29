@@ -213,6 +213,23 @@ describe('Inkrementeller Scan', () => {
     expect((await albums()).length).toBe(6);
   });
 
+  it('meldet einen falsch eingestellten Musikordner verständlich', async () => {
+    const other = await buildApp(
+      loadConfig({
+        NEXTCLOUD_URL: cloud.url,
+        NEXTCLOUD_USER: USER,
+        NEXTCLOUD_PASSWORD: PASSWORD,
+        NEXTCLOUD_MUSIC_PATH: '/Gibt es nicht',
+        DATABASE_PATH: ':memory:',
+      }),
+      { logger: false },
+    );
+    const status = await other.scanner.scan();
+    await other.app.close();
+    expect(status.state).toBe('failed');
+    expect(status.lastError).toBe('Musikordner nicht gefunden: /Gibt es nicht (NEXTCLOUD_MUSIC_PATH prüfen)');
+  });
+
   it('funktioniert auch mit Servern, die Range ignorieren', async () => {
     cloud.ignoreRange = true;
     expect(await ctx.scanner.scan()).toMatchObject({ added: 11, failed: 0 });

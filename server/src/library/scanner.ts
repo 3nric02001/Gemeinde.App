@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { setMeta, type DB } from '../db.js';
-import type { NextcloudClient, RemoteEntry } from '../nextcloud/webdav.js';
+import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextcloud/webdav.js';
 import { rebuildAlbums } from './albums.js';
 import { extractMetadata, type TrackMeta } from './metadata.js';
 import { coverRank, dirname, isAudioFile } from './pathMeta.js';
@@ -118,7 +118,12 @@ export class LibraryScanner {
             entries = await this.client.list(dir);
           } catch (error) {
             // Ohne Wurzelordner gibt es nichts abzugleichen; das ist ein echter Fehler.
-            if (dir === '') throw error;
+            if (dir === '') {
+              if (error instanceof WebDavError && error.status === 404) {
+                throw new Error(`Musikordner nicht gefunden: ${this.client.musicPath || '/'} (NEXTCLOUD_MUSIC_PATH prüfen)`);
+              }
+              throw error;
+            }
             this.log.warn({ err: error, dir }, 'Ordner konnte nicht gelesen werden, wird übersprungen');
             unreadable.push(dir);
             return;

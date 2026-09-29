@@ -54,6 +54,7 @@ export class NextcloudClient {
   private readonly baseUrl: string;
   private readonly basePath: string;
   private readonly authorization: string;
+  readonly musicPath: string;
 
   constructor(
     config: NextcloudConfig,
@@ -64,6 +65,7 @@ export class NextcloudClient {
       '',
     );
     this.basePath = decodeURIComponent(new URL(this.baseUrl).pathname).replace(/\/+$/, '');
+    this.musicPath = config.musicPath;
     this.authorization = `Basic ${Buffer.from(`${config.user}:${config.password}`).toString('base64')}`;
   }
 

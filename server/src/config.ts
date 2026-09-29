@@ -4,7 +4,10 @@ export interface NextcloudConfig {
   user: string;
   /** App-Passwort des Service-Accounts (nicht das Login-Passwort) */
   password: string;
-  /** Ordner innerhalb des Accounts, der die Musik enthält, z. B. /Musik */
+  /**
+   * Ordner innerhalb des Accounts, der gescannt wird, z. B. /Gemeinde/Medien/Musik.
+   * Nur dieser Ordner und seine Unterordner landen in der Bibliothek; "/" wäre der ganze Account.
+   */
   musicPath: string;
 }
 
@@ -40,8 +43,11 @@ function integer(env: Env, name: string, fallback: number, min = 0): number {
 }
 
 export function normalizeMusicPath(path: string): string {
-  const trimmed = path.trim().replace(/^\/+|\/+$/g, '');
-  return trimmed ? `/${trimmed}` : '';
+  const segments = path.trim().split('/').filter(Boolean);
+  if (segments.some((segment) => segment === '.' || segment === '..')) {
+    throw new Error('NEXTCLOUD_MUSIC_PATH darf keine "." oder ".." enthalten');
+  }
+  return segments.length ? `/${segments.join('/')}` : '';
 }
 
 export function loadConfig(env: Env = process.env): Config {
@@ -55,7 +61,8 @@ export function loadConfig(env: Env = process.env): Config {
       url: required(env, 'NEXTCLOUD_URL').replace(/\/+$/, ''),
       user: required(env, 'NEXTCLOUD_USER'),
       password: required(env, 'NEXTCLOUD_PASSWORD'),
-      musicPath: normalizeMusicPath(env.NEXTCLOUD_MUSIC_PATH ?? '/Music'),
+      // Bewusst ohne Standardwert: Welcher Ordner gescannt wird, soll immer ausdrücklich festgelegt sein.
+      musicPath: normalizeMusicPath(required(env, 'NEXTCLOUD_MUSIC_PATH')),
     },
     scanIntervalMinutes: integer(env, 'SCAN_INTERVAL_MINUTES', 60),
     scanConcurrency: integer(env, 'SCAN_CONCURRENCY', 4, 1),
