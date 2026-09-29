@@ -1,5 +1,5 @@
 import type { Album } from '../api';
-import { getJson, type AlbumDetail } from '../api';
+import { coverUrl, getJson, type AlbumDetail } from '../api';
 import { player } from '../player';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
@@ -13,7 +13,7 @@ export function AlbumCard({ album, subtitle }: { album: Album; subtitle?: string
   return (
     <div class="card">
       <a class="card-link" href={`/album/${album.id}`}>
-        <Cover albumId={album.id} hasCover={album.hasCover} title={album.title} />
+        <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} />
         <span class="card-title">{album.title}</span>
         <span class="card-sub">{subtitle ?? [album.artist, album.year].filter(Boolean).join(' · ')}</span>
       </a>

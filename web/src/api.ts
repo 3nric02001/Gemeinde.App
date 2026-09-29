@@ -11,6 +11,8 @@ export interface Track {
   genre: string | null;
   duration: number | null;
   mimeType: string | null;
+  /** Eigenes eingebettetes Bild oder Albumcover vorhanden */
+  hasCover?: boolean;
 }
 
 export interface Album {
@@ -103,4 +105,7 @@ export function peekJson<T>(url: string): T | undefined {
 }
 
 export const coverUrl = (albumId: number) => `/api/albums/${albumId}/cover`;
+/** Titelbild; ältere gespeicherte Warteschlangen kennen `hasCover` noch nicht, dann einfach versuchen. */
+export const trackCoverUrl = (track: Pick<Track, 'id' | 'hasCover'>) =>
+  track.hasCover === false ? undefined : `/api/tracks/${track.id}/cover`;
 export const streamUrl = (trackId: number) => `/api/tracks/${trackId}/stream`;

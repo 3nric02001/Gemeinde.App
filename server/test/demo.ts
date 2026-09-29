@@ -46,12 +46,21 @@ const albums: Array<[string, string, number, string, string[], number[][] | null
   ['Jugendchor', 'Sommerfreizeit', 2023, 'Chor', ['Du bist Herr', 'Meine Hoffnung', 'Vater unser'], null],
   ['Sefora Nelson', 'Liebe, die bleibt', 2019, 'Pop', ['Liebe, die bleibt', 'Gnade'], [[70, 60, 120], [240, 200, 220]]],
 ];
-for (const [artist, album, year, genre, titles, colors] of albums) {
-  titles.forEach((title, i) =>
-    cloud.put(`${artist}/${album}/${String(i + 1).padStart(2, '0')} ${title}.mp3`, mp3({ title, artist, album, track: i + 1, year, genre }, 3000 + i * 800)),
-  );
-  if (colors) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
-}
+albums.forEach(([artist, album, year, genre, titles, colors], n) => {
+  // Mal liegt das Cover als Bild im Ordner, mal steckt es in den Dateien; beim Sampler hat jeder Titel ein eigenes.
+  const sampler = album.startsWith('Feiert Jesus');
+  const embedded = colors && (sampler || n % 2 === 1);
+  titles.forEach((title, i) => {
+    const picture = !embedded
+      ? undefined
+      : { data: png(sampler ? [40 + i * 50, 80, 200 - i * 40] : colors[0]!, sampler ? [250, 200 - i * 30, 90 + i * 40] : colors[1]!), mime: 'image/png' };
+    cloud.put(
+      `${artist}/${album}/${String(i + 1).padStart(2, '0')} ${title}.mp3`,
+      mp3({ title, artist, album, track: i + 1, year, genre, picture }, 3000 + i * 800),
+    );
+  });
+  if (colors && !embedded) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
+});
 const config = loadConfig({
   NEXTCLOUD_URL: cloud.url, NEXTCLOUD_USER: USER, NEXTCLOUD_PASSWORD: PASSWORD, NEXTCLOUD_MUSIC_PATH: '/Musik',
   DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000',

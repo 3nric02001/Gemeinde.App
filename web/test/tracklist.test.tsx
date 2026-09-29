@@ -34,6 +34,15 @@ describe('Titelliste', () => {
     expect(screen.getAllByText('3:05')).toHaveLength(2);
   });
 
+  it('zeigt das Bild jedes Titels und sonst einen Platzhalter', () => {
+    const { container } = render(
+      <TrackList tracks={[{ ...track(7, 'Mit Bild'), hasCover: true }, { ...track(8, 'Ohne Bild'), hasCover: false }]} />,
+    );
+    const images = [...container.querySelectorAll('img')].map((img) => img.getAttribute('src'));
+    expect(images).toEqual(['/api/tracks/7/cover']);
+    expect(container.querySelectorAll('.cover-initials')).toHaveLength(1);
+  });
+
   it('trennt Doppel-CDs mit Zwischenüberschriften', () => {
     render(<TrackList tracks={[track(1, 'A', 1), track(2, 'B', 2)]} variant="album" />);
     expect(screen.getByText('CD 1')).toBeTruthy();

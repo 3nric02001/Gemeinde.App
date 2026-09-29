@@ -16,6 +16,7 @@ interface TrackRow {
   genre: string | null;
   duration: number | null;
   compilation: number;
+  cover_id: number | null;
 }
 
 interface AlbumDraft {
@@ -68,12 +69,14 @@ export function albumKey(path: string, album: string | null): string {
 /**
  * Baut alle Alben aus den Titeln neu auf. Bestehende Alben behalten ihre ID
  * (Links und spätere Playlists bleiben gültig), leere werden entfernt.
- * @param covers Bestes Coverbild pro Ordner (Ordnerpfad → Bildpfad)
+ * @param covers Bestes Coverbild pro Ordner (Ordnerpfad → Bildpfad); ohne Bild im Ordner
+ *   dient das in die Titel eingebettete Cover
  */
 export function rebuildAlbums(db: DB, covers: Map<string, string>, now = Date.now()): void {
   const tracks = db
     .prepare(
-      'SELECT id, path, title, artist, album_artist, album, year, genre, duration, compilation FROM tracks',
+      `SELECT id, path, title, artist, album_artist, album, year, genre, duration, compilation, cover_id FROM tracks
+       ORDER BY coalesce(disc_no, 1), track_no IS NULL, track_no, path`,
     )
     .all() as TrackRow[];
 
@@ -90,11 +93,11 @@ export function rebuildAlbums(db: DB, covers: Map<string, string>, now = Date.no
   }
 
   const upsert = db.prepare(`
-    INSERT INTO albums (key, title, artist, year, genre, folder, cover_path, track_count, duration, created_at)
-    VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @count, @duration, @now)
+    INSERT INTO albums (key, title, artist, year, genre, folder, cover_path, cover_id, track_count, duration, created_at)
+    VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @coverId, @count, @duration, @now)
     ON CONFLICT(key) DO UPDATE SET
       title = excluded.title, artist = excluded.artist, year = excluded.year, genre = excluded.genre,
-      folder = excluded.folder, cover_path = excluded.cover_path,
+      folder = excluded.folder, cover_path = excluded.cover_path, cover_id = excluded.cover_id,
       track_count = excluded.track_count, duration = excluded.duration
     RETURNING id
   `);
@@ -115,6 +118,8 @@ export function rebuildAlbums(db: DB, covers: Map<string, string>, now = Date.no
         genre: mostCommon(draft.tracks.map((t) => t.genre)) ?? null,
         folder: draft.folder,
         cover: cover ?? null,
+        // Eingebettetes Bild, das die meisten Titel tragen (bei Gleichstand das des ersten Titels)
+        coverId: mostCommon(draft.tracks.map((t) => t.cover_id)) ?? null,
         count: draft.tracks.length,
         duration: draft.tracks.reduce((sum, t) => sum + (t.duration ?? 0), 0),
         now,
