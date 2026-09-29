@@ -1,12 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import {
+  addRule,
   addTracks,
   albumDetail,
   albumsOfTracks,
   createManualAlbum,
   CurationError,
   deleteManualAlbum,
+  deleteRule,
+  previewRule,
   removeTrack,
   restoreTrack,
   setTracks,
@@ -14,6 +17,7 @@ import {
   type AlbumFields,
 } from '../library/curation.js';
 import { searchAlbums, type AlbumFilter } from '../library/queries.js';
+import { RULE_FIELDS, RULE_OPS, type RuleCondition } from '../library/rules.js';
 
 const idParam = {
   type: 'object',
@@ -33,6 +37,18 @@ const albumFields = {
   year: { type: ['integer', 'null'], minimum: 1000, maximum: 2999 },
   genre: nullableText(100),
   hidden: { type: 'boolean' },
+} as const;
+
+const ruleCondition = {
+  field: { type: 'string', enum: RULE_FIELDS },
+  op: { type: 'string', enum: RULE_OPS, default: 'contains' },
+  value: { type: 'string', minLength: 1, maxLength: 200 },
+} as const;
+const ruleBody = {
+  type: 'object',
+  required: ['field', 'value'],
+  properties: { ...ruleCondition, move: { type: 'boolean' } },
+  additionalProperties: false,
 } as const;
 
 type IdRequest = FastifyRequest<{ Params: { id: number } }>;
@@ -88,7 +104,13 @@ export async function registerAdminRoutes(
           body: {
             type: 'object',
             required: ['title'],
-            properties: { ...albumFields, title: { type: 'string', maxLength: 200 }, trackIds, move: { type: 'boolean' } },
+            properties: {
+              ...albumFields,
+              title: { type: 'string', maxLength: 200 },
+              trackIds,
+              move: { type: 'boolean' },
+              rules: { type: 'array', items: ruleBody, maxItems: 20 },
+            },
             additionalProperties: false,
           },
         },
@@ -163,6 +185,42 @@ export async function registerAdminRoutes(
         restoreTrack(db, request.params.id, request.params.trackId);
         return albumDetail(db, request.params.id);
       },
+    );
+
+    admin.post(
+      '/api/admin/albums/:id/rules',
+      { schema: { params: idParam, body: ruleBody } },
+      async (request: IdRequest) => {
+        addRule(db, request.params.id, request.body as RuleCondition & { move?: boolean });
+        return albumDetail(db, request.params.id);
+      },
+    );
+
+    admin.delete(
+      '/api/admin/albums/:id/rules/:ruleId',
+      {
+        schema: {
+          params: {
+            type: 'object',
+            required: ['id', 'ruleId'],
+            properties: { id: { type: 'integer', minimum: 1 }, ruleId: { type: 'integer', minimum: 1 } },
+          },
+        },
+      },
+      async (request: FastifyRequest<{ Params: { id: number; ruleId: number } }>) => {
+        deleteRule(db, request.params.id, request.params.ruleId);
+        return albumDetail(db, request.params.id);
+      },
+    );
+
+    admin.get(
+      '/api/admin/rules/preview',
+      {
+        schema: {
+          querystring: { type: 'object', required: ['field', 'value'], properties: ruleCondition, additionalProperties: false },
+        },
+      },
+      async (request) => previewRule(db, request.query as RuleCondition),
     );
 
     admin.get(

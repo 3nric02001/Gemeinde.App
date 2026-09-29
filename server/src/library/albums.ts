@@ -1,5 +1,6 @@
 import type { DB } from '../db.js';
 import { UNKNOWN_ARTIST } from './metadata.js';
+import { evaluateRules } from './rules.js';
 import { albumFolderOf, basename, dirname } from './pathMeta.js';
 
 export const VARIOUS_ARTISTS = 'Verschiedene Interpreten';
@@ -139,11 +140,13 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       ),
     );
 
+    const rules = evaluateRules(db, tracks);
+
     // Automatische Alben: Titel nach Ordner und Albumname gruppieren.
     const drafts = new Map<string, AlbumDraft>();
     for (const track of tracks) {
       const key = albumKey(track.path, track.album);
-      if (excluded.has(`${track.path}\u0000${key}`)) continue;
+      if (excluded.has(`${track.path}\u0000${key}`) || rules.moved.has(track.id)) continue;
       let draft = drafts.get(key);
       if (!draft) {
         const folder = albumFolderOf(track.path);
@@ -218,9 +221,12 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         continue;
       }
       // Manuelle Alben: Pfade, die gerade nicht in der Bibliothek sind, bleiben gespeichert, zählen aber nicht.
+      // Von Hand eingetragene Titel zuerst, danach, was Regeln hinzufügen.
       const members = (manualMembers.all(album.id) as Array<{ path: string }>)
         .map((row) => byPath.get(row.path))
         .filter((t): t is TrackRow => t !== undefined);
+      const listed = new Set(members.map((t) => t.id));
+      for (const track of rules.members.get(album.id) ?? []) if (!listed.has(track.id)) members.push(track);
       const draft: AlbumDraft = { key: album.key, title: LOOSE_TRACKS, folder: '', tracks: members };
       const values = derive(draft, coverFor(members, covers));
       if (!unchanged(album, values)) updateManual.run({ ...values, id: album.id });

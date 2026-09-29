@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { DB } from '../db.js';
 import { albumKey, MANUAL_KEY_PREFIX, rebuildAlbums } from './albums.js';
 import { getAlbum } from './queries.js';
+import { evaluateRules, listRules, ruleMatcher, type RuleCondition, type RuleTrack } from './rules.js';
 
 /**
  * Admin-Werkzeuge für Alben: manuelle Alben zusammenstellen und automatische korrigieren.
@@ -121,8 +122,22 @@ export function albumDetail(db: DB, id: number) {
             .all(id) as Array<{ path: string }>
         ).map((r) => r.path)
       : [];
+  // Titel, die über eine Regel im Album stehen (nicht von Hand eingetragen)
+  const explicit = new Set(
+    (db.prepare('SELECT path FROM manual_album_tracks WHERE album_id = ?').all(id) as Array<{ path: string }>).map((r) => r.path),
+  );
+  const paths = new Map(
+    (db.prepare('SELECT t.id, t.path FROM album_tracks at JOIN tracks t ON t.id = at.track_id WHERE at.album_id = ?').all(id) as Array<{
+      id: number;
+      path: string;
+    }>).map((r) => [r.id, r.path]),
+  );
+  const ruleTrackIds = row.kind === 'manual' ? [...paths].filter(([, path]) => !explicit.has(path)).map(([trackId]) => trackId) : [];
   return {
     ...album,
+    rules: listRules(db, id),
+    ruleTrackIds,
+    movedByRule: row.kind === 'auto' ? movedByRule(db, row.key) : [],
     overrides: {
       title: override?.title ?? null,
       artist: override?.artist ?? null,
@@ -134,7 +149,10 @@ export function albumDetail(db: DB, id: number) {
   };
 }
 
-export function createManualAlbum(db: DB, fields: AlbumFields & { title: string; trackIds?: number[]; move?: boolean }): number {
+export function createManualAlbum(
+  db: DB,
+  fields: AlbumFields & { title: string; trackIds?: number[]; move?: boolean; rules?: Array<RuleCondition & { move?: boolean }> },
+): number {
   const title = cleanText(fields.title);
   if (!title) throw new CurationError(400, 'Das Album braucht einen Titel');
   const id = db.transaction(() => {
@@ -146,6 +164,13 @@ export function createManualAlbum(db: DB, fields: AlbumFields & { title: string;
       .get(key, title, Date.now()) as { id: number };
     writeOverride(db, key, { ...fields, title });
     if (fields.trackIds?.length) addTracks(db, id, fields.trackIds, { move: fields.move, rebuild: false });
+    const insertRule = db.prepare(
+      'INSERT INTO album_rules (album_id, field, op, value, move, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    for (const rule of fields.rules ?? []) {
+      if (!cleanText(rule.value)) throw new CurationError(400, 'Die Regel braucht einen Suchbegriff');
+      insertRule.run(id, rule.field, rule.op, rule.value.trim(), rule.move ? 1 : 0, Date.now());
+    }
     return id;
   })();
   rebuildAlbums(db);
@@ -158,6 +183,62 @@ export function updateAlbum(db: DB, id: number, fields: AlbumFields): void {
     throw new CurationError(400, 'Das Album braucht einen Titel');
   }
   writeOverride(db, album.key, fields);
+  rebuildAlbums(db);
+}
+
+/** Titel eines automatischen Albums, die eine Regel in ein eigenes Album verschiebt */
+function movedByRule(db: DB, key: string) {
+  const tracks = allRuleTracks(db);
+  const { members, moved } = evaluateRules(db, tracks);
+  const result: Array<{ id: number; title: string; artist: string; albumId: number; albumTitle: string }> = [];
+  const titles = new Map(
+    (db.prepare("SELECT id, title FROM albums WHERE kind = 'manual'").all() as Array<{ id: number; title: string }>).map((r) => [
+      r.id,
+      r.title,
+    ]),
+  );
+  for (const [albumId, list] of members) {
+    for (const track of list) {
+      if (!moved.has(track.id) || albumKey(track.path, track.album) !== key) continue;
+      if (result.some((r) => r.id === track.id)) continue;
+      result.push({ id: track.id, title: track.title, artist: track.artist, albumId, albumTitle: titles.get(albumId) ?? '' });
+    }
+  }
+  return result;
+}
+
+function allRuleTracks(db: DB): RuleTrack[] {
+  return db.prepare('SELECT id, path, title, artist, album_artist, album, genre, year FROM tracks').all() as RuleTrack[];
+}
+
+/** Vorschau: welche Titel eine Regel treffen würde */
+export function previewRule(db: DB, condition: RuleCondition, limit = 20) {
+  const matches = ruleMatcher(condition);
+  const hits = allRuleTracks(db).filter(matches);
+  return {
+    total: hits.length,
+    items: hits.slice(0, limit).map(({ id, title, artist, album }) => ({ id, title, artist, album })),
+  };
+}
+
+export function addRule(db: DB, albumId: number, rule: RuleCondition & { move?: boolean }): void {
+  const album = findAlbum(db, albumId);
+  requireManual(album);
+  if (!cleanText(rule.value)) throw new CurationError(400, 'Die Regel braucht einen Suchbegriff');
+  db.prepare('INSERT INTO album_rules (album_id, field, op, value, move, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+    albumId,
+    rule.field,
+    rule.op,
+    rule.value.trim(),
+    rule.move ? 1 : 0,
+    Date.now(),
+  );
+  rebuildAlbums(db);
+}
+
+export function deleteRule(db: DB, albumId: number, ruleId: number): void {
+  const { changes } = db.prepare('DELETE FROM album_rules WHERE id = ? AND album_id = ?').run(ruleId, albumId);
+  if (!changes) throw new CurationError(404, 'Regel nicht gefunden');
   rebuildAlbums(db);
 }
 
@@ -186,7 +267,11 @@ export function addTracks(
       last: number;
     };
     const insert = db.prepare('INSERT OR IGNORE INTO manual_album_tracks (album_id, path, position) VALUES (?, ?, ?)');
-    tracks.forEach((track, index) => insert.run(id, track.path, last + index + 1));
+    const unremove = db.prepare('DELETE FROM manual_album_removed WHERE album_id = ? AND path = ?');
+    tracks.forEach((track, index) => {
+      insert.run(id, track.path, last + index + 1);
+      unremove.run(id, track.path);
+    });
     if (options.move) excludeFromAuto(db, tracks);
   })();
   if (options.rebuild !== false) rebuildAlbums(db);
@@ -209,6 +294,15 @@ export function setTracks(db: DB, id: number, trackIds: number[]): void {
         )
         .all(id) as Array<{ path: string }>
     ).map((r) => r.path);
+    // Was bisher im Album stand (auch per Regel) und jetzt fehlt, bleibt draußen.
+    const wanted = new Set(tracks.map((t) => t.path));
+    const before = db
+      .prepare('SELECT t.path FROM album_tracks at JOIN tracks t ON t.id = at.track_id WHERE at.album_id = ?')
+      .all(id) as Array<{ path: string }>;
+    const remove = db.prepare('INSERT OR IGNORE INTO manual_album_removed (album_id, path) VALUES (?, ?)');
+    for (const { path } of before) if (!wanted.has(path)) remove.run(id, path);
+    const unremove = db.prepare('DELETE FROM manual_album_removed WHERE album_id = ? AND path = ?');
+    for (const path of wanted) unremove.run(id, path);
     db.prepare('DELETE FROM manual_album_tracks WHERE album_id = ?').run(id);
     const insert = db.prepare('INSERT INTO manual_album_tracks (album_id, path, position) VALUES (?, ?, ?)');
     [...tracks.map((t) => t.path), ...missing].forEach((path, index) => insert.run(id, path, index + 1));
@@ -222,6 +316,8 @@ export function removeTrack(db: DB, id: number, trackId: number): void {
   const [track] = trackPaths(db, [trackId]);
   if (album.kind === 'manual') {
     db.prepare('DELETE FROM manual_album_tracks WHERE album_id = ? AND path = ?').run(id, track!.path);
+    // Damit eine Regel den Titel nicht gleich wieder hinzufügt
+    db.prepare('INSERT OR IGNORE INTO manual_album_removed (album_id, path) VALUES (?, ?)').run(id, track!.path);
   } else {
     if (albumKey(track!.path, track!.album) !== album.key) throw new CurationError(404, 'Titel ist nicht in diesem Album');
     excludeFromAuto(db, [track!]);

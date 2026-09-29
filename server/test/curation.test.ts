@@ -267,3 +267,72 @@ describe('Datenbank-Migration', () => {
     }
   });
 });
+
+describe('Regeln', () => {
+  it('füllt ein Album mit allen passenden Titeln, auch künftigen', async () => {
+    const preview = await call('GET', '/api/admin/rules/preview?field=title&value=predigt');
+    expect(preview.total).toBe(2);
+
+    const album = await call<AlbumJson & { rules: Array<{ id: number }> }>(
+      'POST',
+      '/api/admin/albums',
+      { title: 'Predigten', rules: [{ field: 'title', op: 'contains', value: 'Predigt' }] },
+      201,
+    );
+    // Neueste zuerst nach Datum im Ordnernamen
+    expect(titles(album)).toEqual(['Predigt Römer 8', 'Predigt Psalm 23']);
+    expect(album.rules).toHaveLength(1);
+    // Ohne "verschieben" bleiben sie auch im Gottesdienst-Album
+    expect(titles(await call('GET', `/api/admin/albums/${await albumId('Gottesdienst 03.03.')}`))).toEqual([
+      'Begrüßung',
+      'Predigt Psalm 23',
+    ]);
+
+    cloud.put('Gottesdienste/2024-03-17/02 PREDIGT Johannes 3.mp3', mp3({ title: 'PREDIGT: Johannes 3', artist: 'Pastor Meier', album: 'Gottesdienst 17.03.', track: 2, year: 2024 }));
+    await ctx.scanner.scan();
+    const after = await call<AlbumJson>('GET', `/api/admin/albums/${album.id}`);
+    expect(titles(after)).toEqual(['PREDIGT: Johannes 3', 'Predigt Römer 8', 'Predigt Psalm 23']);
+  });
+
+  it('verschiebt auf Wunsch und lässt von Hand entfernte Titel draußen', async () => {
+    const { id } = await call<AlbumJson>('POST', '/api/admin/albums', { title: 'Predigten' }, 201);
+    let album = await call<AlbumJson & { rules: Array<{ id: number }> }>('POST', `/api/admin/albums/${id}/rules`, {
+      field: 'artist',
+      op: 'equals',
+      value: 'pastor meier',
+      move: true,
+    });
+    expect(titles(album)).toEqual(['Predigt Römer 8', 'Predigt Psalm 23']);
+    const gd = await call<AlbumJson & { movedByRule: Array<{ title: string; albumTitle: string }> }>(
+      'GET',
+      `/api/admin/albums/${await albumId('Gottesdienst 03.03.')}`,
+    );
+    expect(titles(gd)).toEqual(['Begrüßung']);
+    expect(gd.movedByRule).toEqual([expect.objectContaining({ title: 'Predigt Psalm 23', albumTitle: 'Predigten' })]);
+
+    const [psalm] = await trackIds('Predigt Psalm 23');
+    album = await call('DELETE', `/api/admin/albums/${id}/tracks/${psalm}`);
+    expect(titles(album)).toEqual(['Predigt Römer 8']);
+    await ctx.scanner.scan();
+    expect(titles(await call('GET', `/api/admin/albums/${id}`))).toEqual(['Predigt Römer 8']);
+    // Von Hand wieder hinzufügen geht
+    album = await call('POST', `/api/admin/albums/${id}/tracks`, { trackIds: [psalm] });
+    expect(titles(album)).toEqual(['Predigt Psalm 23', 'Predigt Römer 8']);
+
+    // Regel löschen: nur noch der von Hand eingetragene Titel, der andere ist zurück im Gottesdienst
+    album = await call('DELETE', `/api/admin/albums/${id}/rules/${album.rules[0]!.id}`);
+    expect(titles(album)).toEqual(['Predigt Psalm 23']);
+    expect(titles(await call('GET', `/api/admin/albums/${await albumId('Gottesdienst 10.03.')}`))).toEqual([
+      'Lied',
+      'Predigt Römer 8',
+    ]);
+  });
+
+  it('prüft Regeln', async () => {
+    const { id } = await call<AlbumJson>('POST', '/api/admin/albums', { title: 'X' }, 201);
+    await call('POST', `/api/admin/albums/${id}/rules`, { field: 'farbe', value: 'rot' }, 400);
+    await call('POST', `/api/admin/albums/${id}/rules`, { field: 'title', value: '   ' }, 400);
+    await call('POST', `/api/admin/albums/${await albumId('Zion')}/rules`, { field: 'title', value: 'a' }, 409);
+    await call('DELETE', `/api/admin/albums/${id}/rules/999`, undefined, 404);
+  });
+});

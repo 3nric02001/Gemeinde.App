@@ -45,8 +45,18 @@ von Hand pflegen. Bis zum Login per OIDC meldet man sich dort mit dem `ADMIN_TOK
 - **Automatische Alben korrigieren**: Titel, Interpret, Jahr und Genre ändern (und wieder auf
   „automatisch“ zurücksetzen), einzelne Titel herausnehmen und zurückholen oder das ganze Album
   für Hörer ausblenden.
+- **Regeln** füllen eigene Alben automatisch, z. B. „Titel enthält Predigt“ oder „Ordner/Dateiname
+  enthält Gottesdienste/2024“. Möglich sind Titel, Interpret, Album, Genre und Ordner/Dateiname mit
+  „enthält“, „beginnt mit“ oder „ist genau“; Groß-/Kleinschreibung und Umlaute spielen keine Rolle.
+  Mehrere Regeln eines Albums gelten mit „oder“. Neue passende Titel kommen beim nächsten Scan von
+  selbst dazu, neueste zuerst (nach Datum im Ordnernamen). Vor dem Speichern zeigt eine Vorschau, wie
+  viele Titel die Regel trifft. Einen Titel, den man aus so einem Album entfernt, fügt die Regel nicht
+  wieder hinzu.
 - **Verschieben statt kopieren**: Titel in einem automatischen Album auswählen und „Zu eigenem Album
   hinzufügen“. Mit „herausnehmen“ verschwinden sie aus dem bisherigen Album, sonst stehen sie in beiden.
+  Dasselbe gibt es für Regeln („verschieben“).
+
+![Regeln in der Verwaltung](docs/screenshots/admin-rules.png)
 
 Alle Eingriffe werden getrennt von den gescannten Daten gespeichert (nach Dateipfad bzw. Album) und
 bei jedem Scan wieder angewendet. Fehlt eine Datei eines eigenen Albums zeitweise in der Nextcloud,
@@ -142,6 +152,9 @@ Verwaltung (alle mit `Authorization: Bearer <ADMIN_TOKEN>`):
 | `PUT /api/admin/albums/:id/tracks` | Inhalt und Reihenfolge eines eigenen Albums setzen: `{ trackIds }` |
 | `DELETE /api/admin/albums/:id/tracks/:trackId` | Titel entfernen (bei automatischen Alben: herausnehmen) |
 | `POST /api/admin/albums/:id/tracks/:trackId/restore` | Herausgenommenen Titel zurückholen |
+| `POST /api/admin/albums/:id/rules` | Regel anlegen: `{ field: title\|artist\|album\|genre\|path, op: contains\|starts\|equals, value, move? }` |
+| `DELETE /api/admin/albums/:id/rules/:ruleId` | Regel löschen |
+| `GET /api/admin/rules/preview?field=&op=&value=` | Wie viele und welche Titel eine Regel treffen würde |
 | `GET /api/admin/track-albums?ids=1,2` | In welchen Alben die Titel stehen |
 
 ## Entwicklung
