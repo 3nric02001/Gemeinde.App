@@ -18,6 +18,7 @@ const base: ScanStatus = {
   failed: 0,
   lastError: null,
   lastSuccessAt: '2026-09-29T12:05:00.000Z',
+  folders: ['/Gemeinde/Musik', '/Gemeinde/Predigten'],
 };
 
 afterEach(() => {
@@ -32,6 +33,7 @@ describe('Scan in der Verwaltung', () => {
     render(<ScanPanel />);
     await waitFor(() => expect(screen.getByText('1.200 Titel in der Nextcloud, zuletzt 3 neu.')).toBeTruthy());
     expect(screen.getByText('Jetzt scannen')).toBeTruthy();
+    expect(screen.getByText('Ordner: /Gemeinde/Musik · /Gemeinde/Predigten')).toBeTruthy();
   });
 
   it('zeigt Fehler des letzten Scans', async () => {

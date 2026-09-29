@@ -260,7 +260,12 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     },
   );
 
-  app.get('/api/scan', async () => ({ ...scanner.getStatus(), lastSuccessAt: getMeta(db, 'lastScanAt') ?? null }));
+  app.get('/api/scan', async () => ({
+    ...scanner.getStatus(),
+    lastSuccessAt: getMeta(db, 'lastScanAt') ?? null,
+    // Die gescannten Ordner, wie in NEXTCLOUD_MUSIC_PATH angegeben
+    folders: deps.client.musicPaths.map((path) => path || '/'),
+  }));
 
   // Nur Manager und Admins (siehe requiredRole)
   app.post('/api/scan', async (_request, reply) => {

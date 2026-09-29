@@ -5,10 +5,10 @@ export interface NextcloudConfig {
   /** App-Passwort des Service-Accounts (nicht das Login-Passwort) */
   password: string;
   /**
-   * Ordner innerhalb des Accounts, der gescannt wird, z. B. /Gemeinde/Medien/Musik.
-   * Nur dieser Ordner und seine Unterordner landen in der Bibliothek; "/" wäre der ganze Account.
+   * Ordner innerhalb des Accounts, die gescannt werden, z. B. ["/Gemeinde/Medien/Musik", "/Gemeinde/Predigten"].
+   * Nur diese Ordner und ihre Unterordner landen in der Bibliothek; "" (also "/") wäre der ganze Account.
    */
-  musicPath: string;
+  musicPaths: string[];
 }
 
 export interface Config {
@@ -57,6 +57,22 @@ export function normalizeMusicPath(path: string): string {
   return segments.length ? `/${segments.join('/')}` : '';
 }
 
+/**
+ * Mehrere Ordner durch Komma, Semikolon oder Zeilenumbruch getrennt. Doppelte und solche,
+ * die schon in einem anderen angegebenen Ordner liegen, fallen weg; die Reihenfolge bleibt.
+ */
+export function parseMusicPaths(raw: string): string[] {
+  const paths = raw
+    .split(/[,;\n]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map(normalizeMusicPath);
+  const inside = (path: string, parent: string) => parent === '' || path === parent || path.startsWith(`${parent}/`);
+  return paths.filter(
+    (path, index) => !paths.some((other, j) => (other === path ? j < index : inside(path, other))),
+  );
+}
+
 function publicUrl(raw: string | undefined): string | undefined {
   const value = raw?.trim();
   if (!value) return undefined;
@@ -68,6 +84,12 @@ function publicUrl(raw: string | undefined): string | undefined {
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('PUBLIC_URL muss mit https:// beginnen');
   return url.origin;
+}
+
+function musicPaths(raw: string): string[] {
+  const paths = parseMusicPaths(raw);
+  if (paths.length === 0) throw new Error('Umgebungsvariable NEXTCLOUD_MUSIC_PATH fehlt');
+  return paths;
 }
 
 export function loadConfig(env: Env = process.env): Config {
@@ -86,7 +108,7 @@ export function loadConfig(env: Env = process.env): Config {
       user: required(env, 'NEXTCLOUD_USER'),
       password: required(env, 'NEXTCLOUD_PASSWORD'),
       // Bewusst ohne Standardwert: Welcher Ordner gescannt wird, soll immer ausdrücklich festgelegt sein.
-      musicPath: normalizeMusicPath(required(env, 'NEXTCLOUD_MUSIC_PATH')),
+      musicPaths: musicPaths(required(env, 'NEXTCLOUD_MUSIC_PATH')),
     },
     scanIntervalMinutes: integer(env, 'SCAN_INTERVAL_MINUTES', 60),
     scanConcurrency: integer(env, 'SCAN_CONCURRENCY', 4, 1),

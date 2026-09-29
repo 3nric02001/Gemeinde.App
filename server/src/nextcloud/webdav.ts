@@ -65,24 +65,50 @@ function networkError(error: unknown, what: string, timeoutMs: number): Error {
  * Ordner auflisten (Depth 1, weil viele Server Depth infinity sperren)
  * und Dateien ganz oder in Teilen lesen.
  */
+/** Gemeinsamer Elternordner mehrerer Musikordner, z. B. /Gemeinde für /Gemeinde/Musik und /Gemeinde/Predigten. */
+export function commonBase(paths: string[]): string {
+  const [first = [], ...rest] = paths.map((path) => path.split('/').filter(Boolean));
+  let length = first.length;
+  for (const segments of rest) {
+    let i = 0;
+    while (i < length && i < segments.length && segments[i] === first[i]) i++;
+    length = i;
+  }
+  return length ? `/${first.slice(0, length).join('/')}` : '';
+}
+
 export class NextcloudClient {
   private readonly baseUrl: string;
   private readonly basePath: string;
   private readonly authorization: string;
-  readonly musicPath: string;
+  /**
+   * Ordner, auf den sich alle Pfade in der Bibliothek beziehen: bei einem Musikordner dieser selbst,
+   * bei mehreren ihr gemeinsamer Elternordner.
+   */
+  readonly base: string;
+  /** Die Musikordner relativ zu `base` ("" ist base selbst) */
+  readonly roots: string[];
+  readonly musicPaths: string[];
 
   constructor(
     config: NextcloudConfig,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly timeoutMs = REQUEST_TIMEOUT_MS,
   ) {
-    this.baseUrl = `${config.url}/remote.php/dav/files/${encodeURIComponent(config.user)}/${encodePath(config.musicPath)}`.replace(
+    this.musicPaths = config.musicPaths;
+    this.base = commonBase(config.musicPaths);
+    this.roots = config.musicPaths.map((path) => path.slice(this.base.length).replace(/^\/+/, ''));
+    this.baseUrl = `${config.url}/remote.php/dav/files/${encodeURIComponent(config.user)}/${encodePath(this.base)}`.replace(
       /\/+$/,
       '',
     );
     this.basePath = decodeURIComponent(new URL(this.baseUrl).pathname).replace(/\/+$/, '');
-    this.musicPath = config.musicPath;
     this.authorization = `Basic ${Buffer.from(`${config.user}:${config.password}`).toString('base64')}`;
+  }
+
+  /** Vollständiger Ordner in der Nextcloud zu einem Pfad der Bibliothek, für Meldungen */
+  absolute(path: string): string {
+    return `${this.base}/${path}`.replace(/\/+$/, '') || '/';
   }
 
   fileUrl(path: string): string {
