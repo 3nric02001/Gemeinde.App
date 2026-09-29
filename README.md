@@ -91,11 +91,13 @@ Dateien einmal neu, um auch die übrigen Tag-Felder zu erfassen.
 
 Die ganze App (auch der Player) ist nur nach Anmeldung erreichbar.
 
-- **Lokaler Admin** `admin`: Er wird beim ersten Start angelegt. Das Passwort kommt aus
-  `ADMIN_PASSWORD`; fehlt die Variable, wird eines erzeugt und einmal ins Log geschrieben
-  (`docker compose logs gemeinde-app`). Danach ändert man es unter Verwaltung → Anmeldung.
-  Passwort vergessen: `RESET_ADMIN_PASSWORD=true` setzen und neu starten, danach die Variable wieder
-  entfernen.
+- **Lokaler Admin** `admin`: Das Passwort kommt aus `ADMIN_PASSWORD`. Ein neuer oder geänderter
+  Wert gilt nach dem nächsten Neustart (`docker compose up -d`), auch wenn die Datenbank schon
+  existiert. Solange der Wert gleich bleibt, gilt ein unter Verwaltung → Anmeldung geändertes
+  Passwort weiter. Ohne `ADMIN_PASSWORD` wird beim ersten Start eines erzeugt und einmal ins Log
+  geschrieben (`docker compose logs gemeinde-app`); `RESET_ADMIN_PASSWORD=true` erzeugt ein neues.
+  Enthält das Passwort ein `$`, muss es in der `.env` als `$$` geschrieben werden, weil Docker
+  Compose `$` als Variable liest.
 - **Alle anderen** melden sich über OIDC mit ihrem Gemeinde-Konto an (Keycloak, Authentik, Nextcloud,
   Entra ID u. a.). Eingerichtet wird das unter Verwaltung → Anmeldung: Issuer-URL, Client-ID,
   Client-Secret und der Claim mit den Gruppen (Standard `groups`, verschachtelt z. B.
@@ -170,8 +172,8 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `NEXTCLOUD_USER` | – | Service-Account |
 | `NEXTCLOUD_PASSWORD` | – | App-Passwort des Service-Accounts |
 | `NEXTCLOUD_MUSIC_PATH` | – (Pflicht) | Ordner, der gescannt wird, relativ zu den Dateien des Service-Accounts, z. B. `/Gemeinde/Medien/Musik`. Nur dieser Ordner und seine Unterordner kommen in die Bibliothek. |
-| `ADMIN_PASSWORD` | – | Startpasswort des lokalen Admins `admin`; ohne Angabe wird eines erzeugt und geloggt |
-| `RESET_ADMIN_PASSWORD` | `false` | `true` setzt das Passwort des lokalen Admins beim Start auf `ADMIN_PASSWORD` (bzw. ein neues) zurück |
+| `ADMIN_PASSWORD` | – | Passwort des lokalen Admins `admin`; gilt nach jedem Neustart, bei dem es sich geändert hat. Ohne Angabe wird beim ersten Start eines erzeugt und geloggt |
+| `RESET_ADMIN_PASSWORD` | `false` | `true` setzt das Passwort des lokalen Admins bei jedem Start auf `ADMIN_PASSWORD` bzw. ein neu erzeugtes zurück |
 | `PUBLIC_URL` | – | Öffentliche Adresse, z. B. `https://musik.gemeinde.de`; ergibt die OIDC-Weiterleitungs-URL. Ohne Angabe aus der Anfrage (Reverse Proxy mit `X-Forwarded-Proto`/`-Host`) |
 | `SCAN_INTERVAL_MINUTES` | `60` | Automatischer Scan, `0` = aus |
 | `SCAN_CONCURRENCY` | `4` | Parallele Zugriffe auf die Nextcloud beim Scan |

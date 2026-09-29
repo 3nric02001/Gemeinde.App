@@ -1,5 +1,5 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto';
-import type { DB } from '../db.js';
+import { getMeta, setMeta, type DB } from '../db.js';
 
 export const ROLES = ['listener', 'manager', 'admin'] as const;
 export type Role = (typeof ROLES)[number];
@@ -112,32 +112,49 @@ interface Logger {
   warn(obj: object, msg: string): void;
 }
 
+// Hash des zuletzt aus ADMIN_PASSWORD übernommenen Passworts, um Änderungen in der .env zu erkennen.
+const ENV_PASSWORD_META = 'adminEnvPassword';
+
 /**
- * Legt beim ersten Start den lokalen Admin an. Das Passwort kommt aus ADMIN_PASSWORD oder wird
- * erzeugt und einmal ins Log geschrieben. Danach ändert es nur noch der Admin selbst,
- * außer RESET_ADMIN_PASSWORD ist gesetzt.
+ * Legt beim Start den lokalen Admin an und hält sein Passwort mit ADMIN_PASSWORD abgestimmt:
+ * Ein neuer oder geänderter Wert in der .env gilt nach dem Neustart. Solange er gleich bleibt,
+ * bleibt ein in der Verwaltung geändertes Passwort erhalten. Ohne ADMIN_PASSWORD wird beim ersten
+ * Start eines erzeugt und geloggt; RESET_ADMIN_PASSWORD erzwingt ein neues.
  */
 export async function ensureLocalAdmin(db: DB, options: { password?: string; reset?: boolean }, log: Logger): Promise<void> {
   const existing = db.prepare("SELECT id FROM users WHERE kind = 'local' AND username = ?").get(LOCAL_ADMIN) as
     | { id: number }
     | undefined;
-  if (existing && !options.reset) return;
+  const fromEnv = options.password;
+  const applied = getMeta(db, ENV_PASSWORD_META);
+  const envChanged = fromEnv !== undefined && !(applied && (await verifyPassword(fromEnv, applied)));
 
-  const generated = !options.password;
-  const password = options.password ?? randomBytes(12).toString('base64url');
+  if (existing && !options.reset && !envChanged) {
+    log.info(
+      { username: LOCAL_ADMIN },
+      fromEnv
+        ? 'Lokaler Admin: ADMIN_PASSWORD unverändert, es gilt das zuletzt gesetzte Passwort'
+        : 'Lokaler Admin vorhanden; zum Zurücksetzen ADMIN_PASSWORD ändern oder RESET_ADMIN_PASSWORD=true setzen',
+    );
+    return;
+  }
+
+  const password = fromEnv ?? randomBytes(12).toString('base64url');
   const hash = await hashPassword(password);
-  if (existing) {
-    db.transaction(() => {
+  db.transaction(() => {
+    if (existing) {
       db.prepare('UPDATE users SET password_hash = ?, disabled = 0 WHERE id = ?').run(hash, existing.id);
       db.prepare('DELETE FROM sessions WHERE user_id = ?').run(existing.id);
-    })();
-  } else {
-    db.prepare(
-      "INSERT INTO users (kind, username, password_hash, name, role, created_at) VALUES ('local', ?, ?, 'Administrator', 'admin', ?)",
-    ).run(LOCAL_ADMIN, hash, Date.now());
-  }
-  const action = existing ? 'zurückgesetzt' : 'angelegt';
-  if (generated) {
+    } else {
+      db.prepare(
+        "INSERT INTO users (kind, username, password_hash, name, role, created_at) VALUES ('local', ?, ?, 'Administrator', 'admin', ?)",
+      ).run(LOCAL_ADMIN, hash, Date.now());
+    }
+    if (fromEnv !== undefined) setMeta(db, ENV_PASSWORD_META, hash);
+  })();
+
+  const action = existing ? 'Passwort gesetzt' : 'angelegt';
+  if (fromEnv === undefined) {
     log.warn(
       { username: LOCAL_ADMIN, password },
       `Lokaler Admin ${action}. Bitte mit diesem Passwort anmelden und es in der Verwaltung ändern.`,
