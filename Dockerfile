@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-bookworm-slim AS web
+FROM node:26-bookworm-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -9,7 +9,7 @@ COPY web/public ./public
 COPY web/src ./src
 RUN npm run build
 
-FROM node:22-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 WORKDIR /app
 COPY server/package.json server/package-lock.json ./
 # better-sqlite3 bringt vorkompilierte Binaries für linux-x64/arm64 mit; ohne Skripte braucht es keinen Compiler.
@@ -18,7 +18,7 @@ COPY server/tsconfig.json server/tsconfig.build.json ./
 COPY server/src ./src
 RUN npm run build && npm prune --omit=dev
 
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
