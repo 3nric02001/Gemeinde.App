@@ -21,6 +21,40 @@ export interface AdminAlbumDetail extends AlbumDetail {
   excluded: Array<{ id: number; title: string; artist: string; duration: number | null }>;
   /** Titel eines eigenen Albums, die gerade nicht in der Nextcloud liegen */
   missing: string[];
+  rules: AlbumRule[];
+  /** Titel, die über eine Regel statt von Hand im Album stehen */
+  ruleTrackIds: number[];
+  /** Titel eines automatischen Albums, die eine Regel in ein eigenes Album verschiebt */
+  movedByRule: Array<{ id: number; title: string; artist: string; albumId: number; albumTitle: string }>;
+}
+
+export type RuleField = 'title' | 'artist' | 'album' | 'genre' | 'path';
+export type RuleOp = 'contains' | 'starts' | 'equals';
+
+export interface AlbumRule {
+  id: number;
+  field: RuleField;
+  op: RuleOp;
+  value: string;
+  move: boolean;
+}
+
+export const RULE_FIELD_LABELS: Record<RuleField, string> = {
+  title: 'Titel',
+  artist: 'Interpret',
+  album: 'Album (Tag)',
+  genre: 'Genre',
+  path: 'Ordner/Dateiname',
+};
+
+export const RULE_OP_LABELS: Record<RuleOp, string> = {
+  contains: 'enthält',
+  starts: 'beginnt mit',
+  equals: 'ist genau',
+};
+
+export function describeRule(rule: Pick<AlbumRule, 'field' | 'op' | 'value'>): string {
+  return `${RULE_FIELD_LABELS[rule.field]} ${RULE_OP_LABELS[rule.op]} „${rule.value}“`;
 }
 
 const KEY = 'gemeinde.adminToken';

@@ -165,6 +165,26 @@ export const migrations: string[] = [
   END;
   INSERT INTO albums_fts(albums_fts) VALUES ('rebuild');
   `,
+  // Regeln, die eigene Alben automatisch füllen ("Titel enthält Predigt").
+  `
+  CREATE TABLE album_rules (
+    id         INTEGER PRIMARY KEY,
+    album_id   INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    field      TEXT NOT NULL,
+    op         TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    move       INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX album_rules_album ON album_rules(album_id);
+
+  -- Titel, die der Admin aus einem Album entfernt hat, obwohl eine Regel sie hineinnimmt.
+  CREATE TABLE manual_album_removed (
+    album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    path     TEXT NOT NULL,
+    PRIMARY KEY (album_id, path)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export function openDatabase(path: string): DB {
