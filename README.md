@@ -58,6 +58,25 @@ Die Farben stehen als CSS-Variablen oben in `web/src/styles.css` und lassen sich
 Die Oberfläche ist mit Vite und Preact gebaut (ca. 17 KB JavaScript, gzip) und wird vom selben Server
 unter `/` ausgeliefert; es ist kein zweiter Container nötig.
 
+## Offline hören
+
+Die App ist eine installierbare Web-App (PWA). Ein Service Worker (`web/sw/sw.js`) hält die Oberfläche
+offline bereit. Mit dem Pfeil nach unten bei einem Album oder Gottesdienst (oder „Herunterladen“ im
+Titelmenü) speichert die App Titel samt Cover auf dem Gerät; „Mehr > Heruntergeladen“ zeigt sie mit
+Speicherbedarf. Ohne Verbindung zum Server startet die App direkt in dieser Ansicht.
+
+Schutz gegen das Weitergeben der Dateien (ganz verhindern lässt sich ein Mitschnitt im Browser nicht):
+
+- Es gibt keinen Datei-Download. Die Titel liegen in IndexedDB, in Stücken mit AES-256-GCM verschlüsselt.
+- Den Schlüssel gibt es je Benutzer vom Server (`GET /api/me/offline`). Die App legt ihn als nicht
+  exportierbaren Schlüssel ab; entschlüsselt wird nur im Speicher zum Abspielen.
+- Ohne Kontakt zum Server verfallen die Kopien nach 30 Tagen (einstellbar). Beim Abmelden, wenn der
+  Server die Sitzung nicht mehr kennt (Sperrung, Rolle entzogen) oder wenn Offline abgeschaltet wird,
+  löscht die App alles. Sperren und Abschalten verwerfen zusätzlich den Schlüssel auf dem Server.
+- Admins schalten Offline unter Verwaltung > Anmeldung > „Offline hören“ an oder aus und legen die Frist fest.
+
+iPhones geben Web-Apps nur begrenzt Speicher und räumen ihn nach längerer Nichtnutzung auf.
+
 ## Verwaltung: Alben zusammenstellen und korrigieren
 
 Unter `/admin` (Link „Verwaltung“ in der Seitenleiste bzw. unter „Mehr“) lassen sich Alben

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { connectOffline, offlineProfile, wipeOffline } from './offline';
 
 export type Role = 'listener' | 'manager' | 'admin';
 
@@ -18,6 +19,8 @@ export interface AuthState {
   notice?: string;
   /** Name der Gemeinde und Begrüßung, in der Verwaltung einstellbar */
   branding: Branding;
+  /** Server nicht erreichbar: nur offline gespeicherte Titel */
+  offline?: boolean;
 }
 
 export interface Branding {
@@ -44,20 +47,38 @@ export function getAuth(): AuthState {
 }
 
 export async function loadAuth(): Promise<void> {
+  let data: { user: CurrentUser | null; oidc: { label: string } | null; branding?: Branding };
   try {
     const res = await fetch('/api/auth/status', { headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`Fehler ${res.status}`);
-    const data = (await res.json()) as { user: CurrentUser | null; oidc: { label: string } | null; branding?: Branding };
-    set({ user: data.user, oidc: data.oidc, ...(data.branding ? { branding: data.branding } : {}) });
-    document.title = state.branding.name;
+    data = await res.json();
   } catch {
-    set({ user: null, notice: 'Der Server ist gerade nicht erreichbar.' });
+    // Unterwegs ohne Netz: mit gültigen Offline-Kopien geht es trotzdem weiter.
+    const saved = await offlineProfile();
+    if (saved) set({ user: saved.user, offline: true, notice: undefined, ...(saved.branding ? { branding: saved.branding } : {}) });
+    else set({ user: null, offline: false, notice: 'Der Server ist gerade nicht erreichbar.' });
+    document.title = state.branding.name;
+    return;
   }
+  set({ user: data.user, oidc: data.oidc, offline: false, ...(data.branding ? { branding: data.branding } : {}) });
+  document.title = state.branding.name;
+  // Der Server kennt die Sitzung nicht (mehr): Offline-Kopien gehören niemandem mehr.
+  if (data.user) void connectOffline(data.user, state.branding);
+  else void wipeOffline();
+}
+
+// Zurück im Netz: wieder richtig anmelden
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    if (state.offline) void loadAuth();
+  });
 }
 
 /** Jede Antwort mit 401 heißt: Sitzung abgelaufen oder Zugang entzogen, zurück zur Anmeldung. */
 export function sessionExpired(): void {
-  if (state.user) set({ user: null, notice: 'Bitte melde dich erneut an.' });
+  if (!state.user) return;
+  set({ user: null, notice: 'Bitte melde dich erneut an.' });
+  void wipeOffline();
 }
 
 export async function loginLocal(username: string, password: string): Promise<void> {
@@ -68,15 +89,17 @@ export async function loginLocal(username: string, password: string): Promise<vo
   });
   const data = (await res.json().catch(() => ({}))) as { user?: CurrentUser; error?: string };
   if (!res.ok || !data.user) throw new Error(data.error ?? `Fehler ${res.status}`);
-  set({ user: data.user, notice: undefined });
+  set({ user: data.user, notice: undefined, offline: false });
+  void connectOffline(data.user, state.branding);
 }
 
 export async function logout(): Promise<void> {
   // Zuerst, solange die Sitzung noch gilt: Der Player sichert dabei den Hörstand.
   const { player } = await import('./player');
   player.reset();
+  await wipeOffline();
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
-  set({ user: null, notice: undefined });
+  set({ user: null, notice: undefined, offline: false });
 }
 
 /** Weiter zum Identity Provider; danach geht es zur aktuellen Seite zurück. */

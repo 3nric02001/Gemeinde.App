@@ -2,6 +2,7 @@ import type { Album, DatedFolderDetail, Track } from '../api';
 import { query, trackCoverUrl } from '../api';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
+import { DownloadButton } from '../components/DownloadButton';
 import { Menu } from '../components/Menu';
 import { TrackList } from '../components/TrackList';
 import { SermonInfo } from '../components/SermonInfo';
@@ -51,6 +52,7 @@ export function DateFolder({ path }: { path: string }) {
           <Icon name="shuffle" size={18} /> <span class="button-label">Zufällig</span>
         </button>
         {album && <FavoriteButton kind="album" item={album} />}
+        <DownloadButton tracks={tracks} />
         <Menu
           label="Weitere Aktionen"
           items={[

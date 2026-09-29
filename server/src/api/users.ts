@@ -4,6 +4,7 @@ import type { OidcService, OidcSettings } from '../auth/oidc.js';
 import { AuthError, deleteGroup, deleteUser, lastDeniedLogin, listGroups, listUsers, ROLES, saveGroup, setUserDisabled, type Role } from '../auth/users.js';
 import { authErrorHandler, redirectUri } from './auth.js';
 import { getBranding, saveBranding, type Branding } from '../branding.js';
+import { getOfflineSettings, MAX_OFFLINE_DAYS, saveOfflineSettings, type OfflineSettings } from '../offline.js';
 
 const idParam = {
   type: 'object',
@@ -44,6 +45,24 @@ export async function registerUserAdminRoutes(
         },
       },
       async (request) => saveBranding(db, request.body as Partial<Branding>),
+    );
+
+    admin.get('/api/admin/offline', async () => getOfflineSettings(db));
+    admin.put(
+      '/api/admin/offline',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              enabled: { type: 'boolean' },
+              days: { type: 'integer', minimum: 1, maximum: MAX_OFFLINE_DAYS },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request) => saveOfflineSettings(db, request.body as Partial<OfflineSettings>),
     );
 
     admin.patch(
