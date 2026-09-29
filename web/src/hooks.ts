@@ -76,7 +76,7 @@ export function usePaged<T>(baseUrl: string, pageSize = 60) {
     if (!el) return;
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) void loadMore();
-    }, { rootMargin: '600px' });
+    }, { root: scrollParent(el), rootMargin: '600px' });
     observer.observe(el);
     return () => observer.disconnect();
   }, [baseUrl, items.length]);
@@ -114,4 +114,10 @@ export function useCategories(path?: string): CategoryInfo[] {
     return () => controller.abort();
   }, [path, version]);
   return items;
+}
+
+/** Der Bereich, der scrollt: auf dem Handy der Inhalt (`.main`), sonst die Seite (`null`). */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  const main = el.closest<HTMLElement>('.main');
+  return main && /auto|scroll/.test(getComputedStyle(main).overflowY) ? main : null;
 }
