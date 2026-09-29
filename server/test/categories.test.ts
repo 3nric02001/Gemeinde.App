@@ -9,15 +9,15 @@ import { migrations, openDatabase } from '../src/db.js';
 import { slugify } from '../src/library/categories.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
+import { sessionCookie } from './helpers/session.js';
 
-const ADMIN_TOKEN = 'geheim-admin';
-const auth = { authorization: `Bearer ${ADMIN_TOKEN}` };
+let cookie = '';
 
 let cloud: FakeNextcloud;
 let ctx: AppContext;
 
 async function call<T = any>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: object, status = 200): Promise<T> {
-  const res = await ctx.app.inject({ method, url, payload, headers: url.startsWith('/api/admin') ? auth : {} });
+  const res = await ctx.app.inject({ method, url, payload, headers: { cookie } });
   expect(res.statusCode, `${method} ${url}: ${res.body}`).toBe(status);
   return (res.body ? res.json() : undefined) as T;
 }
@@ -44,10 +44,10 @@ beforeEach(async () => {
       NEXTCLOUD_PASSWORD: PASSWORD,
       NEXTCLOUD_MUSIC_PATH: '/Musik',
       DATABASE_PATH: ':memory:',
-      ADMIN_TOKEN,
     }),
     { logger: false },
   );
+  cookie = sessionCookie(ctx.db);
   await ctx.scanner.scan();
 });
 

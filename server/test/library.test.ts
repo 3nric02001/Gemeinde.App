@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { InjectOptions } from 'fastify';
 import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { HEAD_BYTES } from '../src/library/scanner.js';
 import { VARIOUS_ARTISTS } from '../src/library/albums.js';
 import { flac, mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
-
-const ADMIN_TOKEN = 'geheim-admin';
+import { sessionCookie } from './helpers/session.js';
 
 let cloud: FakeNextcloud;
 let ctx: AppContext;
+let cookie = '';
+/** Anfrage mit angemeldeter Sitzung */
+const inject = (options: InjectOptions) => ctx.app.inject({ ...options, headers: { cookie, ...options.headers } });
 
 interface AlbumJson {
   id: number;
@@ -23,7 +26,7 @@ interface AlbumJson {
 }
 
 async function get<T = any>(url: string): Promise<T> {
-  const res = await ctx.app.inject({ method: 'GET', url });
+  const res = await inject({ method: 'GET', url });
   expect(res.statusCode, `${url}: ${res.body}`).toBe(200);
   return res.json() as T;
 }
@@ -73,9 +76,9 @@ beforeEach(async () => {
     NEXTCLOUD_PASSWORD: PASSWORD,
     NEXTCLOUD_MUSIC_PATH: '/Musik Bibliothek/',
     DATABASE_PATH: ':memory:',
-    ADMIN_TOKEN,
   });
   ctx = await buildApp(config, { logger: false });
+  cookie = sessionCookie(ctx.db);
 });
 
 afterEach(async () => {
@@ -119,7 +122,7 @@ describe('Scan und automatische Alben', () => {
   it('liefert das beste Cover und streamt es über den Server', async () => {
     const album = await albumByTitle('Let There Be Light');
     expect(album.hasCover).toBe(true);
-    const res = await ctx.app.inject({ method: 'GET', url: `/api/albums/${album.id}/cover` });
+    const res = await inject({ method: 'GET', url: `/api/albums/${album.id}/cover` });
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe('JPEGDATA');
     expect((await albumByTitle('Zion')).hasCover).toBe(false);
@@ -167,9 +170,9 @@ describe('Scan und automatische Alben', () => {
   });
 
   it('prüft Eingaben', async () => {
-    expect((await ctx.app.inject({ method: 'GET', url: '/api/albums?sort=evil' })).statusCode).toBe(400);
-    expect((await ctx.app.inject({ method: 'GET', url: '/api/tracks?limit=100000' })).statusCode).toBe(400);
-    expect((await ctx.app.inject({ method: 'GET', url: '/api/albums/999' })).statusCode).toBe(404);
+    expect((await inject({ method: 'GET', url: '/api/albums?sort=evil' })).statusCode).toBe(400);
+    expect((await inject({ method: 'GET', url: '/api/tracks?limit=100000' })).statusCode).toBe(400);
+    expect((await inject({ method: 'GET', url: '/api/albums/999' })).statusCode).toBe(404);
   });
 });
 
@@ -244,13 +247,13 @@ describe('Streaming und Admin', () => {
   it('streamt Titel mit Range-Unterstützung, ohne Zugangsdaten preiszugeben', async () => {
     const { items } = await get<{ items: Array<{ id: number }> }>('/api/tracks?q=behold');
     const url = `/api/tracks/${items[0]!.id}/stream`;
-    const full = await ctx.app.inject({ method: 'GET', url });
+    const full = await inject({ method: 'GET', url });
     expect(full.statusCode).toBe(200);
     expect(full.headers['content-type']).toBe('audio/mpeg');
     expect(full.headers['accept-ranges']).toBe('bytes');
     expect(full.headers.authorization).toBeUndefined();
 
-    const part = await ctx.app.inject({ method: 'GET', url, headers: { range: 'bytes=0-9' } });
+    const part = await inject({ method: 'GET', url, headers: { range: 'bytes=0-9' } });
     expect(part.statusCode).toBe(206);
     expect(part.rawPayload.length).toBe(10);
     expect(part.rawPayload.subarray(0, 3).toString()).toBe('ID3');
@@ -262,7 +265,7 @@ describe('Streaming und Admin', () => {
     await ctx.scanner.scan();
     const { items } = await get<{ items: Array<{ id: number }> }>('/api/tracks?q=lang');
     const address = await ctx.app.listen({ port: 0, host: '127.0.0.1' });
-    const res = await fetch(`${address}/api/tracks/${items[0]!.id}/stream`);
+    const res = await fetch(`${address}/api/tracks/${items[0]!.id}/stream`, { headers: { cookie } });
     const body = Buffer.from(await res.arrayBuffer());
     expect(res.status).toBe(200);
     expect(body.length).toBe(cloud.files.get('Gross/Album/01 Lang.mp3')!.data.length);
@@ -272,16 +275,13 @@ describe('Streaming und Admin', () => {
   it('meldet 404, wenn die Datei inzwischen gelöscht wurde', async () => {
     const { items } = await get<{ items: Array<{ id: number }> }>('/api/tracks?q=behold');
     cloud.delete('Hillsong/Let There Be Light/01 Behold.mp3');
-    const res = await ctx.app.inject({ method: 'GET', url: `/api/tracks/${items[0]!.id}/stream` });
+    const res = await inject({ method: 'GET', url: `/api/tracks/${items[0]!.id}/stream` });
     expect(res.statusCode).toBe(404);
   });
 
-  it('startet manuelle Scans nur mit Admin-Token', async () => {
+  it('startet manuelle Scans nur für angemeldete Manager und Admins', async () => {
     expect((await ctx.app.inject({ method: 'POST', url: '/api/scan' })).statusCode).toBe(401);
-    expect(
-      (await ctx.app.inject({ method: 'POST', url: '/api/scan', headers: { authorization: 'Bearer falsch' } })).statusCode,
-    ).toBe(401);
-    const ok = await ctx.app.inject({ method: 'POST', url: '/api/scan', headers: { authorization: `Bearer ${ADMIN_TOKEN}` } });
+    const ok = await inject({ method: 'POST', url: '/api/scan' });
     expect(ok.statusCode).toBe(202);
     expect(ok.json()).toMatchObject({ started: true, status: { state: 'running' } });
     await ctx.scanner.scan();

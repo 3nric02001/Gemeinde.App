@@ -3,8 +3,9 @@
 Minimalistischer Musikplayer für die Gemeinde, der seine Musik direkt aus einer Nextcloud liest.
 Alben und Suchfilter entstehen automatisch aus Tags und Ordnerstruktur.
 
-Dieser Stand enthält die **Musikbibliothek** (Backend), die **Weboberfläche** zum Hören und eine
-**Verwaltung** für Alben. Login (OIDC), Benutzer- und Gruppenverwaltung folgen.
+Dieser Stand enthält die **Musikbibliothek** (Backend), die **Weboberfläche** zum Hören, eine
+**Verwaltung** für Alben und die **Anmeldung** über einen lokalen Admin oder OIDC mit den Rollen
+Admin, Manager und Hörer.
 
 ![Album in der Weboberfläche](docs/screenshots/desktop-album.png)
 
@@ -37,7 +38,7 @@ unter `/` ausgeliefert; es ist kein zweiter Container nötig.
 ## Verwaltung: Alben zusammenstellen und korrigieren
 
 Unter `/admin` (Link „Verwaltung“ in der Seitenleiste bzw. unten auf der Startseite) lassen sich Alben
-von Hand pflegen. Bis zum Login per OIDC meldet man sich dort mit dem `ADMIN_TOKEN` an.
+von Hand pflegen. Die Verwaltung sehen nur Manager und Admins.
 
 - **Eigene Alben**, z. B. „Predigten 2024“: Titel über die Suche hinzufügen, per Pfeil umsortieren,
   entfernen. Ein Titel kann in beliebig vielen Alben stehen. Interpret, Jahr, Genre und Cover
@@ -85,6 +86,41 @@ sowie der Reiter „Datum“ bleiben davon unberührt. Beim ersten Start mit die
 Dateien einmal neu, um auch die übrigen Tag-Felder zu erfassen.
 
 ![Kategorie in der Verwaltung](docs/screenshots/admin-categories.png)
+
+## Anmeldung, Benutzer und Rollen
+
+Die ganze App (auch der Player) ist nur nach Anmeldung erreichbar.
+
+- **Lokaler Admin** `admin`: Er wird beim ersten Start angelegt. Das Passwort kommt aus
+  `ADMIN_PASSWORD`; fehlt die Variable, wird eines erzeugt und einmal ins Log geschrieben
+  (`docker compose logs gemeinde-app`). Danach ändert man es unter Verwaltung → Anmeldung.
+  Passwort vergessen: `RESET_ADMIN_PASSWORD=true` setzen und neu starten, danach die Variable wieder
+  entfernen.
+- **Alle anderen** melden sich über OIDC mit ihrem Gemeinde-Konto an (Keycloak, Authentik, Nextcloud,
+  Entra ID u. a.). Eingerichtet wird das unter Verwaltung → Anmeldung: Issuer-URL, Client-ID,
+  Client-Secret und der Claim mit den Gruppen (Standard `groups`, verschachtelt z. B.
+  `realm_access.roles`). Die Weiterleitungs-URL für den Client im Identity Provider steht dort zum
+  Kopieren. Anmeldung mit Authorization Code und PKCE; Gruppen, die nicht im ID-Token stehen,
+  werden über den Userinfo-Endpunkt gelesen.
+- **Gruppen** (Verwaltung → Gruppen): Jede Gruppe, die beim Login mitkommt, erscheint dort; man
+  kann Gruppen auch vorab eintragen. Nur Gruppen mit Haken sind freigeschaltet, und nur wer in einer
+  freigeschalteten Gruppe ist, wird als Benutzer angelegt. Jede Gruppe bekommt eine Rolle; wer in
+  mehreren ist, erhält die höchste. Änderungen gelten sofort, auch für bereits angemeldete Benutzer.
+- **Benutzer** (Verwaltung → Benutzer): Liste mit Rolle, Gruppen und letzter Anmeldung. Einzelne
+  Benutzer lassen sich sperren oder entfernen.
+
+| Rolle | Darf |
+| --- | --- |
+| Admin | alles: Alben und Titel, Scan, Benutzer, Gruppen, OIDC-Schnittstelle |
+| Manager | Alben, Titel und Regeln bearbeiten, Scan starten |
+| Hörer | nur den Player nutzen; die Verwaltung ist ausgeblendet |
+
+Sitzungen laufen über ein HttpOnly-Cookie (SameSite=Lax, bei https mit Secure) und bleiben 30 Tage
+nach der letzten Nutzung gültig. In der Datenbank steht nur ein Hash der Sitzungs-ID, das Passwort
+des lokalen Admins als scrypt-Hash. Nach zehn Fehlversuchen ist die Passwort-Anmeldung je IP für
+15 Minuten gesperrt.
+
+![Gruppen in der Verwaltung](docs/screenshots/admin-groups.png)
 
 ## So funktioniert es
 
@@ -134,7 +170,9 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `NEXTCLOUD_USER` | – | Service-Account |
 | `NEXTCLOUD_PASSWORD` | – | App-Passwort des Service-Accounts |
 | `NEXTCLOUD_MUSIC_PATH` | – (Pflicht) | Ordner, der gescannt wird, relativ zu den Dateien des Service-Accounts, z. B. `/Gemeinde/Medien/Musik`. Nur dieser Ordner und seine Unterordner kommen in die Bibliothek. |
-| `ADMIN_TOKEN` | – | Anmeldung für die Verwaltung und `POST /api/scan`; ohne Token sind beide gesperrt |
+| `ADMIN_PASSWORD` | – | Startpasswort des lokalen Admins `admin`; ohne Angabe wird eines erzeugt und geloggt |
+| `RESET_ADMIN_PASSWORD` | `false` | `true` setzt das Passwort des lokalen Admins beim Start auf `ADMIN_PASSWORD` (bzw. ein neues) zurück |
+| `PUBLIC_URL` | – | Öffentliche Adresse, z. B. `https://musik.gemeinde.de`; ergibt die OIDC-Weiterleitungs-URL. Ohne Angabe aus der Anfrage (Reverse Proxy mit `X-Forwarded-Proto`/`-Host`) |
 | `SCAN_INTERVAL_MINUTES` | `60` | Automatischer Scan, `0` = aus |
 | `SCAN_CONCURRENCY` | `4` | Parallele Zugriffe auf die Nextcloud beim Scan |
 | `DATABASE_PATH` | `/data/library.db` | Pfad der SQLite-Datei |
@@ -143,6 +181,9 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `LOG_LEVEL` | `info` | Log-Level (JSON-Logs) |
 
 ## API
+
+Alle Pfade außer `/api/health` und `/api/auth/*` brauchen eine Sitzung (Cookie `gemeinde_session`),
+sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 
 | Methode und Pfad | Zweck |
 | --- | --- |
@@ -159,13 +200,13 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `GET /api/dates/folder?path=` | Ein Datumsordner mit seinen Titeln |
 | `GET /api/facets` | Genres, Jahrzehnte und Gesamtzahlen für die Filterleiste |
 | `GET /api/scan` | Status des letzten Scans |
-| `POST /api/scan` | Scan starten (`Authorization: Bearer <ADMIN_TOKEN>`) |
+| `POST /api/scan` | Scan starten (Manager, Admin) |
 | `GET /api/health` | Healthcheck |
 
 Alle Listen liefern `{ items, total, limit, offset }`. Alben haben `kind: "auto" | "manual"`.
 `/api/albums` und `/api/tracks` filtern mit `category=<slug>&value=<Wert>` nach dem Wert einer Kategorie.
 
-Verwaltung (alle mit `Authorization: Bearer <ADMIN_TOKEN>`):
+Verwaltung (Manager und Admins):
 
 | Methode und Pfad | Zweck |
 | --- | --- |
@@ -197,24 +238,44 @@ und 30 Bedingungen). Statt `condition` geht für eine einzelne Bedingung auch `{
 
 `groups` einer Kategorie ist eine Liste `{ label, values }`, z. B. `{ "label": "Musik", "values": ["Musik", "Lied"] }`.
 
+Anmeldung und Benutzer:
+
+| Methode und Pfad | Zweck |
+| --- | --- |
+| `GET /api/auth/status` | Angemeldeter Benutzer (oder `null`) und ob OIDC eingerichtet ist |
+| `POST /api/auth/login` | Lokaler Admin: `{ username, password }` |
+| `POST /api/auth/logout` | Abmelden |
+| `POST /api/auth/password` | Passwort des lokalen Admins ändern: `{ current, next }` |
+| `GET /api/auth/oidc/start?returnTo=` | Weiter zum Identity Provider |
+| `GET /api/auth/oidc/callback` | Rückkehr vom Identity Provider |
+| `GET /api/admin/users` | Benutzer (nur Admin) |
+| `PATCH /api/admin/users/:id` | `{ disabled }` sperren oder entsperren (nur Admin) |
+| `DELETE /api/admin/users/:id` | OIDC-Benutzer entfernen (nur Admin) |
+| `GET /api/admin/groups` | Gesehene und eingetragene Gruppen (nur Admin) |
+| `PUT /api/admin/groups/:name` | `{ enabled?, role?: listener\|manager\|admin }`, legt die Gruppe bei Bedarf an (nur Admin) |
+| `DELETE /api/admin/groups/:name` | Gruppe entfernen (nur Admin) |
+| `GET/PUT /api/admin/oidc` | OIDC-Einstellungen; das Secret wird nie ausgeliefert (nur Admin) |
+| `POST /api/admin/oidc/test` | Discovery des Identity Providers testen (nur Admin) |
+
 ## Entwicklung
 
 ```bash
 cd server
 npm install
-npm test            # Vitest, inkl. simulierter Nextcloud
+npm test            # Vitest, inkl. simulierter Nextcloud und simuliertem Identity Provider
 npm run typecheck
 NEXTCLOUD_URL=… NEXTCLOUD_USER=… NEXTCLOUD_PASSWORD=… NEXTCLOUD_MUSIC_PATH=… npm run dev
 
 cd web
 npm install
-npm test            # Warteschlange, Formatierung, Titelliste, Verwaltung
+npm test            # Warteschlange, Formatierung, Titelliste, Verwaltung, Anmeldung
 npm run dev         # Oberfläche mit Hot Reload, /api geht an localhost:3000
 ```
 
 Ohne Nextcloud ausprobieren: `cd web && npm run build && cd ../server && npm run demo` startet den
 Server mit einer simulierten Nextcloud und ein paar Beispielalben unter http://localhost:3000
-(Verwaltung unter `/admin`, Token `demo`).
+(lokaler Admin `admin` / `demo`; „Mit Gemeinde-Konto anmelden“ meldet über einen simulierten Identity
+Provider Anna mit der Rolle Manager an).
 
 Die Tests erzeugen winzige MP3- und FLAC-Dateien im Speicher und starten einen WebDAV-Server,
 der sich wie Nextcloud verhält. Echte Musikdateien sind dafür nicht nötig.

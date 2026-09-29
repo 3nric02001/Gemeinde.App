@@ -8,9 +8,9 @@ import { loadConfig } from '../src/config.js';
 import { migrations, openDatabase } from '../src/db.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
+import { sessionCookie } from './helpers/session.js';
 
-const ADMIN_TOKEN = 'geheim-admin';
-const auth = { authorization: `Bearer ${ADMIN_TOKEN}` };
+let cookie = '';
 
 let cloud: FakeNextcloud;
 let ctx: AppContext;
@@ -37,7 +37,7 @@ interface AlbumJson {
 }
 
 async function call<T = any>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: object, status = 200): Promise<T> {
-  const res = await ctx.app.inject({ method, url, payload, headers: url.startsWith('/api/admin') ? auth : {} });
+  const res = await ctx.app.inject({ method, url, payload, headers: { cookie } });
   expect(res.statusCode, `${method} ${url}: ${res.body}`).toBe(status);
   return (res.body ? res.json() : undefined) as T;
 }
@@ -79,10 +79,10 @@ beforeEach(async () => {
       NEXTCLOUD_PASSWORD: PASSWORD,
       NEXTCLOUD_MUSIC_PATH: '/Musik',
       DATABASE_PATH: ':memory:',
-      ADMIN_TOKEN,
     }),
     { logger: false },
   );
+  cookie = sessionCookie(ctx.db);
   await ctx.scanner.scan();
 });
 
@@ -92,14 +92,13 @@ afterEach(async () => {
 });
 
 describe('Admin-Zugang', () => {
-  it('verlangt das Admin-Token', async () => {
-    for (const headers of [{}, { authorization: 'Bearer falsch' }]) {
+  it('verlangt eine Anmeldung', async () => {
+    for (const headers of [{}, { cookie: 'gemeinde_session=falsch' }]) {
       const res = await ctx.app.inject({ method: 'GET', url: '/api/admin/albums', headers });
       expect(res.statusCode).toBe(401);
     }
     const res = await ctx.app.inject({ method: 'POST', url: '/api/admin/albums', payload: { title: 'X' } });
     expect(res.statusCode).toBe(401);
-    expect(await call('GET', '/api/admin/session')).toEqual({ ok: true });
   });
 
   it('prüft Eingaben', async () => {
@@ -336,7 +335,7 @@ describe('Regeln', () => {
     await call('POST', `/api/admin/albums/${id}/rules`, { condition: { match: 'vielleicht', conditions: [{ field: 'title', value: 'a' }] } }, 400);
     let deep: object = { field: 'title', value: 'a' };
     for (let i = 0; i < 5; i++) deep = { match: 'any', conditions: [deep, { field: 'title', value: 'b' }] };
-    const res = await ctx.app.inject({ method: 'POST', url: `/api/admin/albums/${id}/rules`, headers: auth, payload: { condition: deep } });
+    const res = await ctx.app.inject({ method: 'POST', url: `/api/admin/albums/${id}/rules`, headers: { cookie }, payload: { condition: deep } });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toContain('Ebenen');
     await call('POST', `/api/admin/albums/${await albumId('Zion')}/rules`, { field: 'title', value: 'a' }, 409);

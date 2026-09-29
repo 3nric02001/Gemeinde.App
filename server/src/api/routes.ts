@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
@@ -26,7 +25,6 @@ export interface RouteDeps {
   db: DB;
   client: NextcloudClient;
   scanner: LibraryScanner;
-  adminToken: string | undefined;
 }
 
 const paging = {
@@ -63,14 +61,6 @@ function withCategory<T extends CategoryQuery>(db: DB, query: T) {
   const definition = category !== undefined ? getCategory(db, category) : undefined;
   const filter = definition && value !== undefined ? categoryFilter(definition, value) : undefined;
   return filter ? { ...rest, category: filter } : null;
-}
-
-function isAdmin(request: FastifyRequest, adminToken: string | undefined): boolean {
-  if (!adminToken) return false;
-  const header = request.headers.authorization ?? '';
-  const provided = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '');
-  const expected = Buffer.from(adminToken);
-  return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
 async function proxyFile(
@@ -270,12 +260,12 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   app.get('/api/scan', async () => ({ ...scanner.getStatus(), lastSuccessAt: getMeta(db, 'lastScanAt') ?? null }));
 
-  app.post('/api/scan', async (request, reply) => {
-    if (!isAdmin(request, deps.adminToken)) return reply.code(401).send({ error: 'Admin-Token fehlt oder ist falsch' });
+  // Nur Manager und Admins (siehe requiredRole)
+  app.post('/api/scan', async (_request, reply) => {
     const alreadyRunning = scanner.isRunning();
     void scanner.scan();
     return reply.code(202).send({ started: !alreadyRunning, status: scanner.getStatus() });
   });
 
-  await registerAdminRoutes(app, { db, authorize: (request) => isAdmin(request, deps.adminToken) });
+  await registerAdminRoutes(app, { db });
 }

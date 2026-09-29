@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Admin } from './admin/Admin';
+import { loadAuth, useAuth } from './auth';
 import { NowPlaying } from './components/NowPlaying';
 import { Sidebar, TabBar } from './components/Nav';
 import { PlayerBar } from './components/PlayerBar';
@@ -10,8 +11,9 @@ import { Artists } from './pages/Artists';
 import { Category, CategoryEntry } from './pages/Category';
 import { DateFolder } from './pages/DateFolder';
 import { Dates } from './pages/Dates';
-import { Empty } from './pages/common';
+import { Empty, Loading } from './pages/common';
 import { Home } from './pages/Home';
+import { Login } from './pages/Login';
 import { QueuePage } from './pages/Queue';
 import { Search } from './pages/Search';
 import { Tracks } from './pages/Tracks';
@@ -51,7 +53,21 @@ function isTyping(target: EventTarget | null): boolean {
   return Boolean(el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)));
 }
 
+/** Ohne Anmeldung gibt es nur die Anmeldeseite; danach die App mit den Rechten der Rolle. */
 export function App() {
+  const auth = useAuth();
+  useEffect(() => void loadAuth(), []);
+  // Abgemeldet oder Sitzung abgelaufen: nicht im Hintergrund weiterspielen.
+  useEffect(() => {
+    if (auth.user === null && player.getState().playing) player.toggle();
+  }, [auth.user]);
+
+  if (auth.user === undefined) return <Loading />;
+  if (auth.user === null) return <Login />;
+  return <Shell />;
+}
+
+function Shell() {
   const location = useLocation();
   const [expanded, setExpanded] = useState(false);
 

@@ -97,28 +97,17 @@ const categoryFields = {
 type IdRequest = FastifyRequest<{ Params: { id: number } }>;
 type TrackRequest = FastifyRequest<{ Params: { id: number; trackId: number } }>;
 
-/**
- * Admin-API unter /api/admin. `authorize` prüft vorerst das ADMIN_TOKEN;
- * mit OIDC wird daraus eine Rollenprüfung, die Routen bleiben gleich.
- */
-export async function registerAdminRoutes(
-  app: FastifyInstance,
-  deps: { db: DB; authorize: (request: FastifyRequest) => boolean },
-): Promise<void> {
+/** Verwaltung der Inhalte unter /api/admin; Zugriff für Manager und Admins (siehe requiredRole in auth.ts). */
+export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }): Promise<void> {
   const { db } = deps;
 
   await app.register(async (admin) => {
-    admin.addHook('onRequest', async (request, reply) => {
-      if (!deps.authorize(request)) return reply.code(401).send({ error: 'Admin-Token fehlt oder ist falsch' });
-    });
     admin.setErrorHandler((error, request, reply: FastifyReply) => {
       if (error instanceof CurationError) return reply.code(error.status).send({ error: error.message });
       if ((error as { validation?: unknown }).validation) return reply.code(400).send({ error: (error as Error).message });
       request.log.error({ err: error }, 'Fehler im Admin-Bereich');
       return reply.code(500).send({ error: 'Interner Fehler' });
     });
-
-    admin.get('/api/admin/session', async () => ({ ok: true }));
 
     admin.get(
       '/api/admin/albums',

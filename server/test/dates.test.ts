@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { InjectOptions } from 'fastify';
 import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { parseFolderDate } from '../src/library/dates.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
+import { sessionCookie } from './helpers/session.js';
 
 describe('parseFolderDate', () => {
   it('erkennt übliche Schreibweisen', () => {
@@ -26,6 +28,9 @@ describe('parseFolderDate', () => {
 
 let cloud: FakeNextcloud;
 let ctx: AppContext;
+let cookie = '';
+/** Anfrage mit angemeldeter Sitzung */
+const inject = (options: InjectOptions) => ctx.app.inject({ ...options, headers: { cookie, ...options.headers } });
 
 beforeEach(async () => {
   cloud = new FakeNextcloud('/Musik');
@@ -47,6 +52,7 @@ beforeEach(async () => {
     DATABASE_PATH: ':memory:',
   });
   ctx = await buildApp(config, { logger: false });
+  cookie = sessionCookie(ctx.db);
   await ctx.scanner.scan();
 });
 
@@ -56,7 +62,7 @@ afterEach(async () => {
 });
 
 async function get<T = any>(url: string): Promise<T> {
-  const res = await ctx.app.inject({ method: 'GET', url });
+  const res = await inject({ method: 'GET', url });
   expect(res.statusCode, `${url}: ${res.body}`).toBe(200);
   return res.json() as T;
 }
@@ -79,7 +85,7 @@ describe('Datum-Ansicht', () => {
     expect(folder.tracks.map((t: any) => t.title)).toEqual(['Teil 1', 'Teil 2']);
     const erntedank = await get(`/api/dates/folder?path=${encodeURIComponent('Gottesdienste/2026/2026-09-27 Erntedank')}`);
     expect(erntedank.tracks.map((t: any) => t.title)).toEqual(['Predigt', 'Lied']);
-    const res = await ctx.app.inject({ method: 'GET', url: '/api/dates/folder?path=Hillsong%2FLet%20There%20Be%20Light' });
+    const res = await inject({ method: 'GET', url: '/api/dates/folder?path=Hillsong%2FLet%20There%20Be%20Light' });
     expect(res.statusCode).toBe(404);
   });
 
