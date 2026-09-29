@@ -38,6 +38,8 @@ export interface AlbumFilter {
   category?: CategoryFilter;
   /** Nur diese Alben (z. B. Favoriten) */
   ids?: number[];
+  /** Nur Alben mit (true) bzw. ohne (false) Datum im Ordnernamen, also Gottesdienste oder Musik */
+  dated?: boolean;
   limit: number;
   offset: number;
 }
@@ -175,6 +177,7 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
     where.clauses.push('a.id IN (SELECT value FROM json_each(@ids))');
     where.params.ids = JSON.stringify(filter.ids);
   }
+  if (filter.dated !== undefined) where.clauses.push(filter.dated ? 'a.date IS NOT NULL' : 'a.date IS NULL');
   if (filter.kind) {
     where.clauses.push('a.kind = @kind');
     where.params.kind = filter.kind;

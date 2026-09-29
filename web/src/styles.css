@@ -286,17 +286,20 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .segmented {
-  display: inline-flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  max-width: 480px;
 }
 
 .segmented button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 4px;
   min-height: 44px;
-  padding: 0 18px;
+  padding: 0 6px;
+  white-space: nowrap;
   border-radius: 999px;
   border: 1px solid var(--line);
   font-weight: 600;
@@ -1219,6 +1222,11 @@ html[data-text='xlarge'] .now-playing {
   border-top: 1px solid var(--line);
 }
 
+/* Vor dem ersten Abspielen keine leere Leiste mit ausgegrauten Knöpfen */
+.player-bar.is-empty {
+  display: none;
+}
+
 .player-now {
   display: flex;
   align-items: center;
@@ -1388,7 +1396,7 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .mini-play,
-.mini-progress {
+.mini-track {
   display: none;
 }
 
@@ -2281,10 +2289,6 @@ html[data-text='xlarge'] .now-playing {
     overflow: hidden;
   }
 
-  .player-bar.is-empty {
-    display: none;
-  }
-
   .player-now {
     cursor: pointer;
   }
@@ -2305,12 +2309,21 @@ html[data-text='xlarge'] .now-playing {
     height: 44px;
   }
 
-  .mini-progress {
+  /* Fortschritt als Linie mit heller Spur, eingerückt, damit er nicht in den runden Ecken verschwindet */
+  .mini-track {
     display: block;
     position: absolute;
-    left: 0;
-    bottom: 0;
-    height: 2px;
+    left: 12px;
+    right: 12px;
+    bottom: 4px;
+    height: 3px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--text) 14%, transparent);
+    overflow: hidden;
+  }
+
+  .mini-progress {
+    height: 100%;
     background: var(--text);
     transition: width 0.25s linear;
   }
@@ -2379,8 +2392,20 @@ html[data-text='xlarge'] .now-playing {
     justify-content: flex-start;
   }
 
+  /* Unter Album und Gottesdienst: alle Knöpfe in einer Zeile, "Zufällig" nur als Symbol */
   .hero + .actions {
     justify-content: center;
+    flex-wrap: nowrap;
+  }
+
+  .hero + .actions .button-secondary:has(.button-label) {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .hero + .actions .button-label {
+    display: none;
   }
 
   .track {

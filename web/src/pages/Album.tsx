@@ -6,7 +6,7 @@ import { Menu } from '../components/Menu';
 import { TrackList } from '../components/TrackList';
 import { FavoriteButton } from '../components/FavoriteButton';
 import { SermonInfo } from '../components/SermonInfo';
-import { albumTitle, formatLongDate, formatDuration, plural, withoutDate } from '../format';
+import { albumTitle, formatLongDate, formatDuration, plural, serviceEyebrow } from '../format';
 import { useApi } from '../hooks';
 import { player } from '../player';
 import { coverUrl, query, type Album as AlbumType, type Page } from '../api';
@@ -25,10 +25,10 @@ export function Album({ id }: { id: number }) {
       <header class="hero">
         <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-hero" eager />
         <div class="hero-text">
-          <span class="eyebrow">{album.date ? <a href="/datum">Gottesdienst</a> : 'Album'}</span>
+          <span class="eyebrow">{album.date ? <a href="/datum">{serviceEyebrow(albumTitle(album.title, album.date))}</a> : 'Album'}</span>
           <h1>{albumTitle(album.title, album.date)}</h1>
           <p class="hero-sub">
-            {album.date && withoutDate(album.title) && `${formatLongDate(album.date)} · `}
+            {album.date && `${formatLongDate(album.date)} · `}
             <a href={artistHref}>{album.artist}</a>
             {album.year && !album.date && ` · ${album.year}`}
             {album.genre && (
@@ -48,8 +48,8 @@ export function Album({ id }: { id: number }) {
         <button type="button" class="button-primary" onClick={() => player.playList(album.tracks, 0, { shuffle: false })}>
           <Icon name="play" size={20} /> Abspielen
         </button>
-        <button type="button" class="button-secondary" onClick={() => player.playList(album.tracks, 0, { shuffle: true })}>
-          <Icon name="shuffle" size={18} /> Zufällig
+        <button type="button" class="button-secondary" aria-label="Zufällig abspielen" onClick={() => player.playList(album.tracks, 0, { shuffle: true })}>
+          <Icon name="shuffle" size={18} /> <span class="button-label">Zufällig</span>
         </button>
         <FavoriteButton kind="album" item={album} />
         <Menu

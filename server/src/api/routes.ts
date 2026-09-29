@@ -190,6 +190,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
             ...filters,
             ...paging,
             sort: { type: 'string', enum: ALBUM_SORTS, default: 'artist' },
+            dated: { type: 'boolean' },
           },
           additionalProperties: false,
         },
