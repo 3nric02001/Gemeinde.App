@@ -389,6 +389,18 @@ export const migrations: string[] = [
   -- Eingebettete Bilder, die kein Rasterbild sind (z. B. SVG), nicht mehr ausliefern.
   DELETE FROM covers WHERE mime NOT IN ('image/jpeg', 'image/png', 'image/webp', 'image/gif');
   `,
+  `
+  -- Favoriten verschwinden mit ihrem Titel oder Album. Sonst zeigte ein Favorit, wenn SQLite die ID
+  -- später neu vergibt, auf ein ganz anderes Album.
+  DELETE FROM favorites WHERE kind = 'album' AND item_id NOT IN (SELECT id FROM albums);
+  DELETE FROM favorites WHERE kind = 'track' AND item_id NOT IN (SELECT id FROM tracks);
+  CREATE TRIGGER favorites_album_gone AFTER DELETE ON albums BEGIN
+    DELETE FROM favorites WHERE kind = 'album' AND item_id = old.id;
+  END;
+  CREATE TRIGGER favorites_track_gone AFTER DELETE ON tracks BEGIN
+    DELETE FROM favorites WHERE kind = 'track' AND item_id = old.id;
+  END;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

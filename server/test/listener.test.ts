@@ -144,6 +144,21 @@ describe('Favoriten', () => {
   });
 });
 
+describe('Favoriten verschwundener Alben', () => {
+  it('gehen mit dem Album und landen nie bei einem neuen Album mit derselben ID', async () => {
+    const album = albumId('Let There Be Light');
+    await inject({ method: 'PUT', url: `/api/me/favorites/album/${album}` });
+    await inject({ method: 'PUT', url: `/api/me/favorites/track/${trackId('Behold')}` });
+    cloud.delete('Hillsong/Let There Be Light/01 Behold.mp3');
+    await ctx.scanner.scan();
+    expect(ctx.db.prepare('SELECT count(*) AS n FROM favorites').get()).toEqual({ n: 0 });
+
+    cloud.put('Chor/Neu/01 Neu.mp3', mp3({ title: 'Neu', artist: 'Chor', album: 'Neu' }));
+    await ctx.scanner.scan();
+    expect((await get('/api/me/favorites')).albums).toEqual([]);
+  });
+});
+
 describe('Weiterhören', () => {
   it('merkt sich die Stelle langer Titel und zeigt zuletzt gehörte Alben', async () => {
     const sermon = trackId('Predigt Psalm 23');
