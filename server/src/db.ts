@@ -385,6 +385,35 @@ export const migrations: string[] = [
   CREATE INDEX listening_recent ON listening(user_id, updated_at);
   CREATE INDEX listening_track ON listening(track_id);
   `,
+  `
+  -- Eingebettete Bilder, die kein Rasterbild sind (z. B. SVG), nicht mehr ausliefern.
+  DELETE FROM covers WHERE mime NOT IN ('image/jpeg', 'image/png', 'image/webp', 'image/gif');
+  `,
+  `
+  -- Favoriten verschwinden mit ihrem Titel oder Album. Sonst zeigte ein Favorit, wenn SQLite die ID
+  -- später neu vergibt, auf ein ganz anderes Album.
+  DELETE FROM favorites WHERE kind = 'album' AND item_id NOT IN (SELECT id FROM albums);
+  DELETE FROM favorites WHERE kind = 'track' AND item_id NOT IN (SELECT id FROM tracks);
+  CREATE TRIGGER favorites_album_gone AFTER DELETE ON albums BEGIN
+    DELETE FROM favorites WHERE kind = 'album' AND item_id = old.id;
+  END;
+  CREATE TRIGGER favorites_track_gone AFTER DELETE ON tracks BEGIN
+    DELETE FROM favorites WHERE kind = 'track' AND item_id = old.id;
+  END;
+  `,
+  `
+  -- ETag des Ordnerbilds, damit Vorschaubilder bei einer Änderung neu entstehen (füllt der nächste Scan).
+  ALTER TABLE folder_covers ADD COLUMN etag TEXT;
+  CREATE INDEX folder_covers_path ON folder_covers(path);
+  -- Verkleinerte Cover (WebP), je Quelle: "file:<Pfad>" für Ordnerbilder, "cover:<id>" für eingebettete.
+  -- version ist ETag bzw. Hash der Quelle; passt sie nicht mehr, wird neu gerechnet.
+  CREATE TABLE cover_thumbs (
+    source     TEXT PRIMARY KEY,
+    version    TEXT NOT NULL,
+    data       BLOB NOT NULL,
+    created_at INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

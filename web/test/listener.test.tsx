@@ -116,6 +116,27 @@ describe('Predigt-Player', () => {
   });
 });
 
+describe('Abmelden', () => {
+  it('hält den Player an und vergisst die Warteschlange', async () => {
+    const fetchMock = mockServer();
+    vi.spyOn(player.audio, 'play').mockResolvedValue(undefined);
+    vi.spyOn(player.audio, 'pause').mockImplementation(() => undefined);
+    player.playList([sermon, song], 0, { shuffle: false });
+    player.audio.currentTime = 300;
+    localStorage.setItem('gemeinde.player', '{"queue":{}}');
+
+    const { logout } = await import('../src/auth');
+    await logout();
+    expect(player.getState().current).toBeUndefined();
+    expect(player.getState().queue).toEqual([]);
+    expect(localStorage.getItem('gemeinde.player')).toBeNull();
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    // Der Hörstand geht noch mit der alten Sitzung raus, erst dann die Abmeldung.
+    expect(urls.indexOf('/api/me/progress/41')).toBeGreaterThanOrEqual(0);
+    expect(urls.indexOf('/api/me/progress/41')).toBeLessThan(urls.indexOf('/api/auth/logout'));
+  });
+});
+
 describe('Favoriten', () => {
   it('Herz schaltet um und fällt bei einem Fehler zurück', async () => {
     const fetchMock = mockServer();

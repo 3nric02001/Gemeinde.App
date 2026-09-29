@@ -13,6 +13,8 @@ export interface ScanStatus {
   updated: number;
   removed: number;
   failed: number;
+  /** Fehlende Titel, die zur Sicherheit noch nicht entfernt wurden */
+  heldBack?: number;
   lastError: string | null;
   /** Ende des letzten erfolgreichen Scans, auch über Neustarts hinweg */
   lastSuccessAt: string | null;
@@ -31,6 +33,7 @@ function summary(status: ScanStatus): string {
     if (status.toRead === 0) return 'Scan läuft: Ordner in der Nextcloud werden gelesen …';
     return `Scan läuft: ${status.read.toLocaleString('de-DE')} von ${plural(status.toRead, 'Datei', 'Dateien')} gelesen`;
   }
+  if (status.heldBack) return 'Der letzte Scan wartet auf eine Bestätigung.';
   if (status.state === 'failed') return 'Der letzte Scan ist fehlgeschlagen.';
   const changes = [
     status.added && `${status.added.toLocaleString('de-DE')} neu`,
@@ -60,9 +63,21 @@ export function ScanPanel() {
     return () => clearTimeout(timer);
   }, [status]);
 
-  const start = async () => {
+  const start = async (removeMissing = false) => {
+    if (
+      removeMissing &&
+      !confirm(
+        `${plural(status?.heldBack ?? 0, 'Titel', 'Titel')} aus der Bibliothek entfernen? Favoriten und Weiterhören-Stellen dieser Titel gehen dabei verloren.`,
+      )
+    ) {
+      return;
+    }
     try {
-      const result = await adminRequest<{ status: Omit<ScanStatus, 'lastSuccessAt' | 'folders'> }>('POST', '/api/scan');
+      const result = await adminRequest<{ status: Omit<ScanStatus, 'lastSuccessAt' | 'folders'> }>(
+        'POST',
+        '/api/scan',
+        removeMissing ? { removeMissing: true } : undefined,
+      );
       setStatus((prev) => ({ ...result.status, lastSuccessAt: prev?.lastSuccessAt ?? null, folders: prev?.folders ?? [] }));
       setError(undefined);
     } catch (e) {
@@ -99,6 +114,17 @@ export function ScanPanel() {
         <p class={status.state === 'failed' ? 'admin-error' : 'admin-hint'}>
           {status.state === 'failed' ? 'Fehler' : 'Erste Ursache'}: {status.lastError}
         </p>
+      )}
+      {status && status.state !== 'running' && (status.heldBack ?? 0) > 0 && (
+        <div class="scan-held">
+          <p class="admin-hint">
+            Prüfe zuerst, ob die Ordner in der Nextcloud wirklich leer sind (z. B. externer Speicher nicht eingehängt). Wenn die
+            Titel absichtlich gelöscht wurden, hier bestätigen.
+          </p>
+          <button type="button" class="button-secondary" onClick={() => void start(true)}>
+            {plural(status.heldBack ?? 0, 'Titel', 'Titel')} entfernen
+          </button>
+        </div>
       )}
       {error && (
         <p class="admin-error" role="alert">

@@ -1,4 +1,5 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto';
+import { rmSync, writeFileSync } from 'node:fs';
 import { getMeta, setMeta, type DB } from '../db.js';
 
 export const ROLES = ['listener', 'manager', 'admin'] as const;
@@ -119,9 +120,15 @@ const ENV_PASSWORD_META = 'adminEnvPassword';
  * Legt beim Start den lokalen Admin an und hält sein Passwort mit ADMIN_PASSWORD abgestimmt:
  * Ein neuer oder geänderter Wert in der .env gilt nach dem Neustart. Solange er gleich bleibt,
  * bleibt ein in der Verwaltung geändertes Passwort erhalten. Ohne ADMIN_PASSWORD wird beim ersten
- * Start eines erzeugt und geloggt; RESET_ADMIN_PASSWORD erzwingt ein neues.
+ * Start eines erzeugt; RESET_ADMIN_PASSWORD erzwingt ein neues. Ein erzeugtes Passwort landet in
+ * `passwordFile` (nur für den Container-Benutzer lesbar) statt im Log, das oft an zentrale Systeme geht;
+ * ohne Datei (Tests, Datenbank im Speicher) im Log.
  */
-export async function ensureLocalAdmin(db: DB, options: { password?: string; reset?: boolean }, log: Logger): Promise<void> {
+export async function ensureLocalAdmin(
+  db: DB,
+  options: { password?: string; reset?: boolean; passwordFile?: string },
+  log: Logger,
+): Promise<void> {
   const existing = db.prepare("SELECT id FROM users WHERE kind = 'local' AND username = ?").get(LOCAL_ADMIN) as
     | { id: number }
     | undefined;
@@ -154,12 +161,24 @@ export async function ensureLocalAdmin(db: DB, options: { password?: string; res
   })();
 
   const action = existing ? 'Passwort gesetzt' : 'angelegt';
-  if (fromEnv === undefined) {
+  if (fromEnv === undefined && options.passwordFile) {
+    writeFileSync(
+      options.passwordFile,
+      `Startpasswort des lokalen Admins "${LOCAL_ADMIN}" (gilt, bis es in der Verwaltung geändert wird):\n${password}\n`,
+      { mode: 0o600 },
+    );
+    log.warn(
+      { username: LOCAL_ADMIN, file: options.passwordFile },
+      `Lokaler Admin ${action}. Das Passwort steht in der Datei; bitte damit anmelden, es in der Verwaltung ändern und die Datei löschen.`,
+    );
+  } else if (fromEnv === undefined) {
     log.warn(
       { username: LOCAL_ADMIN, password },
       `Lokaler Admin ${action}. Bitte mit diesem Passwort anmelden und es in der Verwaltung ändern.`,
     );
   } else {
+    // Ein früher erzeugtes Startpasswort gilt nicht mehr.
+    if (options.passwordFile) rmSync(options.passwordFile, { force: true });
     log.info({ username: LOCAL_ADMIN }, `Lokaler Admin ${action}, Passwort aus ADMIN_PASSWORD`);
   }
 }

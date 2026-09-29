@@ -114,8 +114,10 @@ nur „Mit Gemeinde-Konto anmelden“; die Anmeldung des lokalen Admins steht un
 - **Lokaler Admin** `admin`: Das Passwort kommt aus `ADMIN_PASSWORD`. Ein neuer oder geänderter
   Wert gilt nach dem nächsten Neustart (`docker compose up -d`), auch wenn die Datenbank schon
   existiert. Solange der Wert gleich bleibt, gilt ein unter Verwaltung → Anmeldung geändertes
-  Passwort weiter. Ohne `ADMIN_PASSWORD` wird beim ersten Start eines erzeugt und einmal ins Log
-  geschrieben (`docker compose logs gemeinde-app`); `RESET_ADMIN_PASSWORD=true` erzeugt ein neues.
+  Passwort weiter. Ohne `ADMIN_PASSWORD` wird beim ersten Start eines erzeugt und in
+  `/data/admin-password.txt` geschrieben, nicht ins Log
+  (`docker compose exec gemeinde-app cat /data/admin-password.txt`; nach dem Ändern in der Verwaltung
+  die Datei löschen); `RESET_ADMIN_PASSWORD=true` erzeugt ein neues.
   Enthält das Passwort ein `$`, muss es in der `.env` als `$$` geschrieben werden, weil Docker
   Compose `$` als Variable liest.
 - **Alle anderen** melden sich über OIDC mit ihrem Gemeinde-Konto an (Keycloak, Authentik, Nextcloud,
@@ -138,9 +140,14 @@ nur „Mit Gemeinde-Konto anmelden“; die Anmeldung des lokalen Admins steht un
 | Hörer | nur den Player nutzen; die Verwaltung ist ausgeblendet |
 
 Sitzungen laufen über ein HttpOnly-Cookie (SameSite=Lax, bei https mit Secure) und bleiben 30 Tage
-nach der letzten Nutzung gültig. In der Datenbank steht nur ein Hash der Sitzungs-ID, das Passwort
+nach der letzten Nutzung gültig. Anmeldungen über OIDC enden zusätzlich spätestens 30 Tage nach der
+Anmeldung; danach geht es einmal über den Identity Provider, der dabei die aktuellen Gruppen liefert.
+Wer dort aus einer Gruppe entfernt wird, verliert den Zugang also spätestens nach 30 Tagen (sofort:
+Benutzer in der Verwaltung sperren). In der Datenbank steht nur ein Hash der Sitzungs-ID, das Passwort
 des lokalen Admins als scrypt-Hash. Nach zehn Fehlversuchen ist die Passwort-Anmeldung je IP für
-15 Minuten gesperrt.
+15 Minuten gesperrt, nach hundert Fehlversuchen von beliebig vielen IPs auch je Benutzername; es laufen
+höchstens zwei Passwortprüfungen gleichzeitig. Jede Antwort trägt Sicherheits-Header (Content-Security-Policy,
+kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
 
 ![Gruppen in der Verwaltung](docs/screenshots/admin-groups.png)
 
@@ -160,7 +167,10 @@ des lokalen Admins als scrypt-Hash. Nach zehn Fehlversuchen ist die Passwort-Anm
   Nur neue Dateien und solche mit geändertem ETag werden gelesen, und davon nur der Anfang mit den
   Tags (256 KB, bei großen eingebetteten Covern etwas mehr). Nach dem Update auf diese Version
   liest der erste Scan alle Dateien einmal neu, um die Cover zu übernehmen. Gelöschte Dateien verschwinden aus der Bibliothek; Ordner, die gerade nicht lesbar
-  sind, bleiben unangetastet. Stand, Fortschritt und letzten Fehler zeigt die Verwaltung unter
+  sind, bleiben unangetastet. Ist ein ganzer Musikordner plötzlich leer oder fehlen auf einmal mehr als
+  20 Titel und mehr als ein Fünftel der Bibliothek (etwa weil ein Speicher nicht eingehängt ist), entfernt
+  der Scan nichts und wartet auf eine Bestätigung in der Verwaltung; sonst gingen Favoriten und
+  Weiterhören-Stellen aller Hörer verloren. Stand, Fortschritt und letzten Fehler zeigt die Verwaltung unter
   **Alben** („Abgleich mit der Nextcloud“), dort startet „Jetzt scannen“ einen Scan sofort.
   Antwortet die Nextcloud auf eine Anfrage 60 Sekunden lang nicht, wird sie abgebrochen, damit ein
   einzelner hängender Download den Scan nicht aufhält.
@@ -172,7 +182,12 @@ des lokalen Admins als scrypt-Hash. Nach zehn Fehlversuchen ist die Passwort-Anm
   `folder.jpg`, `front.jpg` o. ä. im Albumordner, sonst das in die Dateien eingebettete Bild.
 - **Titelbilder**: In MP3 (ID3) und FLAC eingebettete Cover werden beim Scan gelesen und in der
   Datenbank abgelegt (gleiche Bilder nur einmal). Jeder Titel zeigt sein eigenes Bild, ohne eigenes
-  Bild das Albumcover. Große Tag-Blöcke werden dafür bis 8 MB nachgeladen.
+  Bild das Albumcover. Große Tag-Blöcke werden dafür bis 8 MB nachgeladen. Nur JPEG, PNG, WebP und
+  GIF zählen als Cover (ein SVG könnte Skripte enthalten).
+- **Vorschaubilder**: Ordnerbilder und eingebettete Cover rechnet der Server beim ersten Abruf auf
+  höchstens 640 px als WebP herunter und legt sie in der Datenbank ab; danach fragt eine
+  Albenübersicht die Nextcloud nicht mehr. Ändert sich ein Bild, entsteht nach dem nächsten Scan eine
+  neue Vorschau. Lässt sich ein Bild nicht verkleinern, wird das Original gezeigt.
 - **Suche und Filter**: Volltextsuche mit Präfix und ohne Rücksicht auf Umlaute/Akzente (SQLite FTS5),
   Filter nach Interpret, Genre, Jahr und Jahrzehnt.
 - **Streaming** läuft über den Server mit Range-Unterstützung (Spulen im Browser), die
@@ -191,8 +206,27 @@ curl localhost:3000/api/health
 
 Die Datenbank liegt im Volume `gemeinde-data` (`/data` im Container). Die Bibliothek selbst baut
 jeder Scan aus der Nextcloud neu auf, eigene Alben und Korrekturen aus der Verwaltung gibt es aber
-nur in dieser Datenbank: Das Volume gehört deshalb ins Backup. Für den Betrieb im Internet gehört
-ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
+nur in dieser Datenbank: Das Volume gehört deshalb ins Backup.
+
+**Sicherung:** Die App sichert die Datenbank einmal am Tag nach `/data/backups/library-JJJJ-MM-TT.db`
+(konsistent per SQLite-Online-Backup, auch während sie läuft) und behält die letzten 14 Tage
+(`BACKUP_KEEP`). Diese Dateien gehören zusätzlich außerhalb des Servers gesichert, z. B. per
+`docker compose cp gemeinde-app:/data/backups ./backups` in einem nächtlichen Cronjob. Wiederherstellen:
+
+```bash
+docker compose stop gemeinde-app
+docker compose run --rm --no-deps --entrypoint sh gemeinde-app -c \
+  'cp /data/backups/library-2026-09-28.db /data/library.db && rm -f /data/library.db-wal /data/library.db-shm'
+docker compose up -d
+```
+
+**Im Internet** gehört ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor, und Port 3000 soll nur
+für ihn erreichbar sein. `docker-compose.yml` bindet den Port deshalb standardmäßig nur an
+`127.0.0.1` (Proxy auf demselben Server). Läuft der Proxy auf einem anderen Rechner, `APP_BIND` in der
+`.env` auf die Adresse im internen Netz setzen; läuft er im selben Docker-Netz, braucht es gar keinen
+veröffentlichten Port. `PUBLIC_URL` gehört dann immer gesetzt. `X-Forwarded-For`/`-Proto`/`-Host` glaubt
+die App nur Absendern aus privaten Netzen (`TRUST_PROXY`), sonst könnte jeder seine IP fälschen und die
+Sperre nach Fehlversuchen umgehen.
 
 | Variable | Standard | Bedeutung |
 | --- | --- | --- |
@@ -202,10 +236,14 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `NEXTCLOUD_MUSIC_PATH` | – (Pflicht) | Ordner, die gescannt werden, relativ zu den Dateien des Service-Accounts, z. B. `/Gemeinde/Medien/Musik`. Mehrere durch Komma, Semikolon oder Zeilenumbruch getrennt. Nur diese Ordner und ihre Unterordner kommen in die Bibliothek. |
 | `ADMIN_PASSWORD` | – | Passwort des lokalen Admins `admin`; gilt nach jedem Neustart, bei dem es sich geändert hat. Ohne Angabe wird beim ersten Start eines erzeugt und geloggt |
 | `RESET_ADMIN_PASSWORD` | `false` | `true` setzt das Passwort des lokalen Admins bei jedem Start auf `ADMIN_PASSWORD` bzw. ein neu erzeugtes zurück |
-| `PUBLIC_URL` | – | Öffentliche Adresse, z. B. `https://musik.gemeinde.de`; ergibt die OIDC-Weiterleitungs-URL. Ohne Angabe aus der Anfrage (Reverse Proxy mit `X-Forwarded-Proto`/`-Host`) |
+| `PUBLIC_URL` | – | Öffentliche Adresse, z. B. `https://musik.gemeinde.de`; ergibt die OIDC-Weiterleitungs-URL und ist Pflicht, um OIDC einzuschalten |
+| `TRUST_PROXY` | private Netze | Wem `X-Forwarded-*` geglaubt wird: `false`, `true` oder Adressen/Netze (z. B. `172.18.0.0/16`). Standard: Loopback und private Netze |
+| `APP_BIND` | `127.0.0.1` | Nur `docker-compose.yml`: Adresse auf dem Host, an die Port 3000 gebunden wird; `0.0.0.0` für alle |
 | `SCAN_INTERVAL_MINUTES` | `60` | Automatischer Scan, `0` = aus |
 | `SCAN_CONCURRENCY` | `4` | Parallele Zugriffe auf die Nextcloud beim Scan |
 | `DATABASE_PATH` | `/data/library.db` | Pfad der SQLite-Datei |
+| `BACKUP_DIR` | `/data/backups` | Ordner der täglichen Sicherungen (Standard: `backups` neben der Datenbank) |
+| `BACKUP_KEEP` | `14` | Wie viele tägliche Sicherungen bleiben, `0` = keine Sicherung |
 | `WEB_DIR` | `/app/public` | Ordner der gebauten Weboberfläche; fehlt er, läuft nur die API |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | Adresse des HTTP-Servers |
 | `LOG_LEVEL` | `info` | Log-Level (JSON-Logs) |

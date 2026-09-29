@@ -72,6 +72,9 @@ export async function loginLocal(username: string, password: string): Promise<vo
 }
 
 export async function logout(): Promise<void> {
+  // Zuerst, solange die Sitzung noch gilt: Der Player sichert dabei den Hörstand.
+  const { player } = await import('./player');
+  player.reset();
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
   set({ user: null, notice: undefined });
 }

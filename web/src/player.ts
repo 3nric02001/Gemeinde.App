@@ -175,6 +175,31 @@ export class Player {
     this.emit();
   }
 
+  /**
+   * Beim Abmelden: Hörstand sichern, anhalten und Warteschlange samt gespeichertem Stand vergessen,
+   * damit auf einem geteilten Gerät die nächste Person nicht sieht, was zuletzt lief.
+   */
+  reset(): void {
+    this.saveProgress();
+    this.audio.pause();
+    this.audio.removeAttribute('src');
+    this.audio.load();
+    this.loaded = undefined;
+    this.queue.set([]);
+    this.queueDirty = true;
+    window.clearTimeout(this.saveTimer);
+    this.saveTimer = undefined;
+    this.state = this.compute({ error: undefined });
+    this.queueDirty = false;
+    for (const listener of this.listeners) listener();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Gesperrter Speicher: nichts zu löschen.
+    }
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+  }
+
   seek(seconds: number): void {
     if (Number.isFinite(seconds)) this.audio.currentTime = Math.max(0, seconds);
   }

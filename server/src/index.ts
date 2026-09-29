@@ -1,8 +1,9 @@
 import { buildApp } from './app.js';
+import { DatabaseBackup } from './backup.js';
 import { loadConfig } from './config.js';
 
 const config = loadConfig();
-const { app, scanner } = await buildApp(config);
+const { app, db, scanner } = await buildApp(config);
 
 let timer: NodeJS.Timeout | undefined;
 if (config.scanIntervalMinutes > 0) {
@@ -10,9 +11,19 @@ if (config.scanIntervalMinutes > 0) {
   timer.unref();
 }
 
+// Tägliche Sicherung: stündlich prüfen, ob es die von heute schon gibt (übersteht so auch Neustarts).
+let backupTimer: NodeJS.Timeout | undefined;
+if (config.backupKeep > 0 && config.databasePath !== ':memory:') {
+  const backup = new DatabaseBackup(db, config.backupDir, config.backupKeep, app.log);
+  backupTimer = setInterval(() => void backup.ensureToday(), 60 * 60_000);
+  backupTimer.unref();
+  setTimeout(() => void backup.ensureToday(), 60_000).unref();
+}
+
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'Server wird beendet');
   clearInterval(timer);
+  clearInterval(backupTimer);
   await app.close();
   process.exit(0);
 };

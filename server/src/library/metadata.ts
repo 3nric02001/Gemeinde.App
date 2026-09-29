@@ -138,12 +138,17 @@ export function tagSpan(head: Buffer): number | undefined {
   return undefined;
 }
 
+/** Bildformate, die als Cover ausgeliefert werden dürfen. */
+export const COVER_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
 function pickPicture(pictures: Array<{ data: Uint8Array; format: string; type?: string }> | undefined): Picture | undefined {
   if (!pictures?.length) return undefined;
   const front = pictures.find((p) => /front/i.test(p.type ?? '')) ?? pictures[0]!;
-  const mime = front.format.includes('/') ? front.format : `image/${front.format.toLowerCase() || 'jpeg'}`;
-  if (!mime.startsWith('image/') || front.data.byteLength === 0 || front.data.byteLength > MAX_PICTURE_BYTES) return undefined;
-  return { data: Buffer.from(front.data), mime: mime === 'image/jpg' ? 'image/jpeg' : mime };
+  const raw = (front.format.includes('/') ? front.format : `image/${front.format || 'jpeg'}`).trim().toLowerCase();
+  const mime = raw === 'image/jpg' ? 'image/jpeg' : raw;
+  // Nur echte Rasterbilder: Ein SVG oder HTML im Tag liefe sonst als Skript auf der Seite der App.
+  if (!COVER_MIME_TYPES.includes(mime) || front.data.byteLength === 0 || front.data.byteLength > MAX_PICTURE_BYTES) return undefined;
+  return { data: Buffer.from(front.data), mime };
 }
 
 export const UNKNOWN_ARTIST = 'Unbekannter Interpret';

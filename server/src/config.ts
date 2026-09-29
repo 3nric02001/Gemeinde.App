@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path';
+
 export interface NextcloudConfig {
   /** Basis-URL der Nextcloud, z. B. https://cloud.example.org */
   url: string;
@@ -22,6 +24,11 @@ export interface Config {
   resetAdminPassword: boolean;
   /** Öffentliche Adresse, z. B. https://musik.gemeinde.de; sonst aus der Anfrage abgeleitet */
   publicUrl: string | undefined;
+  /**
+   * Wem X-Forwarded-For/-Proto/-Host geglaubt wird: true, false oder Adressen/Netze.
+   * Standard: nur Absendern aus privaten Netzen (Reverse Proxy im selben Docker-Netz oder LAN).
+   */
+  trustProxy: boolean | string[];
   /** Ordner mit der gebauten Weboberfläche; fehlt er, liefert der Server nur die API aus */
   webDir: string;
   nextcloud: NextcloudConfig;
@@ -29,6 +36,10 @@ export interface Config {
   scanIntervalMinutes: number;
   /** Wie viele Dateien parallel aus der Nextcloud gelesen werden */
   scanConcurrency: number;
+  /** Ordner für die tägliche Sicherung der Datenbank */
+  backupDir: string;
+  /** Wie viele tägliche Sicherungen behalten werden, 0 schaltet sie ab */
+  backupKeep: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -86,6 +97,17 @@ function publicUrl(raw: string | undefined): string | undefined {
   return url.origin;
 }
 
+/** Private Netze und Loopback: Dort sitzt der Reverse Proxy, das Internet nicht. */
+export const DEFAULT_TRUST_PROXY = ['loopback', 'linklocal', 'uniquelocal'];
+
+function trustProxy(raw: string | undefined): boolean | string[] {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return DEFAULT_TRUST_PROXY;
+  if (['true', 'ja', 'yes'].includes(value)) return true;
+  if (['false', 'nein', 'no', '0'].includes(value)) return false;
+  return value.split(/[,\s]+/).filter(Boolean);
+}
+
 function musicPaths(raw: string): string[] {
   const paths = parseMusicPaths(raw);
   if (paths.length === 0) throw new Error('Umgebungsvariable NEXTCLOUD_MUSIC_PATH fehlt');
@@ -93,15 +115,17 @@ function musicPaths(raw: string): string[] {
 }
 
 export function loadConfig(env: Env = process.env): Config {
+  const databasePath = env.DATABASE_PATH?.trim() || './data/library.db';
   return {
     host: env.HOST?.trim() || '0.0.0.0',
     port: integer(env, 'PORT', 3000, 1),
     logLevel: env.LOG_LEVEL?.trim() || 'info',
-    databasePath: env.DATABASE_PATH?.trim() || './data/library.db',
+    databasePath,
     // Ohne Leerzeichen/Zeilenende am Rand, die beim Bearbeiten der .env (z. B. unter Windows) mitrutschen.
     adminPassword: env.ADMIN_PASSWORD?.trim() || undefined,
     resetAdminPassword: ['1', 'true', 'ja', 'yes'].includes(env.RESET_ADMIN_PASSWORD?.trim().toLowerCase() ?? ''),
     publicUrl: publicUrl(env.PUBLIC_URL),
+    trustProxy: trustProxy(env.TRUST_PROXY),
     webDir: env.WEB_DIR?.trim() || '../web/dist',
     nextcloud: {
       url: required(env, 'NEXTCLOUD_URL').replace(/\/+$/, ''),
@@ -112,5 +136,7 @@ export function loadConfig(env: Env = process.env): Config {
     },
     scanIntervalMinutes: integer(env, 'SCAN_INTERVAL_MINUTES', 60),
     scanConcurrency: integer(env, 'SCAN_CONCURRENCY', 4, 1),
+    backupDir: env.BACKUP_DIR?.trim() || join(dirname(databasePath), 'backups'),
+    backupKeep: integer(env, 'BACKUP_KEEP', 14),
   };
 }

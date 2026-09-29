@@ -5,9 +5,16 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "3000:3000"
+      # Nur für den Reverse Proxy auf diesem Server; APP_BIND=0.0.0.0 öffnet den Port für alle.
+      - "${APP_BIND:-127.0.0.1}:3000:3000"
     volumes:
       - gemeinde-data:/data
+    # Nur /data ist beschreibbar; der Prozess kann sich keine weiteren Rechte verschaffen.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   gemeinde-data:

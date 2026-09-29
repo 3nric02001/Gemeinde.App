@@ -4,6 +4,7 @@ import { getMeta, type DB } from '../db.js';
 import { categoryFilter, categoryValues, getCategory, listCategories } from '../library/categories.js';
 import { datedFolderTrackIds, listDatedFolders, withSermonInfo } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
+import type { CoverThumbnails } from '../library/thumbnails.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerMeRoutes } from './me.js';
@@ -27,6 +28,9 @@ export interface RouteDeps {
   db: DB;
   client: NextcloudClient;
   scanner: LibraryScanner;
+  thumbnails: CoverThumbnails;
+  /** Abweichende Wartezeit bis zur ersten Antwort der Nextcloud (Tests) */
+  streamTimeoutMs?: number;
 }
 
 const paging = {
@@ -48,6 +52,9 @@ const idParam = {
   required: ['id'],
   properties: { id: { type: 'integer', minimum: 1 } },
 } as const;
+
+/** So lange darf die Nextcloud brauchen, bis eine Datei zu fließen beginnt. */
+export const UPSTREAM_TIMEOUT_MS = 15_000;
 
 /** Header, die beim Streaming von der Nextcloud an den Browser durchgereicht werden. */
 const PASS_THROUGH = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified'];
@@ -81,7 +88,24 @@ async function proxyFile(
   const headers: Record<string, string> = {};
   if (typeof request.headers.range === 'string') headers.Range = request.headers.range;
 
-  const upstream = await deps.client.get(path, headers, controller.signal);
+  // Nur bis die Antwort beginnt; das Streamen selbst darf so lange dauern wie der Titel.
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, deps.streamTimeoutMs ?? UPSTREAM_TIMEOUT_MS);
+  let upstream: Response;
+  try {
+    upstream = await deps.client.get(path, headers, controller.signal);
+  } catch (error) {
+    if (reply.raw.destroyed) return reply;
+    request.log.warn({ err: error, path, timedOut }, 'Nextcloud-Abruf fehlgeschlagen');
+    return reply
+      .code(timedOut ? 504 : 502)
+      .send({ error: timedOut ? 'Nextcloud antwortet nicht' : 'Nextcloud nicht erreichbar' });
+  } finally {
+    clearTimeout(timer);
+  }
   if (upstream.status === 404) return reply.code(404).send({ error: 'Datei nicht mehr in der Nextcloud vorhanden' });
   if (upstream.status === 416) return reply.code(416).send();
   if (!upstream.ok || !upstream.body) {
@@ -106,6 +130,13 @@ async function sendCover(
   source: CoverSource | undefined,
 ): Promise<FastifyReply> {
   if (!source) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
+  const thumb = await deps.thumbnails.get(source);
+  if (thumb) {
+    reply.header('etag', thumb.etag).header('cache-control', 'private, max-age=86400');
+    if (request.headers['if-none-match'] === thumb.etag) return reply.code(304).send();
+    return reply.type('image/webp').send(thumb.data);
+  }
+  // Nicht verkleinerbar (z. B. sehr groß oder unbekanntes Format): das Original wie bisher.
   if ('path' in source) return proxyFile(deps, request, reply, source.path, null);
   const image = getCoverImage(deps.db, source.coverId);
   if (!image) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
@@ -118,7 +149,17 @@ async function sendCover(
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   const { db, scanner } = deps;
 
-  app.get('/api/health', async () => ({ status: 'ok' }));
+  // Für Docker: prüft, ob die Datenbank antwortet. Die Nextcloud bewusst nicht, sonst startete Docker
+  // den Container bei jeder Nextcloud-Wartung neu; ihren Zustand zeigt die Verwaltung.
+  app.get('/api/health', async (request, reply) => {
+    try {
+      db.prepare('SELECT 1').get();
+      return { status: 'ok' };
+    } catch (error) {
+      request.log.error({ err: error }, 'Datenbank antwortet nicht');
+      return reply.code(503).send({ status: 'error' });
+    }
+  });
 
   app.get(
     '/api/tracks',
@@ -268,11 +309,24 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   }));
 
   // Nur Manager und Admins (siehe requiredRole)
-  app.post('/api/scan', async (_request, reply) => {
-    const alreadyRunning = scanner.isRunning();
-    void scanner.scan();
-    return reply.code(202).send({ started: !alreadyRunning, status: scanner.getStatus() });
-  });
+  app.post(
+    '/api/scan',
+    {
+      schema: {
+        body: {
+          type: ['object', 'null'],
+          // Auch ungewöhnlich viele fehlende Titel entfernen (nach Rückfrage in der Verwaltung)
+          properties: { removeMissing: { type: 'boolean' } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const alreadyRunning = scanner.isRunning();
+      void scanner.scan({ removeMissing: (request.body as { removeMissing?: boolean } | null)?.removeMissing === true });
+      return reply.code(202).send({ started: !alreadyRunning, status: scanner.getStatus() });
+    },
+  );
 
   await registerAdminRoutes(app, { db });
   await registerMeRoutes(app, { db });

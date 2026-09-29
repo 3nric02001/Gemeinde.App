@@ -217,6 +217,33 @@ describe('Inkrementeller Scan', () => {
     expect((await albums()).length).toBe(6);
   });
 
+  it('entfernt bei leerem Musikordner nichts, bis es bestätigt wird', async () => {
+    await ctx.scanner.scan();
+    for (const path of [...cloud.files.keys()]) cloud.delete(path);
+    const held = await ctx.scanner.scan();
+    expect(held).toMatchObject({ state: 'failed', removed: 0, heldBack: 11 });
+    expect(held.lastError).toContain('Musikordner ist leer');
+    expect((await albums()).length).toBe(6);
+    expect((await get('/api/scan')).lastSuccessAt).not.toBeNull();
+
+    const res = await inject({ method: 'POST', url: '/api/scan', payload: { removeMissing: true } });
+    expect(res.statusCode, res.body).toBe(202);
+    expect(await ctx.scanner.scan()).toMatchObject({ state: 'idle', removed: 11, heldBack: 0 });
+    expect((await albums()).length).toBe(0);
+  });
+
+  it('hält auch ungewöhnlich viele fehlende Titel zurück', async () => {
+    for (let i = 0; i < 25; i++) cloud.put(`Predigten/${i}.mp3`, mp3({ title: `Predigt ${i}` }));
+    await ctx.scanner.scan();
+    for (let i = 0; i < 25; i++) cloud.delete(`Predigten/${i}.mp3`);
+    expect(await ctx.scanner.scan()).toMatchObject({ state: 'failed', removed: 0, heldBack: 25 });
+    // Wenige fehlende Titel gehen wie bisher ohne Rückfrage
+    cloud.delete('Downloads/a.mp3');
+    expect(await ctx.scanner.scan({ removeMissing: true })).toMatchObject({ state: 'idle', removed: 26 });
+    cloud.delete('Downloads/b.mp3');
+    expect(await ctx.scanner.scan()).toMatchObject({ state: 'idle', removed: 1 });
+  });
+
   it('meldet einen falsch eingestellten Musikordner verständlich', async () => {
     const other = await buildApp(
       loadConfig({
@@ -260,6 +287,26 @@ describe('Inkrementeller Scan', () => {
     await quick.app.close();
     expect(status).toMatchObject({ state: 'idle', added: 10, failed: 1 });
     expect(status.lastError).toBe('Downloads/b.mp3: GET Downloads/b.mp3: Nextcloud hat nicht innerhalb von 1 s geantwortet');
+  });
+
+  it('bricht einen Stream ab, wenn die Nextcloud gar nicht antwortet', async () => {
+    const quick = await buildApp(
+      loadConfig({
+        NEXTCLOUD_URL: cloud.url,
+        NEXTCLOUD_USER: USER,
+        NEXTCLOUD_PASSWORD: PASSWORD,
+        NEXTCLOUD_MUSIC_PATH: '/Musik Bibliothek',
+        DATABASE_PATH: ':memory:',
+      }),
+      { logger: false, streamTimeoutMs: 200 },
+    );
+    await quick.scanner.scan();
+    const { id } = quick.db.prepare("SELECT id FROM tracks WHERE path = 'Downloads/b.mp3'").get() as { id: number };
+    cloud.hangingFiles.add('Downloads/b.mp3');
+    const res = await quick.app.inject({ method: 'GET', url: `/api/tracks/${id}/stream`, headers: { cookie: sessionCookie(quick.db) } });
+    await quick.app.close();
+    expect(res.statusCode).toBe(504);
+    expect(res.json()).toEqual({ error: 'Nextcloud antwortet nicht' });
   });
 
   it('meldet falsche Zugangsdaten und eine nicht erreichbare Nextcloud verständlich', async () => {

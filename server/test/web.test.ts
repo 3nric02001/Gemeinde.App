@@ -50,6 +50,20 @@ describe('Weboberfläche', () => {
     }
   });
 
+  it('setzt Sicherheits-Header für Seiten und API', async () => {
+    await start(dir);
+    const page = await inject({ method: 'GET', url: '/album/3' });
+    expect(page.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(page.headers['content-security-policy']).toContain("script-src 'self'");
+    expect(page.headers['x-frame-options']).toBe('DENY');
+    expect(page.headers['x-content-type-options']).toBe('nosniff');
+    expect(page.headers['strict-transport-security']).toBeUndefined();
+    const api = await inject({ method: 'GET', url: '/api/health' });
+    expect(api.headers['content-security-policy']).toContain('sandbox');
+    const https = await inject({ method: 'GET', url: '/', headers: { 'x-forwarded-proto': 'https' } });
+    expect(https.headers['strict-transport-security']).toContain('max-age=');
+  });
+
   it('cacht gehashte Dateien lange, andere nicht', async () => {
     await start(dir);
     const asset = await inject({ method: 'GET', url: '/assets/app-abc123.js' });
@@ -66,6 +80,13 @@ describe('Weboberfläche', () => {
     expect(missing.json()).toEqual({ error: 'Nicht gefunden' });
     const health = await inject({ method: 'GET', url: '/api/health' });
     expect(health.json()).toEqual({ status: 'ok' });
+  });
+
+  it('meldet eine nicht erreichbare Datenbank im Healthcheck', async () => {
+    await start(dir);
+    ctx.db.close();
+    const health = await ctx.app.inject({ method: 'GET', url: '/api/health' });
+    expect(health.statusCode).toBe(503);
   });
 
   it('läuft ohne gebaute Oberfläche als reine API', async () => {

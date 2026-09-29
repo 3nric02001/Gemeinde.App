@@ -233,14 +233,17 @@ export function getTrackFile(db: DB, id: number): { path: string; mime: string |
 }
 
 /** Bild im Ordner (liegt in der Nextcloud) oder eingebettetes Bild (liegt in der Datenbank) */
-export type CoverSource = { path: string } | { coverId: number };
+export type CoverSource = { path: string; etag: string | null } | { coverId: number };
 
 /** Albumcover: Bild im Albumordner hat Vorrang vor dem eingebetteten. */
 export function getAlbumCover(db: DB, id: number): CoverSource | undefined {
-  const row = db.prepare('SELECT cover_path, cover_id FROM albums WHERE id = ?').get(id) as
-    | { cover_path: string | null; cover_id: number | null }
-    | undefined;
-  if (row?.cover_path) return { path: row.cover_path };
+  const row = db
+    .prepare(
+      `SELECT a.cover_path, a.cover_id, (SELECT etag FROM folder_covers WHERE path = a.cover_path LIMIT 1) AS etag
+       FROM albums a WHERE a.id = ?`,
+    )
+    .get(id) as { cover_path: string | null; cover_id: number | null; etag: string | null } | undefined;
+  if (row?.cover_path) return { path: row.cover_path, etag: row.etag };
   if (row?.cover_id) return { coverId: row.cover_id };
   return undefined;
 }

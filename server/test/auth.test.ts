@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { InjectOptions } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { requiredRole } from '../src/api/auth.js';
@@ -25,6 +28,7 @@ async function start(env: Record<string, string> = {}) {
       NEXTCLOUD_MUSIC_PATH: '/Musik',
       DATABASE_PATH: ':memory:',
       ADMIN_PASSWORD,
+      PUBLIC_URL: 'http://localhost',
       ...env,
     }),
     { logger: false },
@@ -159,6 +163,38 @@ describe('Lokaler Admin', () => {
     expect((await localLogin()).statusCode).toBe(429);
   });
 
+  it('glaubt X-Forwarded-For nur einem Proxy aus dem eigenen Netz', async () => {
+    await start();
+    const attempt = (remoteAddress: string, forwarded: string) =>
+      ctx.app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        remoteAddress,
+        headers: { 'x-forwarded-for': forwarded },
+        payload: { username: 'admin', password: 'falsch' },
+      });
+    // Direkt aus dem Internet: Die gefälschte IP zählt nicht, nach 10 Versuchen ist Schluss.
+    for (let i = 0; i < 10; i++) expect((await attempt('203.0.113.9', `198.51.100.${i}`)).statusCode).toBe(401);
+    expect((await attempt('203.0.113.9', '198.51.100.99')).statusCode).toBe(429);
+    // Über den Reverse Proxy im Docker-Netz: jede echte Client-IP für sich.
+    expect((await attempt('172.18.0.2', '198.51.100.7')).statusCode).toBe(401);
+  });
+
+  it('bremst Raten von vielen IPs über den Benutzernamen und lässt nur wenige Prüfungen gleichzeitig zu', async () => {
+    await start({ TRUST_PROXY: 'false' });
+    const from = (ip: string, password = 'falsch') =>
+      ctx.app.inject({ method: 'POST', url: '/api/auth/login', remoteAddress: ip, payload: { username: 'admin', password } });
+    for (let i = 0; i < 100; i++) expect((await from(`198.51.100.${i}`)).statusCode).toBe(401);
+    expect((await from('198.51.100.200', ADMIN_PASSWORD)).statusCode).toBe(429);
+
+    await ctx.app.close();
+    await start();
+    const burst = await Promise.all(Array.from({ length: 6 }, (_, i) => from(`192.0.2.${i}`)));
+    const codes = burst.map((r) => r.statusCode);
+    expect(codes.filter((c) => c === 429).length).toBeGreaterThan(0);
+    expect(codes.filter((c) => c === 401).length).toBeGreaterThanOrEqual(2);
+  }, 60_000);
+
   it('lässt sich nicht mit kodierten Pfaden umgehen', async () => {
     await start();
     const admin = await adminCookie();
@@ -228,6 +264,24 @@ describe('Lokaler Admin', () => {
     expect(await canLogin(logged.at(-1)!.password as string)).toBe(true);
     expect(await canLogin('aus-der-env-2')).toBe(false);
     db.close();
+  });
+
+  it('schreibt ein erzeugtes Passwort in eine Datei statt ins Log', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gemeinde-admin-'));
+    const file = join(dir, 'admin-password.txt');
+    const db = openDatabase(':memory:');
+    const logged: Array<Record<string, unknown>> = [];
+    const log = { info: (obj: object) => logged.push({ ...obj }), warn: (obj: object) => logged.push({ ...obj }) };
+    await ensureLocalAdmin(db, { passwordFile: file }, log);
+    expect(logged.some((entry) => 'password' in entry)).toBe(false);
+    const password = readFileSync(file, 'utf8').trim().split('\n').at(-1)!;
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(await checkLocalLogin(db, 'admin', password)).toBeDefined();
+    // Kommt später ADMIN_PASSWORD, verschwindet die veraltete Datei.
+    await ensureLocalAdmin(db, { password: 'aus-der-env-3', passwordFile: file }, log);
+    expect(existsSync(file)).toBe(false);
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it('ignoriert Leerzeichen und Zeilenenden um ADMIN_PASSWORD', () => {
@@ -387,6 +441,37 @@ describe('OIDC', () => {
 
     expect((await oidcLogin('//boese.example')).location).toBe('/');
     expect((await oidcLogin('https://boese.example')).location).toBe('/');
+  });
+
+  it('beendet OIDC-Sitzungen spätestens 30 Tage nach der Anmeldung, auch bei täglicher Nutzung', async () => {
+    await start();
+    const admin = await adminCookie();
+    await configureOidc(admin);
+    await setGroup(admin, 'musik', { enabled: true, role: 'listener' });
+    idp.user = { sub: 'anna', name: 'Anna', email: 'anna@example.org', groups: ['musik'] };
+    const { cookie } = await oidcLogin();
+    expect((await as(cookie, { method: 'GET', url: '/api/albums' })).statusCode).toBe(200);
+
+    const age = (days: number) => ctx.db.prepare('UPDATE sessions SET created_at = ?').run(Date.now() - days * 24 * 60 * 60 * 1000);
+    age(29);
+    expect((await as(cookie, { method: 'GET', url: '/api/albums' })).statusCode).toBe(200);
+    age(31);
+    expect((await as(cookie, { method: 'GET', url: '/api/albums' })).statusCode).toBe(401);
+    // Der lokale Admin hat keinen Identity Provider, seine Sitzung läuft weiter.
+    expect((await as(admin, { method: 'GET', url: '/api/albums' })).statusCode).toBe(200);
+  });
+
+  it('lässt sich ohne PUBLIC_URL nicht einschalten', async () => {
+    await start({ PUBLIC_URL: '' });
+    const admin = await adminCookie();
+    const res = await as(admin, {
+      method: 'PUT',
+      url: '/api/admin/oidc',
+      payload: { enabled: true, issuer: idp.url, clientId: CLIENT_ID },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('PUBLIC_URL');
+    expect((await as(admin, { method: 'GET', url: '/api/admin/oidc' })).json()).toMatchObject({ enabled: false, publicUrlMissing: true });
   });
 
   it('prüft die Einstellungen', async () => {
