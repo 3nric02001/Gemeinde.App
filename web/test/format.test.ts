@@ -36,15 +36,13 @@ describe('Formatierung', () => {
     expect(formatShortDate('2026-09-06')).toBe('Sonntag, 06.09.2026');
   });
 
-  it('zeigt unter dem Datum den Rest des Ordnernamens', () => {
+  it('zeigt unter dem Anlass Datum und Sprecher', () => {
     const folder = {
       folder: 'x', date: '2026-09-27', trackCount: 3, duration: 0, coverTrackId: null,
       albumId: null, speaker: null, passage: null, description: null,
     };
-    expect(folderSubtitle({ ...folder, name: '2026-09-27 Erntedank' })).toBe('Erntedank');
-    expect(folderSubtitle({ ...folder, name: 'GD 27.09.2026' })).toBe('GD');
-    expect(folderSubtitle({ ...folder, name: '2026-09-27' })).toBe('3 Titel');
-    expect(folderSubtitle({ ...folder, name: '2026-09-27', speaker: 'Pastor Meier' })).toBe('Pastor Meier');
+    expect(folderSubtitle({ ...folder, name: '2026-09-27 Erntedank' })).toBe('So., 27.09.2026');
+    expect(folderSubtitle({ ...folder, name: '2026-09-27', speaker: 'Pastor Meier' })).toBe('So., 27.09.2026 · Pastor Meier');
   });
 
   it('benennt Gottesdienste nach Anlass und Datum statt nach dem Ordner', () => {
@@ -52,13 +50,13 @@ describe('Formatierung', () => {
     expect(withoutDate('13.09.2026 Taufgottesdienst')).toBe('Taufgottesdienst');
     expect(withoutDate('Feiert Jesus! 20')).toBe('Feiert Jesus! 20');
     expect(albumTitle('2026-09-27 Erntedank', '2026-09-27')).toBe('Erntedank');
-    expect(albumTitle('2026-09-20', '2026-09-20')).toBe('Sonntag, 20.09.2026');
+    expect(albumTitle('2026-09-20', '2026-09-20')).toBe('Gottesdienst');
     expect(albumTitle('Adventskonzert', null)).toBe('Adventskonzert');
     expect(albumLabel('2026-09-27 Erntedank', '2026-09-27')).toBe('Erntedank, So., 27.09.2026');
     expect(albumLabel('2026-09-20', '2026-09-20')).toBe('So., 20.09.2026');
-    expect(albumSubtitle({ title: '2026-09-27 Erntedank', artist: 'MBG', year: 2026, date: '2026-09-27' })).toBe('So., 27.09.2026');
-    expect(albumSubtitle({ title: '2026-09-20', artist: 'MBG', year: 2026, date: '2026-09-20' })).toBe('MBG');
-    expect(albumSubtitle({ title: 'Unser Gott', artist: 'Outbreakband', year: 2018 })).toBe('Outbreakband · 2018');
+    expect(albumSubtitle({ artist: 'MBG', year: 2026, date: '2026-09-27' })).toBe('So., 27.09.2026');
+    expect(albumSubtitle({ artist: 'MBG', year: 2026, date: '2026-09-20', speaker: 'Pastor Meier' })).toBe('So., 20.09.2026 · Pastor Meier');
+    expect(albumSubtitle({ artist: 'Outbreakband', year: 2018 })).toBe('Outbreakband · 2018');
   });
 
   it('bildet Initialen für Platzhalter', () => {

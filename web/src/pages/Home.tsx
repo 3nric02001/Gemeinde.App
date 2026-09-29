@@ -12,6 +12,9 @@ import { useMe } from '../me';
 import { Empty } from './common';
 import { folderHref, playFolder } from './Dates';
 
+/** Genres, die für Gottesdienste stehen; die Genre-Reihe auf Start zeigt Musik */
+const SERVICE_GENRE = /gottesdienst|predigt/i;
+
 function greeting(): string {
   const hour = new Date().getHours();
   if (hour < 11) return 'Guten Morgen';
@@ -30,12 +33,14 @@ export function Home() {
   const me = useMe();
   const latest = useApi<Page<DatedFolder>>('/api/dates?limit=1');
   const personal = useApi<{ resume: Array<Track & { position: number }>; recent: Album[] }>('/api/me/home');
-  const recent = useApi<Page<Album>>('/api/albums?sort=recent&limit=12');
+  // Gottesdienste und Musik getrennt, damit dieselben Karten nicht zweimal untereinander stehen
+  const services = useApi<Page<Album>>('/api/albums?dated=true&sort=date&limit=13');
+  const recent = useApi<Page<Album>>('/api/albums?dated=false&sort=recent&limit=12');
   const facets = useApi<Facets>('/api/facets');
-  const topGenre = facets.data?.genres[0]?.value;
+  const topGenre = facets.data?.genres.find((genre) => !SERVICE_GENRE.test(genre.value))?.value;
   const genreAlbums = useApi<Page<Album>>(
-    // Vorschläge aus dem häufigsten Genre: oft Gehörtes zuerst
-    topGenre ? `/api/albums${query({ genre: topGenre, limit: 12, sort: 'popular' })}` : undefined,
+    // Vorschläge aus dem häufigsten Musik-Genre: oft Gehörtes zuerst
+    topGenre ? `/api/albums${query({ genre: topGenre, dated: 'false', limit: 12, sort: 'popular' })}` : undefined,
   );
   const name = firstName(user?.name, user?.kind);
   const title = name ? `${greeting()}, ${name}` : greeting();
@@ -74,7 +79,12 @@ export function Home() {
 
       <Shelf title="Zuletzt gehört" albums={personal.data?.recent ?? []} />
 
-      <Shelf title="Neu hinzugefügt" href="/alben?sort=recent" albums={recent.data?.items ?? []} />
+      <Shelf
+        title="Weitere Gottesdienste"
+        href="/datum"
+        albums={(services.data?.items ?? []).filter((album) => album.id !== service?.albumId).slice(0, 12)}
+      />
+      <Shelf title="Neue Musik" href="/alben?sort=recent" albums={recent.data?.items ?? []} />
       {topGenre && (
         <Shelf title={topGenre} href={`/alben${query({ genre: topGenre, sort: 'year' })}`} albums={genreAlbums.data?.items ?? []} />
       )}
