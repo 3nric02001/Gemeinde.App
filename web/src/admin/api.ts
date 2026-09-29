@@ -29,13 +29,27 @@ export interface AdminAlbumDetail extends AlbumDetail {
 }
 
 export type RuleField = 'title' | 'artist' | 'album' | 'genre' | 'path';
-export type RuleOp = 'contains' | 'starts' | 'equals';
+export type RuleOp = 'contains' | 'not_contains' | 'starts' | 'equals';
 
-export interface AlbumRule {
-  id: number;
+export interface RuleLeaf {
   field: RuleField;
   op: RuleOp;
   value: string;
+}
+
+/** "all" = alle Bedingungen (UND), "any" = mindestens eine (ODER); beliebig verschachtelbar */
+export interface RuleGroup {
+  match: 'all' | 'any';
+  conditions: RuleCondition[];
+}
+
+export type RuleCondition = RuleLeaf | RuleGroup;
+
+export const isGroup = (condition: RuleCondition): condition is RuleGroup => 'match' in condition;
+
+export interface AlbumRule {
+  id: number;
+  condition: RuleCondition;
   move: boolean;
 }
 
@@ -49,12 +63,23 @@ export const RULE_FIELD_LABELS: Record<RuleField, string> = {
 
 export const RULE_OP_LABELS: Record<RuleOp, string> = {
   contains: 'enthält',
+  not_contains: 'enthält nicht',
   starts: 'beginnt mit',
   equals: 'ist genau',
 };
 
-export function describeRule(rule: Pick<AlbumRule, 'field' | 'op' | 'value'>): string {
-  return `${RULE_FIELD_LABELS[rule.field]} ${RULE_OP_LABELS[rule.op]} „${rule.value}“`;
+/** Lesbare Form, z. B. Titel enthält „Predigt“ und (Interpret ist genau „A“ oder Interpret ist genau „B“) */
+export function describeRule(condition: RuleCondition, nested = false): string {
+  if (!isGroup(condition)) return `${RULE_FIELD_LABELS[condition.field]} ${RULE_OP_LABELS[condition.op]} „${condition.value}“`;
+  const text = condition.conditions.map((c) => describeRule(c, true)).join(condition.match === 'all' ? ' und ' : ' oder ');
+  return nested && condition.conditions.length > 1 ? `(${text})` : text;
+}
+
+/** Alle Bedingungen haben einen Suchbegriff und keine Gruppe ist leer */
+export function isComplete(condition: RuleCondition): boolean {
+  return isGroup(condition)
+    ? condition.conditions.length > 0 && condition.conditions.every(isComplete)
+    : condition.value.trim().length > 0;
 }
 
 const KEY = 'gemeinde.adminToken';
@@ -89,6 +114,6 @@ export async function adminRequest<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' |
     throw new ApiError(res.status, data.error ?? `Fehler ${res.status}`);
   }
   // Nach Änderungen sollen Player-Seiten sofort den neuen Stand laden.
-  if (method !== 'GET') clearCache();
+  if (method !== 'GET' && !url.endsWith('/preview')) clearCache();
   return (res.status === 204 ? undefined : await res.json()) as T;
 }

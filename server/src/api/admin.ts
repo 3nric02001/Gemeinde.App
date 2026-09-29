@@ -10,6 +10,9 @@ import {
   deleteManualAlbum,
   deleteRule,
   previewRule,
+  toCondition,
+  updateRule,
+  type RuleInput,
   removeTrack,
   restoreTrack,
   setTracks,
@@ -17,7 +20,7 @@ import {
   type AlbumFields,
 } from '../library/curation.js';
 import { searchAlbums, type AlbumFilter } from '../library/queries.js';
-import { RULE_FIELDS, RULE_OPS, type RuleCondition } from '../library/rules.js';
+import { RULE_FIELDS, RULE_OPS } from '../library/rules.js';
 
 const idParam = {
   type: 'object',
@@ -39,17 +42,24 @@ const albumFields = {
   hidden: { type: 'boolean' },
 } as const;
 
-const ruleCondition = {
-  field: { type: 'string', enum: RULE_FIELDS },
-  op: { type: 'string', enum: RULE_OPS, default: 'contains' },
-  value: { type: 'string', minLength: 1, maxLength: 200 },
-} as const;
+// Die Struktur verschachtelter Bedingungen prüft parseCondition, hier nur die äußere Form.
 const ruleBody = {
   type: 'object',
-  required: ['field', 'value'],
-  properties: { ...ruleCondition, move: { type: 'boolean' } },
+  properties: {
+    condition: { type: 'object' },
+    field: { type: 'string', enum: RULE_FIELDS },
+    op: { type: 'string', enum: RULE_OPS },
+    value: { type: 'string', maxLength: 200 },
+    move: { type: 'boolean' },
+  },
   additionalProperties: false,
 } as const;
+const ruleParam = {
+  type: 'object',
+  required: ['id', 'ruleId'],
+  properties: { id: { type: 'integer', minimum: 1 }, ruleId: { type: 'integer', minimum: 1 } },
+} as const;
+type RuleRequest = FastifyRequest<{ Params: { id: number; ruleId: number } }>;
 
 type IdRequest = FastifyRequest<{ Params: { id: number } }>;
 type TrackRequest = FastifyRequest<{ Params: { id: number; trackId: number } }>;
@@ -191,36 +201,28 @@ export async function registerAdminRoutes(
       '/api/admin/albums/:id/rules',
       { schema: { params: idParam, body: ruleBody } },
       async (request: IdRequest) => {
-        addRule(db, request.params.id, request.body as RuleCondition & { move?: boolean });
+        addRule(db, request.params.id, request.body as RuleInput);
         return albumDetail(db, request.params.id);
       },
     );
 
-    admin.delete(
+    admin.put(
       '/api/admin/albums/:id/rules/:ruleId',
-      {
-        schema: {
-          params: {
-            type: 'object',
-            required: ['id', 'ruleId'],
-            properties: { id: { type: 'integer', minimum: 1 }, ruleId: { type: 'integer', minimum: 1 } },
-          },
-        },
-      },
-      async (request: FastifyRequest<{ Params: { id: number; ruleId: number } }>) => {
-        deleteRule(db, request.params.id, request.params.ruleId);
+      { schema: { params: ruleParam, body: ruleBody } },
+      async (request: RuleRequest) => {
+        updateRule(db, request.params.id, request.params.ruleId, request.body as RuleInput);
         return albumDetail(db, request.params.id);
       },
     );
 
-    admin.get(
-      '/api/admin/rules/preview',
-      {
-        schema: {
-          querystring: { type: 'object', required: ['field', 'value'], properties: ruleCondition, additionalProperties: false },
-        },
-      },
-      async (request) => previewRule(db, request.query as RuleCondition),
+    admin.delete('/api/admin/albums/:id/rules/:ruleId', { schema: { params: ruleParam } }, async (request: RuleRequest) => {
+      deleteRule(db, request.params.id, request.params.ruleId);
+      return albumDetail(db, request.params.id);
+    });
+
+    // POST, weil verschachtelte Bedingungen nicht gut in eine URL passen
+    admin.post('/api/admin/rules/preview', { schema: { body: ruleBody } }, async (request) =>
+      previewRule(db, toCondition(request.body)),
     );
 
     admin.get(

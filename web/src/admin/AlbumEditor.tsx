@@ -6,17 +6,8 @@ import { formatDuration, formatTime, plural } from '../format';
 import { useDebounced } from '../hooks';
 import { navigate } from '../router';
 import { ErrorNote, Loading } from '../pages/common';
-import {
-  adminRequest,
-  describeRule,
-  RULE_FIELD_LABELS,
-  RULE_OP_LABELS,
-  type AdminAlbum,
-  type AdminAlbumDetail,
-  type AlbumFields,
-  type RuleField,
-  type RuleOp,
-} from './api';
+import { adminRequest, type AdminAlbum, type AdminAlbumDetail, type AlbumFields } from './api';
+import { Rules } from './Rules';
 
 interface Props {
   id: number;
@@ -238,7 +229,13 @@ export function AlbumEditor({ id, onError }: Props) {
         <Rules
           album={album}
           busy={busy}
-          onAdd={(rule) => run(() => adminRequest('POST', `${base}/rules`, rule))}
+          onSave={(rule, ruleId) =>
+            run(() =>
+              ruleId === undefined
+                ? adminRequest('POST', `${base}/rules`, rule)
+                : adminRequest('PUT', `${base}/rules/${ruleId}`, rule),
+            )
+          }
           onDelete={(ruleId) => run(() => adminRequest('DELETE', `${base}/rules/${ruleId}`))}
         />
       )}
@@ -370,124 +367,6 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
         {!yearValid && <span class="admin-error">Jahr bitte vierstellig</span>}
       </div>
     </form>
-  );
-}
-
-interface RuleDraft {
-  field: RuleField;
-  op: RuleOp;
-  value: string;
-  move: boolean;
-}
-
-/** Regeln füllen das Album automatisch, auch mit Titeln, die erst später in die Nextcloud kommen. */
-function Rules({
-  album,
-  busy,
-  onAdd,
-  onDelete,
-}: {
-  album: AdminAlbumDetail;
-  busy: boolean;
-  onAdd: (rule: RuleDraft) => void;
-  onDelete: (ruleId: number) => void;
-}) {
-  const [draft, setDraft] = useState<RuleDraft>({ field: 'title', op: 'contains', value: '', move: false });
-  const value = useDebounced(draft.value.trim(), 250);
-  const [preview, setPreview] = useState<{ total: number; items: Array<{ id: number; title: string; artist: string }> }>();
-
-  useEffect(() => {
-    if (!value) {
-      setPreview(undefined);
-      return;
-    }
-    let active = true;
-    adminRequest<typeof preview>('GET', `/api/admin/rules/preview${query({ field: draft.field, op: draft.op, value })}`)
-      .then((result) => active && setPreview(result))
-      .catch(() => active && setPreview(undefined));
-    return () => {
-      active = false;
-    };
-  }, [draft.field, draft.op, value]);
-
-  return (
-    <section class="shelf admin-panel">
-      <div class="section-head">
-        <h2>Regeln</h2>
-      </div>
-      <p class="admin-hint">
-        Alle Titel, auf die eine Regel passt, kommen automatisch in dieses Album, auch solche, die später in die Nextcloud
-        kommen. Groß- und Kleinschreibung und Umlaute spielen keine Rolle. Die Titel erscheinen nach den von Hand
-        eingetragenen, neueste zuerst (nach Datum im Ordnernamen).
-      </p>
-      {album.rules.length > 0 && (
-        <ul class="admin-rules">
-          {album.rules.map((rule) => (
-            <li key={rule.id}>
-              <span>
-                {describeRule(rule)}
-                {rule.move && <span class="badge badge-muted">verschiebt</span>}
-              </span>
-              <button type="button" class="button-secondary button-small" disabled={busy} onClick={() => onDelete(rule.id)}>
-                Löschen
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form
-        class="admin-rule-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!draft.value.trim()) return;
-          onAdd({ ...draft, value: draft.value.trim() });
-          setDraft({ ...draft, value: '' });
-        }}
-      >
-        <label class="field">
-          <span>Feld</span>
-          <select value={draft.field} onChange={(e) => setDraft({ ...draft, field: (e.target as HTMLSelectElement).value as RuleField })}>
-            {Object.entries(RULE_FIELD_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label class="field">
-          <span>Bedingung</span>
-          <select value={draft.op} onChange={(e) => setDraft({ ...draft, op: (e.target as HTMLSelectElement).value as RuleOp })}>
-            {Object.entries(RULE_OP_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label class="field admin-rule-value">
-          <span>Suchbegriff</span>
-          <input
-            value={draft.value}
-            maxLength={200}
-            placeholder="z. B. Predigt"
-            onInput={(e) => setDraft({ ...draft, value: (e.target as HTMLInputElement).value })}
-          />
-        </label>
-        <button type="submit" class="button-primary" disabled={busy || !draft.value.trim()}>
-          Regel hinzufügen
-        </button>
-      </form>
-      <label class="admin-check">
-        <input type="checkbox" checked={draft.move} onChange={(e) => setDraft({ ...draft, move: (e.target as HTMLInputElement).checked })} />
-        Passende Titel aus ihrem automatischen Album herausnehmen (verschieben)
-      </label>
-      {preview && draft.value.trim() && (
-        <p class="admin-hint" aria-live="polite">
-          Trifft {plural(preview.total, 'Titel', 'Titel')}
-          {preview.items.length > 0 && `: ${preview.items.slice(0, 5).map((t) => t.title).join(', ')}${preview.total > 5 ? ' …' : ''}`}
-        </p>
-      )}
-    </section>
   );
 }
 

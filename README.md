@@ -47,8 +47,10 @@ von Hand pflegen. Bis zum Login per OIDC meldet man sich dort mit dem `ADMIN_TOK
   für Hörer ausblenden.
 - **Regeln** füllen eigene Alben automatisch, z. B. „Titel enthält Predigt“ oder „Ordner/Dateiname
   enthält Gottesdienste/2024“. Möglich sind Titel, Interpret, Album, Genre und Ordner/Dateiname mit
-  „enthält“, „beginnt mit“ oder „ist genau“; Groß-/Kleinschreibung und Umlaute spielen keine Rolle.
-  Mehrere Regeln eines Albums gelten mit „oder“. Neue passende Titel kommen beim nächsten Scan von
+  „enthält“, „enthält nicht“, „beginnt mit“ oder „ist genau“; Groß-/Kleinschreibung und Umlaute
+  spielen keine Rolle. Bedingungen lassen sich in Gruppen mit UND/ODER verschachteln (bis zu 4 Ebenen),
+  z. B. „Titel enthält Predigt UND (Interpret ist Meier ODER Interpret ist Schulz)“. Mehrere Regeln
+  eines Albums gelten mit ODER; bestehende Regeln lassen sich bearbeiten. Neue passende Titel kommen beim nächsten Scan von
   selbst dazu, neueste zuerst (nach Datum im Ordnernamen). Vor dem Speichern zeigt eine Vorschau, wie
   viele Titel die Regel trifft. Einen Titel, den man aus so einem Album entfernt, fügt die Regel nicht
   wieder hinzu.
@@ -152,9 +154,14 @@ Verwaltung (alle mit `Authorization: Bearer <ADMIN_TOKEN>`):
 | `PUT /api/admin/albums/:id/tracks` | Inhalt und Reihenfolge eines eigenen Albums setzen: `{ trackIds }` |
 | `DELETE /api/admin/albums/:id/tracks/:trackId` | Titel entfernen (bei automatischen Alben: herausnehmen) |
 | `POST /api/admin/albums/:id/tracks/:trackId/restore` | Herausgenommenen Titel zurückholen |
-| `POST /api/admin/albums/:id/rules` | Regel anlegen: `{ field: title\|artist\|album\|genre\|path, op: contains\|starts\|equals, value, move? }` |
+| `POST /api/admin/albums/:id/rules` | Regel anlegen: `{ condition, move? }` (siehe unten) |
+| `PUT /api/admin/albums/:id/rules/:ruleId` | Regel ändern, gleicher Aufbau |
 | `DELETE /api/admin/albums/:id/rules/:ruleId` | Regel löschen |
-| `GET /api/admin/rules/preview?field=&op=&value=` | Wie viele und welche Titel eine Regel treffen würde |
+| `POST /api/admin/rules/preview` | `{ condition }`: wie viele und welche Titel eine Regel treffen würde |
+
+Eine `condition` ist entweder eine Bedingung `{ field: title|artist|album|genre|path, op: contains|not_contains|starts|equals, value }`
+oder eine Gruppe `{ match: "all" | "any", conditions: [...] }` (UND bzw. ODER, beliebig verschachtelt, bis zu 4 Ebenen
+und 30 Bedingungen). Statt `condition` geht für eine einzelne Bedingung auch `{ field, op, value }` direkt.
 | `GET /api/admin/track-albums?ids=1,2` | In welchen Alben die Titel stehen |
 
 ## Entwicklung
