@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { query } from '../src/api';
-import { formatDuration, formatTime, initials } from '../src/format';
+import { formatDuration, formatLongDate, formatMonth, formatShortDate, formatTime, initials } from '../src/format';
+import { folderSubtitle } from '../src/pages/Dates';
 import { match } from '../src/router';
 
 describe('Formatierung', () => {
@@ -16,6 +17,19 @@ describe('Formatierung', () => {
     expect(formatDuration(59)).toBe('1 Min.');
     expect(formatDuration(3600)).toBe('1 Std.');
     expect(formatDuration(4380)).toBe('1 Std. 13 Min.');
+  });
+
+  it('zeigt Datum mit Wochentag', () => {
+    expect(formatLongDate('2026-09-27')).toBe('Sonntag, 27. September 2026');
+    expect(formatMonth('2026-09-27')).toBe('September 2026');
+    expect(formatShortDate('2026-09-06')).toBe('Sonntag, 06.09.2026');
+  });
+
+  it('zeigt unter dem Datum den Rest des Ordnernamens', () => {
+    const folder = { folder: 'x', date: '2026-09-27', trackCount: 3, duration: 0, coverTrackId: null };
+    expect(folderSubtitle({ ...folder, name: '2026-09-27 Erntedank' })).toBe('Erntedank');
+    expect(folderSubtitle({ ...folder, name: 'GD 27.09.2026' })).toBe('GD');
+    expect(folderSubtitle({ ...folder, name: '2026-09-27' })).toBe('3 Titel');
   });
 
   it('bildet Initialen für Platzhalter', () => {
