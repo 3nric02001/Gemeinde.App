@@ -198,6 +198,18 @@ Die Datenbank liegt im Volume `gemeinde-data` (`/data` im Container). Die Biblio
 jeder Scan aus der Nextcloud neu auf, eigene Alben und Korrekturen aus der Verwaltung gibt es aber
 nur in dieser Datenbank: Das Volume gehört deshalb ins Backup.
 
+**Sicherung:** Die App sichert die Datenbank einmal am Tag nach `/data/backups/library-JJJJ-MM-TT.db`
+(konsistent per SQLite-Online-Backup, auch während sie läuft) und behält die letzten 14 Tage
+(`BACKUP_KEEP`). Diese Dateien gehören zusätzlich außerhalb des Servers gesichert, z. B. per
+`docker compose cp gemeinde-app:/data/backups ./backups` in einem nächtlichen Cronjob. Wiederherstellen:
+
+```bash
+docker compose stop gemeinde-app
+docker compose run --rm --no-deps --entrypoint sh gemeinde-app -c \
+  'cp /data/backups/library-2026-09-28.db /data/library.db && rm -f /data/library.db-wal /data/library.db-shm'
+docker compose up -d
+```
+
 **Im Internet** gehört ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor, und Port 3000 soll nur
 für ihn erreichbar sein. `docker-compose.yml` bindet den Port deshalb standardmäßig nur an
 `127.0.0.1` (Proxy auf demselben Server). Läuft der Proxy auf einem anderen Rechner, `APP_BIND` in der
@@ -220,6 +232,8 @@ Sperre nach Fehlversuchen umgehen.
 | `SCAN_INTERVAL_MINUTES` | `60` | Automatischer Scan, `0` = aus |
 | `SCAN_CONCURRENCY` | `4` | Parallele Zugriffe auf die Nextcloud beim Scan |
 | `DATABASE_PATH` | `/data/library.db` | Pfad der SQLite-Datei |
+| `BACKUP_DIR` | `/data/backups` | Ordner der täglichen Sicherungen (Standard: `backups` neben der Datenbank) |
+| `BACKUP_KEEP` | `14` | Wie viele tägliche Sicherungen bleiben, `0` = keine Sicherung |
 | `WEB_DIR` | `/app/public` | Ordner der gebauten Weboberfläche; fehlt er, läuft nur die API |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | Adresse des HTTP-Servers |
 | `LOG_LEVEL` | `info` | Log-Level (JSON-Logs) |

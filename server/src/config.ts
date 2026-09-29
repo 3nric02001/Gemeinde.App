@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path';
+
 export interface NextcloudConfig {
   /** Basis-URL der Nextcloud, z. B. https://cloud.example.org */
   url: string;
@@ -34,6 +36,10 @@ export interface Config {
   scanIntervalMinutes: number;
   /** Wie viele Dateien parallel aus der Nextcloud gelesen werden */
   scanConcurrency: number;
+  /** Ordner für die tägliche Sicherung der Datenbank */
+  backupDir: string;
+  /** Wie viele tägliche Sicherungen behalten werden, 0 schaltet sie ab */
+  backupKeep: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -109,11 +115,12 @@ function musicPaths(raw: string): string[] {
 }
 
 export function loadConfig(env: Env = process.env): Config {
+  const databasePath = env.DATABASE_PATH?.trim() || './data/library.db';
   return {
     host: env.HOST?.trim() || '0.0.0.0',
     port: integer(env, 'PORT', 3000, 1),
     logLevel: env.LOG_LEVEL?.trim() || 'info',
-    databasePath: env.DATABASE_PATH?.trim() || './data/library.db',
+    databasePath,
     // Ohne Leerzeichen/Zeilenende am Rand, die beim Bearbeiten der .env (z. B. unter Windows) mitrutschen.
     adminPassword: env.ADMIN_PASSWORD?.trim() || undefined,
     resetAdminPassword: ['1', 'true', 'ja', 'yes'].includes(env.RESET_ADMIN_PASSWORD?.trim().toLowerCase() ?? ''),
@@ -129,5 +136,7 @@ export function loadConfig(env: Env = process.env): Config {
     },
     scanIntervalMinutes: integer(env, 'SCAN_INTERVAL_MINUTES', 60),
     scanConcurrency: integer(env, 'SCAN_CONCURRENCY', 4, 1),
+    backupDir: env.BACKUP_DIR?.trim() || join(dirname(databasePath), 'backups'),
+    backupKeep: integer(env, 'BACKUP_KEEP', 14),
   };
 }
