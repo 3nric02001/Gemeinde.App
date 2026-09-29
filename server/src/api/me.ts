@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
+import { recordPlay } from '../library/popularity.js';
 import { listenerHome, listFavorites, listProgress, saveProgress, setFavorite, type FavoriteKind } from '../library/listener.js';
 
 const favoriteParams = {
@@ -49,6 +50,16 @@ export async function registerMeRoutes(app: FastifyInstance, { db }: { db: DB })
       if (!saveProgress(db, userId(request), request.params.id, position, duration)) {
         return reply.code(404).send({ error: 'Titel nicht gefunden' });
       }
+      return reply.code(204).send();
+    },
+  );
+
+  // Zählt eine Wiedergabe fürs verdeckte Scoring; der Player meldet sie, sobald genug gehört wurde.
+  app.post(
+    '/api/me/plays/:id',
+    { schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } } } },
+    async (request: FastifyRequest<{ Params: { id: number } }>, reply) => {
+      if (!recordPlay(db, userId(request), request.params.id)) return reply.code(404).send({ error: 'Titel nicht gefunden' });
       return reply.code(204).send();
     },
   );
