@@ -128,8 +128,13 @@ des lokalen Admins als scrypt-Hash. Nach zehn Fehlversuchen ist die Passwort-Anm
 
 ## So funktioniert es
 
-- Ein **Service-Account** in der Nextcloud (mit App-Passwort) liest genau den Ordner, der in
-  `NEXTCLOUD_MUSIC_PATH` steht, samt Unterordnern; alles andere im Account bleibt unberührt.
+- Ein **Service-Account** in der Nextcloud (mit App-Passwort) liest genau die Ordner, die in
+  `NEXTCLOUD_MUSIC_PATH` stehen, samt Unterordnern; alles andere im Account bleibt unberührt.
+  Mehrere Ordner trennst du durch Komma, Semikolon oder Zeilenumbruch, z. B.
+  `NEXTCLOUD_MUSIC_PATH=/Gemeinde/Musik, /Gemeinde/Predigten`. Kommt ein Ordner dazu oder fällt einer
+  weg, rechnet die App beim Start die gespeicherten Pfade um; eigene Alben, Korrekturen und Regeln
+  bleiben erhalten. Stell dabei den bisherigen Ordner an die erste Stelle.
+  Ordnernamen mit Komma oder Semikolon lassen sich deshalb nicht angeben.
   Ein mit dem Service-Account geteilter Ordner erscheint in dessen Dateien und kann direkt
   angegeben werden. Nutzer brauchen keinen Nextcloud-Zugang. Den genauen Pfad zeigt die
   Nextcloud-Weboberfläche des Service-Accounts in der Brotkrumen-Navigation.
@@ -176,7 +181,7 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `NEXTCLOUD_URL` | – | Basis-URL der Nextcloud |
 | `NEXTCLOUD_USER` | – | Service-Account |
 | `NEXTCLOUD_PASSWORD` | – | App-Passwort des Service-Accounts |
-| `NEXTCLOUD_MUSIC_PATH` | – (Pflicht) | Ordner, der gescannt wird, relativ zu den Dateien des Service-Accounts, z. B. `/Gemeinde/Medien/Musik`. Nur dieser Ordner und seine Unterordner kommen in die Bibliothek. |
+| `NEXTCLOUD_MUSIC_PATH` | – (Pflicht) | Ordner, die gescannt werden, relativ zu den Dateien des Service-Accounts, z. B. `/Gemeinde/Medien/Musik`. Mehrere durch Komma, Semikolon oder Zeilenumbruch getrennt. Nur diese Ordner und ihre Unterordner kommen in die Bibliothek. |
 | `ADMIN_PASSWORD` | – | Passwort des lokalen Admins `admin`; gilt nach jedem Neustart, bei dem es sich geändert hat. Ohne Angabe wird beim ersten Start eines erzeugt und geloggt |
 | `RESET_ADMIN_PASSWORD` | `false` | `true` setzt das Passwort des lokalen Admins bei jedem Start auf `ADMIN_PASSWORD` bzw. ein neu erzeugtes zurück |
 | `PUBLIC_URL` | – | Öffentliche Adresse, z. B. `https://musik.gemeinde.de`; ergibt die OIDC-Weiterleitungs-URL. Ohne Angabe aus der Anfrage (Reverse Proxy mit `X-Forwarded-Proto`/`-Host`) |

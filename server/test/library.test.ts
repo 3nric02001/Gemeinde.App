@@ -345,6 +345,6 @@ describe('Streaming und Admin', () => {
     expect(ok.statusCode).toBe(202);
     expect(ok.json()).toMatchObject({ started: true, status: { state: 'running' } });
     await ctx.scanner.scan();
-    expect(await get('/api/scan')).toMatchObject({ state: 'idle', lastSuccessAt: expect.any(String) });
+    expect(await get('/api/scan')).toMatchObject({ state: 'idle', lastSuccessAt: expect.any(String), folders: ['/Musik Bibliothek'] });
   });
 });

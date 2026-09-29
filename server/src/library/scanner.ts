@@ -4,7 +4,7 @@ import { setMeta, type DB } from '../db.js';
 import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextcloud/webdav.js';
 import { rebuildAlbums } from './albums.js';
 import { extractMetadata, tagSpan, type TrackMeta } from './metadata.js';
-import { coverRank, dirname, isAudioFile } from './pathMeta.js';
+import { basename, coverRank, dirname, isAudioFile } from './pathMeta.js';
 import { foldValue } from './text.js';
 
 /** So viel vom Dateianfang lesen wir zuerst für Tags; reicht für ID3v2, FLAC und Ogg ohne großes Cover. */
@@ -121,7 +121,8 @@ export class LibraryScanner {
     const files: RemoteEntry[] = [];
     const bestCover = new Map<string, { path: string; rank: number }>();
     const unreadable: string[] = [];
-    const queue = [''];
+    const roots = new Set(this.client.roots);
+    const queue = [...this.client.roots];
     while (queue.length > 0) {
       const batch = queue.splice(0, this.concurrency);
       await Promise.all(
@@ -130,10 +131,10 @@ export class LibraryScanner {
           try {
             entries = await this.client.list(dir);
           } catch (error) {
-            // Ohne Wurzelordner gibt es nichts abzugleichen; das ist ein echter Fehler.
-            if (dir === '') {
+            // Fehlt ein Musikordner, bricht der Scan ab, statt dessen Titel zu löschen.
+            if (roots.has(dir)) {
               if (error instanceof WebDavError && error.status === 404) {
-                throw new Error(`Musikordner nicht gefunden: ${this.client.musicPath || '/'} (NEXTCLOUD_MUSIC_PATH prüfen)`);
+                throw new Error(`Musikordner nicht gefunden: ${this.client.absolute(dir)} (NEXTCLOUD_MUSIC_PATH prüfen)`);
               }
               throw error;
             }
@@ -144,7 +145,8 @@ export class LibraryScanner {
           }
           for (const entry of entries) {
             if (entry.isDirectory) {
-              if (!entry.path.split('/').some((segment) => segment.startsWith('.'))) queue.push(entry.path);
+              // Versteckte Ordner (.trash, .git …) auslassen; ihre Eltern sind schon geprüft.
+              if (!basename(entry.path).startsWith('.')) queue.push(entry.path);
               continue;
             }
             if (isAudioFile(entry.path)) {

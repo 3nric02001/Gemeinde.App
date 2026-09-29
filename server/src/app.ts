@@ -6,6 +6,7 @@ import { OidcService } from './auth/oidc.js';
 import { ensureLocalAdmin } from './auth/users.js';
 import type { Config } from './config.js';
 import { openDatabase, type DB } from './db.js';
+import { relocateLibrary } from './library/relocate.js';
 import { LibraryScanner } from './library/scanner.js';
 import { NextcloudClient } from './nextcloud/webdav.js';
 import { registerWeb } from './web.js';
@@ -24,6 +25,7 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
   });
   const db = openDatabase(config.databasePath);
   const client = new NextcloudClient(config.nextcloud, options.fetch, options.requestTimeoutMs);
+  relocateLibrary(db, client.base, config.nextcloud.musicPaths, app.log);
   const scanner = new LibraryScanner(db, client, app.log, config.scanConcurrency);
 
   await ensureLocalAdmin(db, { password: config.adminPassword, reset: config.resetAdminPassword }, app.log);

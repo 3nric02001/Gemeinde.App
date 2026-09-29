@@ -16,6 +16,8 @@ export interface ScanStatus {
   lastError: string | null;
   /** Ende des letzten erfolgreichen Scans, auch über Neustarts hinweg */
   lastSuccessAt: string | null;
+  /** Gescannte Ordner in der Nextcloud */
+  folders: string[];
 }
 
 /** Wie oft der Stand abgefragt wird, solange ein Scan läuft */
@@ -60,8 +62,8 @@ export function ScanPanel() {
 
   const start = async () => {
     try {
-      const result = await adminRequest<{ status: Omit<ScanStatus, 'lastSuccessAt'> }>('POST', '/api/scan');
-      setStatus((prev) => ({ ...result.status, lastSuccessAt: prev?.lastSuccessAt ?? null }));
+      const result = await adminRequest<{ status: Omit<ScanStatus, 'lastSuccessAt' | 'folders'> }>('POST', '/api/scan');
+      setStatus((prev) => ({ ...result.status, lastSuccessAt: prev?.lastSuccessAt ?? null, folders: prev?.folders ?? [] }));
       setError(undefined);
     } catch (e) {
       setError((e as Error).message);
@@ -80,6 +82,11 @@ export function ScanPanel() {
             </p>
           )}
           {status && <p class="admin-hint">Zuletzt erfolgreich: {when(status.lastSuccessAt)}</p>}
+          {status && status.folders?.length > 0 && (
+            <p class="admin-hint scan-folders">
+              Ordner: {status.folders.join(' · ')}
+            </p>
+          )}
         </div>
         <button type="button" class="button-secondary" disabled={!status || running} onClick={() => void start()}>
           {running ? 'Scan läuft …' : 'Jetzt scannen'}

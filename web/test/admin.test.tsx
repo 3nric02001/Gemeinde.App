@@ -27,7 +27,7 @@ function mockApi() {
     const url = String(input);
     if (url.startsWith('/api/admin/albums')) return json(albums);
     if (url === '/api/scan') {
-      return json({ state: 'idle', filesSeen: 2, toRead: 0, read: 0, added: 0, updated: 0, removed: 0, failed: 0, lastError: null, lastSuccessAt: null });
+      return json({ state: 'idle', filesSeen: 2, toRead: 0, read: 0, added: 0, updated: 0, removed: 0, failed: 0, lastError: null, lastSuccessAt: null, folders: ['/Musik'] });
     }
     if (url === '/api/admin/users') {
       return json({ items: [{ id: 1, kind: 'local', username: 'admin', name: 'Administrator', email: null, role: 'admin', groups: [], disabled: false, lastLoginAt: null }] });
