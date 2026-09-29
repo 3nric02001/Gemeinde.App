@@ -9,6 +9,7 @@ import type { Config } from './config.js';
 import { openDatabase, type DB } from './db.js';
 import { relocateLibrary } from './library/relocate.js';
 import { LibraryScanner } from './library/scanner.js';
+import { CoverThumbnails } from './library/thumbnails.js';
 import { NextcloudClient } from './nextcloud/webdav.js';
 import { registerSecurityHeaders } from './http/security.js';
 import { registerWeb } from './web.js';
@@ -40,7 +41,7 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
   registerSecurityHeaders(app);
   // Zuerst: Der Zugriffsschutz muss vor allen API-Routen stehen.
   await registerAuth(app, { db, oidc, publicUrl: config.publicUrl });
-  await registerRoutes(app, { db, client, scanner });
+  await registerRoutes(app, { db, client, scanner, thumbnails: new CoverThumbnails(db, client, app.log) });
   await registerUserAdminRoutes(app, { db, oidc, publicUrl: config.publicUrl });
   app.get('/manifest.webmanifest', async (_request, reply) =>
     reply.type('application/manifest+json').header('cache-control', 'no-cache').send(manifest(getBranding(db))),

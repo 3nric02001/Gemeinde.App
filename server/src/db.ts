@@ -401,6 +401,19 @@ export const migrations: string[] = [
     DELETE FROM favorites WHERE kind = 'track' AND item_id = old.id;
   END;
   `,
+  `
+  -- ETag des Ordnerbilds, damit Vorschaubilder bei einer Änderung neu entstehen (füllt der nächste Scan).
+  ALTER TABLE folder_covers ADD COLUMN etag TEXT;
+  CREATE INDEX folder_covers_path ON folder_covers(path);
+  -- Verkleinerte Cover (WebP), je Quelle: "file:<Pfad>" für Ordnerbilder, "cover:<id>" für eingebettete.
+  -- version ist ETag bzw. Hash der Quelle; passt sie nicht mehr, wird neu gerechnet.
+  CREATE TABLE cover_thumbs (
+    source     TEXT PRIMARY KEY,
+    version    TEXT NOT NULL,
+    data       BLOB NOT NULL,
+    created_at INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

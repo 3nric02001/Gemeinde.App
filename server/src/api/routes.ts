@@ -4,6 +4,7 @@ import { getMeta, type DB } from '../db.js';
 import { categoryFilter, categoryValues, getCategory, listCategories } from '../library/categories.js';
 import { datedFolderTrackIds, listDatedFolders, withSermonInfo } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
+import type { CoverThumbnails } from '../library/thumbnails.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerMeRoutes } from './me.js';
@@ -27,6 +28,7 @@ export interface RouteDeps {
   db: DB;
   client: NextcloudClient;
   scanner: LibraryScanner;
+  thumbnails: CoverThumbnails;
 }
 
 const paging = {
@@ -106,6 +108,13 @@ async function sendCover(
   source: CoverSource | undefined,
 ): Promise<FastifyReply> {
   if (!source) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
+  const thumb = await deps.thumbnails.get(source);
+  if (thumb) {
+    reply.header('etag', thumb.etag).header('cache-control', 'private, max-age=86400');
+    if (request.headers['if-none-match'] === thumb.etag) return reply.code(304).send();
+    return reply.type('image/webp').send(thumb.data);
+  }
+  // Nicht verkleinerbar (z. B. sehr groß oder unbekanntes Format): das Original wie bisher.
   if ('path' in source) return proxyFile(deps, request, reply, source.path, null);
   const image = getCoverImage(deps.db, source.coverId);
   if (!image) return reply.code(404).send({ error: 'Kein Cover vorhanden' });

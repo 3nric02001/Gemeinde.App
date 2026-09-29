@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { InjectOptions } from 'fastify';
 import { buildApp, type AppContext } from '../src/app.js';
@@ -144,6 +145,62 @@ describe('Eingebettete Cover', () => {
     cloud.delete('Sampler/Mix/02.mp3');
     await ctx.scanner.scan();
     expect(ctx.db.prepare('SELECT count(*) AS n FROM covers').get()).toEqual({ n: 3 });
+  });
+});
+
+describe('Vorschaubilder', () => {
+  const photo = (width: number, height: number, format: 'png' | 'jpeg' = 'png') =>
+    sharp({ create: { width, height, channels: 3, background: '#3366aa' } })[format]().toBuffer();
+
+  it('verkleinert Ordnerbilder einmal und liefert sie danach aus dem Cache', async () => {
+    cloud.put('Foto/Gross/01.mp3', mp3({ title: 'Gross', artist: 'Foto', album: 'Gross' }));
+    cloud.put('Foto/Gross/cover.jpg', await photo(3000, 2000, 'jpeg'));
+    await ctx.scanner.scan();
+    const gross = await album('Gross');
+    const url = `/api/albums/${gross.id}/cover`;
+
+    const before = cloud.gets().length;
+    const first = await image(url);
+    expect(first.status).toBe(200);
+    expect(first.type).toBe('image/webp');
+    expect(await sharp(first.body).metadata()).toMatchObject({ format: 'webp', width: 640, height: 427 });
+    expect(cloud.gets().length).toBe(before + 1);
+
+    const again = await image(url);
+    expect(again.body.equals(first.body)).toBe(true);
+    expect(again.etag).toBe(first.etag);
+    expect(cloud.gets().length).toBe(before + 1);
+
+    // Neues Bild in der Nextcloud: neuer ETag nach dem Scan, neue Vorschau
+    cloud.put('Foto/Gross/cover.jpg', await photo(800, 800, 'jpeg'));
+    await ctx.scanner.scan();
+    const changed = await image(url);
+    expect(changed.etag).not.toBe(first.etag);
+    expect(await sharp(changed.body).metadata()).toMatchObject({ width: 640, height: 640 });
+  });
+
+  it('öffnet Ordnerbilder nur als Rasterbild, auch wenn ein SVG .jpg heißt', async () => {
+    cloud.put('Foto/Falsch/01.mp3', mp3({ title: 'Falsch', artist: 'Foto', album: 'Falsch' }));
+    cloud.put('Foto/Falsch/cover.jpg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900"><rect width="900" height="900"/></svg>'));
+    await ctx.scanner.scan();
+    const res = await inject({ method: 'GET', url: `/api/albums/${(await album('Falsch')).id}/cover` });
+    expect(res.headers['content-type']).not.toBe('image/webp');
+    expect(res.headers['content-security-policy']).toContain('sandbox');
+    expect(ctx.db.prepare('SELECT count(*) AS n FROM cover_thumbs').get()).toEqual({ n: 0 });
+  });
+
+  it('verkleinert eingebettete Bilder und räumt Vorschauen verschwundener Bilder auf', async () => {
+    cloud.put('Foto/Tag/01.mp3', mp3({ title: 'Tag', artist: 'Foto', album: 'Tag', picture: { data: await photo(1200, 1200), mime: 'image/png' } }));
+    await ctx.scanner.scan();
+    const tag = await album('Tag');
+    const cover = await image(`/api/tracks/${tag.tracks[0]!.id}/cover`);
+    expect(cover.type).toBe('image/webp');
+    expect(await sharp(cover.body).metadata()).toMatchObject({ width: 640, height: 640 });
+    expect(ctx.db.prepare('SELECT count(*) AS n FROM cover_thumbs').get()).toEqual({ n: 1 });
+
+    cloud.delete('Foto/Tag/01.mp3');
+    await ctx.scanner.scan();
+    expect(ctx.db.prepare('SELECT count(*) AS n FROM cover_thumbs').get()).toEqual({ n: 0 });
   });
 });
 

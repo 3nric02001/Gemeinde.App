@@ -180,7 +180,12 @@ kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
   `folder.jpg`, `front.jpg` o. ä. im Albumordner, sonst das in die Dateien eingebettete Bild.
 - **Titelbilder**: In MP3 (ID3) und FLAC eingebettete Cover werden beim Scan gelesen und in der
   Datenbank abgelegt (gleiche Bilder nur einmal). Jeder Titel zeigt sein eigenes Bild, ohne eigenes
-  Bild das Albumcover. Große Tag-Blöcke werden dafür bis 8 MB nachgeladen.
+  Bild das Albumcover. Große Tag-Blöcke werden dafür bis 8 MB nachgeladen. Nur JPEG, PNG, WebP und
+  GIF zählen als Cover (ein SVG könnte Skripte enthalten).
+- **Vorschaubilder**: Ordnerbilder und eingebettete Cover rechnet der Server beim ersten Abruf auf
+  höchstens 640 px als WebP herunter und legt sie in der Datenbank ab; danach fragt eine
+  Albenübersicht die Nextcloud nicht mehr. Ändert sich ein Bild, entsteht nach dem nächsten Scan eine
+  neue Vorschau. Lässt sich ein Bild nicht verkleinern, wird das Original gezeigt.
 - **Suche und Filter**: Volltextsuche mit Präfix und ohne Rücksicht auf Umlaute/Akzente (SQLite FTS5),
   Filter nach Interpret, Genre, Jahr und Jahrzehnt.
 - **Streaming** läuft über den Server mit Range-Unterstützung (Spulen im Browser), die

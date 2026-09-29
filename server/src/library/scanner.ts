@@ -40,6 +40,11 @@ export interface ScanStatus {
   lastError: string | null;
 }
 
+interface FolderCover {
+  path: string;
+  etag: string;
+}
+
 interface ScanResult {
   entry: RemoteEntry;
   meta: TrackMeta;
@@ -132,9 +137,9 @@ export class LibraryScanner {
     return this.getStatus();
   }
 
-  private async walk(): Promise<{ files: RemoteEntry[]; covers: Map<string, string>; unreadable: string[] }> {
+  private async walk(): Promise<{ files: RemoteEntry[]; covers: Map<string, FolderCover>; unreadable: string[] }> {
     const files: RemoteEntry[] = [];
-    const bestCover = new Map<string, { path: string; rank: number }>();
+    const bestCover = new Map<string, FolderCover & { rank: number }>();
     const unreadable: string[] = [];
     const roots = new Set(this.client.roots);
     const queue = [...this.client.roots];
@@ -173,13 +178,13 @@ export class LibraryScanner {
             const folder = dirname(entry.path);
             const known = bestCover.get(folder);
             if (!known || rank < known.rank || (rank === known.rank && entry.path < known.path)) {
-              bestCover.set(folder, { path: entry.path, rank });
+              bestCover.set(folder, { path: entry.path, etag: entry.etag, rank });
             }
           }
         }),
       );
     }
-    const covers = new Map([...bestCover].map(([folder, { path }]) => [folder, path]));
+    const covers = new Map([...bestCover].map(([folder, { path, etag }]) => [folder, { path, etag }]));
     return { files, covers, unreadable };
   }
 
@@ -300,19 +305,26 @@ export class LibraryScanner {
 
     this.saveCovers(covers, keepCovers);
     rebuildAlbums(this.db);
-    // Bilder, auf die kein Titel mehr zeigt, wegräumen.
+    // Bilder, auf die kein Titel mehr zeigt, wegräumen, ebenso Vorschaubilder verschwundener Quellen.
     this.db.prepare('DELETE FROM covers WHERE id NOT IN (SELECT cover_id FROM tracks WHERE cover_id IS NOT NULL)').run();
+    this.db
+      .prepare(
+        `DELETE FROM cover_thumbs WHERE source NOT IN (SELECT 'file:' || path FROM folder_covers)
+           AND source NOT IN (SELECT 'cover:' || id FROM covers)`,
+      )
+      .run();
   }
 
-  private saveCovers(covers: Map<string, string>, isUnderUnreadable: (path: string) => boolean): void {
+  private saveCovers(covers: Map<string, FolderCover>, isUnderUnreadable: (path: string) => boolean): void {
     const upsert = this.db.prepare(
-      'INSERT INTO folder_covers (folder, path) VALUES (?, ?) ON CONFLICT(folder) DO UPDATE SET path = excluded.path',
+      `INSERT INTO folder_covers (folder, path, etag) VALUES (?, ?, ?)
+       ON CONFLICT(folder) DO UPDATE SET path = excluded.path, etag = excluded.etag`,
     );
     const remove = this.db.prepare('DELETE FROM folder_covers WHERE folder = ?');
     const known = this.db.prepare('SELECT folder, path FROM folder_covers').all() as Array<{ folder: string; path: string }>;
     this.db.transaction(() => {
       for (const { folder, path } of known) if (!covers.has(folder) && !isUnderUnreadable(path)) remove.run(folder);
-      for (const [folder, path] of covers) upsert.run(folder, path);
+      for (const [folder, { path, etag }] of covers) upsert.run(folder, path, etag || null);
     })();
   }
 
