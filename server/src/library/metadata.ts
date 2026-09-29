@@ -32,6 +32,20 @@ const SKIPPED_TAGS = new Set([
   'waveformatextensible', 'notes', 'averagelevel', 'peaklevel', 'podcast', 'podcasturl', 'podcastid', 'podcastkeywords',
 ]);
 const MAX_TAG_VALUE = 200;
+
+/** Eigene Felder, aus denen der Sprecher einer Predigt kommt (Name klein geschrieben) */
+export const SPEAKER_TAGS = ['sprecher', 'speaker', 'prediger', 'predigerin', 'referent', 'referentin'];
+/** Eigene Felder mit der Bibelstelle einer Predigt */
+export const PASSAGE_TAGS = ['bibelstelle', 'bibeltext', 'predigttext', 'scripture', 'passage'];
+
+/**
+ * Text für die Suche aus allen Feldern außer denen, die schon in eigenen Spalten stehen
+ * (Titel, Interpret, Album, Genre, Jahr): so findet "Meier" auch den Sprecher.
+ */
+export function searchExtra(tags: Array<[string, string]>): string | null {
+  const values = tags.filter(([tag]) => !CORE_TAGS.has(tag)).map(([, value]) => value);
+  return values.length ? values.join(' ') : null;
+}
 const MAX_TAGS = 60;
 
 /** Mehrfachwerte ("Lobpreis; Chor") aufteilen, leere und überlange verwerfen */

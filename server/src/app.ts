@@ -3,6 +3,7 @@ import { registerAuth } from './api/auth.js';
 import { registerRoutes } from './api/routes.js';
 import { registerUserAdminRoutes } from './api/users.js';
 import { OidcService } from './auth/oidc.js';
+import { getBranding, manifest } from './branding.js';
 import { ensureLocalAdmin } from './auth/users.js';
 import type { Config } from './config.js';
 import { openDatabase, type DB } from './db.js';
@@ -35,6 +36,9 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
   await registerAuth(app, { db, oidc, publicUrl: config.publicUrl });
   await registerRoutes(app, { db, client, scanner });
   await registerUserAdminRoutes(app, { db, oidc, publicUrl: config.publicUrl });
+  app.get('/manifest.webmanifest', async (_request, reply) =>
+    reply.type('application/manifest+json').header('cache-control', 'no-cache').send(manifest(getBranding(db))),
+  );
   if (!(await registerWeb(app, config.webDir))) {
     app.log.info({ webDir: config.webDir }, 'Keine Weboberfläche gefunden, nur die API ist erreichbar');
   }

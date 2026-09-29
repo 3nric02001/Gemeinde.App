@@ -1,5 +1,6 @@
 import type { DB } from '../db.js';
 import type { CategoryFilter } from './categories.js';
+import { SPEAKER_TAGS } from './metadata.js';
 
 export interface Page<T> {
   items: T[];
@@ -21,17 +22,22 @@ export interface TrackFilter {
   offset: number;
 }
 
+export const ALBUM_SORTS = ['title', 'artist', 'year', 'recent', 'date'] as const;
+export type AlbumSort = (typeof ALBUM_SORTS)[number];
+
 export interface AlbumFilter {
   q?: string;
   artist?: string;
   genre?: string;
   year?: number;
   decade?: number;
-  sort: 'title' | 'artist' | 'year' | 'recent';
+  sort: AlbumSort;
   /** Nur für den Admin-Bereich: ausgeblendete Alben mitliefern */
   includeHidden?: boolean;
   kind?: 'auto' | 'manual';
   category?: CategoryFilter;
+  /** Nur diese Alben (z. B. Favoriten) */
+  ids?: number[];
   limit: number;
   offset: number;
 }
@@ -40,13 +46,16 @@ const TRACK_COLUMNS = `
   t.id, t.title, t.artist, t.album_artist AS albumArtist,
   coalesce((SELECT title FROM albums WHERE id = t.album_id), t.album) AS album, t.album_id AS albumId,
   t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType,
+  (SELECT date FROM albums WHERE id = t.album_id) AS albumDate,
+  (SELECT value FROM track_tags WHERE track_id = t.id AND tag IN (${SPEAKER_TAGS.map((tag) => `'${tag}'`).join(', ')}) LIMIT 1) AS speaker,
   (t.cover_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
   )) AS hasCover
 `;
 const ALBUM_COLUMNS = `
   a.id, a.title, a.artist, a.year, a.genre, a.track_count AS trackCount, a.duration,
-  (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover, a.kind
+  (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover, a.kind,
+  a.date, a.speaker, a.passage, a.description
 `;
 
 /**
@@ -125,18 +134,21 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
   const items = db
     .prepare(
       `SELECT ${TRACK_COLUMNS} FROM tracks t ${sql(where)}
-       ORDER BY t.artist COLLATE NOCASE, t.album COLLATE NOCASE, t.disc_no, t.track_no, t.title COLLATE NOCASE
+       ORDER BY ${fts ? 'albumDate DESC NULLS LAST, ' : ''}t.artist COLLATE NOCASE, t.album COLLATE NOCASE, t.disc_no, t.track_no, t.title COLLATE NOCASE
        LIMIT @limit OFFSET @offset`,
     )
     .all({ ...where.params, limit: filter.limit, offset: filter.offset }) as Array<{ hasCover: number }>;
   return { items: items.map(coerceHasCover), total, limit: filter.limit, offset: filter.offset };
 }
 
-const ALBUM_SORT: Record<AlbumFilter['sort'], string> = {
+const ALBUM_SORT: Record<AlbumSort, string> = {
   title: 'a.title COLLATE NOCASE',
   artist: 'a.artist COLLATE NOCASE, a.year, a.title COLLATE NOCASE',
-  year: 'a.year IS NULL, a.year DESC, a.title COLLATE NOCASE',
-  recent: 'a.created_at DESC, a.id DESC',
+  // Innerhalb eines Jahres Gottesdienste nach Datum, neueste zuerst
+  year: 'a.year IS NULL, a.year DESC, a.date DESC NULLS LAST, a.title COLLATE NOCASE',
+  recent: 'a.created_at DESC, a.date DESC NULLS LAST, a.id DESC',
+  // Alben mit Datum im Ordnernamen zuerst (neueste oben), danach der Rest nach Interpret
+  date: 'a.date DESC NULLS LAST, a.artist COLLATE NOCASE, a.year, a.title COLLATE NOCASE',
 };
 
 export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, unknown>> {
@@ -159,6 +171,10 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
     where.params.artist = filter.artist;
   }
   if (!filter.includeHidden) where.clauses.push('a.hidden = 0');
+  if (filter.ids) {
+    where.clauses.push('a.id IN (SELECT value FROM json_each(@ids))');
+    where.params.ids = JSON.stringify(filter.ids);
+  }
   if (filter.kind) {
     where.clauses.push('a.kind = @kind');
     where.params.kind = filter.kind;

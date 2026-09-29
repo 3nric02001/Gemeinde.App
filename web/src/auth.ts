@@ -16,6 +16,13 @@ export interface AuthState {
   oidc: { label: string } | null;
   /** Hinweis für die Anmeldeseite, z. B. nach abgelaufener Sitzung */
   notice?: string;
+  /** Name der Gemeinde und Begrüßung, in der Verwaltung einstellbar */
+  branding: Branding;
+}
+
+export interface Branding {
+  name: string;
+  welcome: string;
 }
 
 const ORDER: Role[] = ['listener', 'manager', 'admin'];
@@ -24,7 +31,7 @@ export const hasRole = (user: CurrentUser | null | undefined, role: Role) =>
 
 export const ROLE_LABELS: Record<Role, string> = { listener: 'Hörer', manager: 'Manager', admin: 'Admin' };
 
-let state: AuthState = { user: undefined, oidc: null };
+let state: AuthState = { user: undefined, oidc: null, branding: { name: 'Gemeinde.App', welcome: '' } };
 const listeners = new Set<() => void>();
 
 function set(next: Partial<AuthState>): void {
@@ -40,8 +47,9 @@ export async function loadAuth(): Promise<void> {
   try {
     const res = await fetch('/api/auth/status', { headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`Fehler ${res.status}`);
-    const data = (await res.json()) as { user: CurrentUser | null; oidc: { label: string } | null };
-    set({ user: data.user, oidc: data.oidc });
+    const data = (await res.json()) as { user: CurrentUser | null; oidc: { label: string } | null; branding?: Branding };
+    set({ user: data.user, oidc: data.oidc, ...(data.branding ? { branding: data.branding } : {}) });
+    document.title = state.branding.name;
   } catch {
     set({ user: null, notice: 'Der Server ist gerade nicht erreichbar.' });
   }
@@ -72,6 +80,12 @@ export async function logout(): Promise<void> {
 export function loginOidc(): void {
   const returnTo = window.location.pathname + window.location.search;
   window.location.assign(`/api/auth/oidc/start?returnTo=${encodeURIComponent(returnTo)}`);
+}
+
+/** Nach einer Änderung in der Verwaltung sofort überall den neuen Namen zeigen */
+export function setBranding(branding: Branding): void {
+  set({ branding });
+  document.title = branding.name;
 }
 
 export function useAuth(): AuthState {

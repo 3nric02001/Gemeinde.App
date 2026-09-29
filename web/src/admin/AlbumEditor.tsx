@@ -296,33 +296,41 @@ export function AlbumEditor({ id, onError }: Props) {
   );
 }
 
+const TEXT_FIELDS = ['title', 'artist', 'genre', 'speaker', 'passage', 'description'] as const;
+
 function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: boolean; onSave: (fields: Partial<AlbumFields>) => void }) {
   const initial = () => ({
     title: album.title,
     artist: album.artist,
     year: album.year ? String(album.year) : '',
     genre: album.genre ?? '',
+    speaker: album.speaker ?? '',
+    passage: album.passage ?? '',
+    description: album.description ?? '',
   });
   const [form, setForm] = useState(initial);
   useEffect(() => setForm(initial()), [album]);
 
   // Nur geänderte Felder senden: Was nicht angefasst wird, bleibt automatisch.
   const changes: Partial<AlbumFields> = {};
-  if (form.title.trim() !== album.title) changes.title = form.title.trim() || null;
-  if (form.artist.trim() !== album.artist) changes.artist = form.artist.trim() || null;
+  for (const name of TEXT_FIELDS) {
+    if (form[name].trim() !== (album[name] ?? '')) changes[name] = form[name].trim() || null;
+  }
   if (form.year.trim() !== (album.year ? String(album.year) : '')) changes.year = form.year.trim() ? Number(form.year) : null;
-  if (form.genre.trim() !== (album.genre ?? '')) changes.genre = form.genre.trim() || null;
   const yearValid = !form.year.trim() || /^\d{4}$/.test(form.year.trim());
   const dirty = Object.keys(changes).length > 0;
   const overridden = Object.values(album.overrides).some((value) => value !== null);
   const manual = album.kind === 'manual';
 
-  const field = (name: keyof typeof form, label: string, props: Record<string, unknown> = {}) => (
+  const label = (name: keyof typeof form, text: string) => (
+    <span>
+      {text}
+      {!manual && album.overrides[name] !== null && <em> · angepasst</em>}
+    </span>
+  );
+  const field = (name: keyof typeof form, text: string, props: Record<string, unknown> = {}) => (
     <label class="field">
-      <span>
-        {label}
-        {!manual && album.overrides[name] !== null && <em> · angepasst</em>}
-      </span>
+      {label(name, text)}
       <input
         value={form[name]}
         onInput={(e) => setForm({ ...form, [name]: (e.target as HTMLInputElement).value })}
@@ -333,7 +341,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
 
   return (
     <form
-      class="admin-panel admin-form"
+      class="admin-panel admin-form admin-form-wide"
       onSubmit={(e) => {
         e.preventDefault();
         if (dirty && yearValid) onSave(changes);
@@ -344,7 +352,19 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
         {field('artist', 'Interpret', { maxLength: 200, placeholder: 'Automatisch aus den Titeln' })}
         {field('year', 'Jahr', { inputMode: 'numeric', maxLength: 4, placeholder: 'Automatisch' })}
         {field('genre', 'Genre', { maxLength: 100, placeholder: 'Automatisch' })}
+        {field('speaker', 'Sprecher', { maxLength: 200, placeholder: 'Aus dem Tag „Sprecher“' })}
+        {field('passage', 'Bibelstelle', { maxLength: 200, placeholder: 'z. B. Psalm 23' })}
       </div>
+      <label class="field">
+        {label('description', 'Beschreibung für Hörer')}
+        <textarea
+          rows={3}
+          maxLength={2000}
+          value={form.description}
+          placeholder="Ein, zwei Sätze zum Gottesdienst oder zur Predigt"
+          onInput={(e) => setForm({ ...form, description: (e.target as HTMLTextAreaElement).value })}
+        />
+      </label>
       <div class="actions">
         <button type="submit" class="button-primary" disabled={busy || !dirty || !yearValid}>
           Speichern
@@ -359,7 +379,9 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
             type="button"
             class="button-secondary"
             disabled={busy}
-            onClick={() => onSave({ title: null, artist: null, year: null, genre: null })}
+            onClick={() =>
+              onSave({ title: null, artist: null, year: null, genre: null, speaker: null, passage: null, description: null })
+            }
           >
             Automatische Werte wiederherstellen
           </button>

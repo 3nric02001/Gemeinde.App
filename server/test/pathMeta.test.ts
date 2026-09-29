@@ -25,6 +25,11 @@ describe('parsePath', () => {
     });
   });
 
+  it('lässt ein Datum im Ordnernamen stehen, trennt aber "1999 - Album"', () => {
+    expect(parsePath('Gottesdienste/2026/2026-09-27 Erntedank/01 Predigt.mp3').album).toBe('2026-09-27 Erntedank');
+    expect(parsePath('Chor/1999 - Konzert/01 Lied.mp3')).toMatchObject({ album: 'Konzert', year: 1999 });
+  });
+
   it('erkennt "Interpret - Album" als Ordnername und Disc-Track im Dateinamen', () => {
     expect(parsePath('Lobpreis/Hillsong - Let There Be Light/1-04 What a Beautiful Name.mp3')).toMatchObject({
       artist: 'Hillsong',

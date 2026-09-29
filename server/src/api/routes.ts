@@ -2,10 +2,11 @@ import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
 import { categoryFilter, categoryValues, getCategory, listCategories } from '../library/categories.js';
-import { datedFolderTrackIds, listDatedFolders } from '../library/dates.js';
+import { datedFolderTrackIds, listDatedFolders, withSermonInfo } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
 import { registerAdminRoutes } from './admin.js';
+import { registerMeRoutes } from './me.js';
 import {
   getAlbum,
   getAlbumCover,
@@ -17,6 +18,7 @@ import {
   listArtists,
   searchAlbums,
   searchTracks,
+  ALBUM_SORTS,
   type AlbumFilter,
   type CoverSource,
 } from '../library/queries.js';
@@ -146,7 +148,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
           properties: {
             ...filters,
             ...paging,
-            sort: { type: 'string', enum: ['title', 'artist', 'year', 'recent'], default: 'artist' },
+            sort: { type: 'string', enum: ALBUM_SORTS, default: 'artist' },
           },
           additionalProperties: false,
         },
@@ -234,7 +236,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     async (request) => {
       const { limit, offset } = request.query as { limit: number; offset: number };
       const folders = listDatedFolders(db);
-      return { items: folders.slice(offset, offset + limit), total: folders.length, limit, offset };
+      return { items: withSermonInfo(db, folders.slice(offset, offset + limit)), total: folders.length, limit, offset };
     },
   );
 
@@ -254,7 +256,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
       const { path } = request.query as { path: string };
       const folder = listDatedFolders(db).find((f) => f.folder === path);
       if (!folder) return reply.code(404).send({ error: 'Ordner nicht gefunden' });
-      return { ...folder, tracks: getTracksByIds(db, datedFolderTrackIds(db, folder.folder)) };
+      return { ...withSermonInfo(db, [folder])[0], tracks: getTracksByIds(db, datedFolderTrackIds(db, folder.folder)) };
     },
   );
 
@@ -273,4 +275,5 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   });
 
   await registerAdminRoutes(app, { db });
+  await registerMeRoutes(app, { db });
 }

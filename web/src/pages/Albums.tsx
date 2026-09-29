@@ -11,6 +11,7 @@ const SORTS = [
   ['artist', 'Interpret'],
   ['title', 'Titel'],
   ['year', 'Jahr'],
+  ['date', 'Datum (Gottesdienste zuerst)'],
   ['recent', 'Neu hinzugefügt'],
 ] as const;
 

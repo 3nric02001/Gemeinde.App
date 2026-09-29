@@ -12,6 +12,29 @@ export interface DatedFolder {
   duration: number;
   /** Titel, dessen Bild als Cover dient (Titelbild oder Albumcover) */
   coverTrackId: number | null;
+  /** Album des ersten Titels; liefert Sprecher, Bibelstelle und Beschreibung */
+  albumId: number | null;
+}
+
+export interface SermonInfo {
+  speaker: string | null;
+  passage: string | null;
+  description: string | null;
+}
+
+/** Sprecher, Bibelstelle und Beschreibung aus dem zugehörigen Album (Tags oder Verwaltung), zur Anfragezeit gelesen. */
+export function withSermonInfo<T extends DatedFolder>(db: DB, folders: T[]): Array<T & SermonInfo> {
+  const ids = folders.map((f) => f.albumId).filter((id): id is number => id !== null);
+  const rows = ids.length
+    ? (db
+        .prepare('SELECT id, speaker, passage, description FROM albums WHERE id IN (SELECT value FROM json_each(?))')
+        .all(JSON.stringify(ids)) as Array<SermonInfo & { id: number }>)
+    : [];
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return folders.map((folder) => {
+    const info = folder.albumId !== null ? byId.get(folder.albumId) : undefined;
+    return { ...folder, speaker: info?.speaker ?? null, passage: info?.passage ?? null, description: info?.description ?? null };
+  });
 }
 
 const MONTHS: Record<string, number> = {
@@ -66,12 +89,12 @@ export function listDatedFolders(db: DB): DatedFolder[] {
 
   const rows = db
     .prepare(
-      `SELECT t.id, t.path, t.duration,
+      `SELECT t.id, t.path, t.duration, t.album_id,
               (t.cover_id IS NOT NULL OR a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover
        FROM tracks t LEFT JOIN albums a ON a.id = t.album_id
        ORDER BY coalesce(t.disc_no, 1), t.track_no IS NULL, t.track_no, t.path`,
     )
-    .all() as Array<{ id: number; path: string; duration: number | null; hasCover: number }>;
+    .all() as Array<{ id: number; path: string; duration: number | null; hasCover: number; album_id: number | null }>;
 
   const byFolder = new Map<string, DatedFolder>();
   for (const row of rows) {
@@ -80,10 +103,11 @@ export function listDatedFolders(db: DB): DatedFolder[] {
     if (!entry) {
       const date = parseFolderDate(basename(folder));
       if (!date) continue;
-      entry = { folder, name: basename(folder), date, trackCount: 0, duration: 0, coverTrackId: null };
+      entry = { folder, name: basename(folder), date, trackCount: 0, duration: 0, coverTrackId: null, albumId: row.album_id };
       byFolder.set(folder, entry);
     }
     entry.trackCount++;
+    entry.albumId ??= row.album_id;
     entry.duration += row.duration ?? 0;
     if (entry.coverTrackId === null && row.hasCover) entry.coverTrackId = row.id;
   }

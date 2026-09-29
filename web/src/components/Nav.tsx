@@ -3,25 +3,44 @@ import { useCategories } from '../hooks';
 import { hasRole, logout, ROLE_LABELS, useAuth } from '../auth';
 import { Icon, type IconName } from './Icon';
 
-const items: Array<{ href: string; label: string; icon: IconName; match: (path: string) => boolean }> = [
-  { href: '/', label: 'Start', icon: 'home', match: (p) => p === '/' },
-  { href: '/suche', label: 'Suche', icon: 'search', match: (p) => p.startsWith('/suche') },
-  { href: '/alben', label: 'Alben', icon: 'albums', match: (p) => p.startsWith('/alben') || p.startsWith('/album/') },
-  { href: '/datum', label: 'Datum', icon: 'calendar', match: (p) => p.startsWith('/datum') },
+type NavItem = { href: string; label: string; icon: IconName; match: (path: string) => boolean };
+
+const start: NavItem = { href: '/', label: 'Start', icon: 'home', match: (p) => p === '/' };
+const search: NavItem = { href: '/suche', label: 'Suche', icon: 'search', match: (p) => p.startsWith('/suche') };
+const albums: NavItem = { href: '/alben', label: 'Alben', icon: 'albums', match: (p) => p.startsWith('/alben') || p.startsWith('/album/') };
+const dates: NavItem = { href: '/datum', label: 'Datum', icon: 'calendar', match: (p) => p.startsWith('/datum') };
+
+/** Seitenleiste am Rechner: Platz für alles */
+const items: NavItem[] = [
+  start,
+  search,
+  albums,
+  dates,
   { href: '/titel', label: 'Titel', icon: 'tracks', match: (p) => p.startsWith('/titel') },
+  { href: '/favoriten', label: 'Favoriten', icon: 'heart', match: (p) => p.startsWith('/favoriten') },
+];
+
+/** Tab-Leiste auf dem Handy: die vier wichtigsten Ziele, der Rest unter "Mehr" */
+const MORE_PATHS = ['/mehr', '/titel', '/favoriten', '/interpret', '/kategorie', '/warteschlange', '/admin'];
+const tabs: NavItem[] = [
+  start,
+  search,
+  dates,
+  albums,
+  { href: '/mehr', label: 'Mehr', icon: 'menu', match: (p) => MORE_PATHS.some((prefix) => p.startsWith(prefix)) },
 ];
 
 export function Sidebar({ path }: { path: string }) {
   // Eigene Kategorien aus der Verwaltung stehen nach den festen Einträgen.
   const categories = useCategories(path).filter((c) => c.inNav);
-  const { user } = useAuth();
+  const { user, branding } = useAuth();
   return (
     <nav class="sidebar" aria-label="Hauptnavigation">
       <a class="brand" href="/">
         <span class="brand-mark">
           <Icon name="cross" size={18} />
         </span>
-        <span>Gemeinde.App</span>
+        <span>{branding.name}</span>
       </a>
       <ul>
         {items.map((item) => (
@@ -53,6 +72,16 @@ export function Sidebar({ path }: { path: string }) {
           </a>
         )}
         {user && (
+          <a
+            class={`sidebar-admin${path === '/mehr' ? ' is-active' : ''}`}
+            href="/mehr"
+            title={`${user.name} (${ROLE_LABELS[user.role]}): Schriftgröße, App installieren`}
+          >
+            <Icon name="user" size={20} />
+            <span>{user.name}</span>
+          </a>
+        )}
+        {user && (
           <button type="button" class="sidebar-admin" onClick={() => void logout()} title={`${user.name} (${ROLE_LABELS[user.role]})`}>
             <Icon name="logout" size={20} />
             <span>Abmelden</span>
@@ -67,7 +96,7 @@ export function Sidebar({ path }: { path: string }) {
 export function TabBar({ path }: { path: string }) {
   return (
     <nav class="tabbar" aria-label="Hauptnavigation">
-      {items.map((item) => (
+      {tabs.map((item) => (
         <a key={item.href} href={item.href} class={item.match(path) ? 'is-active' : ''} aria-current={item.match(path) ? 'page' : undefined}>
           <Icon name={item.icon} size={22} />
           <span>{item.label}</span>

@@ -1,6 +1,6 @@
 import type { FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { ROLE_LABELS, useAuth, type Role } from '../auth';
+import { ROLE_LABELS, setBranding, useAuth, type Branding, type Role } from '../auth';
 import { Empty, ErrorNote, Loading } from '../pages/common';
 import { adminRequest } from './api';
 
@@ -286,9 +286,74 @@ function LoginAdmin() {
   return (
     <>
       <h1 class="page-title">Anmeldung</h1>
+      <BrandingSettings />
       <OidcSettings />
       {user?.kind === 'local' && <PasswordForm />}
     </>
+  );
+}
+
+/** Name der Gemeinde und Begrüßung auf der Anmeldeseite */
+function BrandingSettings() {
+  const [data, error, setData] = useLoad<Branding>('/api/admin/branding');
+  const [form, setForm] = useState<Branding | undefined>();
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | undefined>();
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setForm(data), [data]);
+
+  if (error) return <ErrorNote message={error} />;
+  if (!form) return <Loading />;
+
+  const submit = async (event: Event) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const saved = await adminRequest<Branding>('PUT', '/api/admin/branding', form);
+      setData(saved);
+      setBranding(saved);
+      setMessage({ text: 'Gespeichert.', ok: true });
+    } catch (e) {
+      setMessage({ text: (e as Error).message, ok: false });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form class="admin-panel admin-form" onSubmit={submit}>
+      <h2>Name und Begrüßung</h2>
+      <p class="admin-hint">Erscheinen auf der Anmeldeseite, in der Seitenleiste und im Browser-Tab.</p>
+      <label class="field">
+        <span>Name</span>
+        <input
+          maxLength={60}
+          placeholder="Gemeinde.App"
+          value={form.name}
+          onInput={(e) => setForm({ ...form, name: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+      <label class="field">
+        <span>
+          Begrüßung <em>(ein Satz unter „Anmelden“)</em>
+        </span>
+        <input
+          maxLength={300}
+          placeholder="Predigten und Musik unserer Gemeinde"
+          value={form.welcome}
+          onInput={(e) => setForm({ ...form, welcome: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+      {message && (
+        <p class={message.ok ? 'admin-ok' : 'admin-error'} role="status">
+          {message.text}
+        </p>
+      )}
+      <div class="actions">
+        <button type="submit" class="button-primary" disabled={busy}>
+          Speichern
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -385,6 +450,10 @@ function OidcSettings() {
         <span>Beschriftung des Anmeldeknopfs</span>
         <input {...field('label')} />
       </label>
+      <p class="admin-hint">
+        Solange das Gemeinde-Konto eingeschaltet ist, zeigt die Anmeldeseite den lokalen Admin nicht mehr an. Er bleibt über{' '}
+        <code class="admin-copy">/?admin</code> erreichbar.
+      </p>
       {message && (
         <p class={message.ok ? 'admin-ok' : 'admin-error'} role="status">
           {message.text}

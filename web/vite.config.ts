@@ -5,7 +5,10 @@ export default defineConfig({
   plugins: [preact()],
   server: {
     // Im Entwicklungsmodus läuft die API getrennt (cd server && npm run dev).
-    proxy: { '/api': process.env.API_URL ?? 'http://localhost:3000' },
+    proxy: {
+      '/api': process.env.API_URL ?? 'http://localhost:3000',
+      '/manifest.webmanifest': process.env.API_URL ?? 'http://localhost:3000',
+    },
   },
   build: { outDir: 'dist', assetsDir: 'assets' },
   test: {

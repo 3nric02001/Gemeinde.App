@@ -11,14 +11,14 @@ function Row({ entry, index, current, playing }: { entry: Entry; index: number; 
   return (
     <li class={`track${current ? ' is-current' : ''}`} onClick={() => (current ? player.toggle() : player.jump(index))}>
       <span class="track-lead">
-        <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} class="cover-sm" />
+        <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} date={track.albumDate} class="cover-sm" />
         <span class="track-play" aria-hidden="true">
           {current && playing ? <Equalizer /> : <Icon name="play" size={18} />}
         </span>
       </span>
       <span class="track-main">
         <span class="track-title">{track.title}</span>
-        <span class="track-sub">{track.artist}</span>
+        <span class="track-sub">{track.speaker ?? track.artist}</span>
       </span>
       <span class="track-time">{formatTime(track.duration)}</span>
       {!current && (

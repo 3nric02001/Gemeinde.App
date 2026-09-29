@@ -118,7 +118,7 @@ describe('Lokaler Admin', () => {
   it('meldet sich mit Passwort an und wieder ab', async () => {
     await start();
     expect((await ctx.app.inject({ method: 'GET', url: '/api/albums' })).statusCode).toBe(401);
-    expect((await ctx.app.inject({ method: 'GET', url: '/api/auth/status' })).json()).toEqual({ user: null, oidc: null });
+    expect((await ctx.app.inject({ method: 'GET', url: '/api/auth/status' })).json()).toEqual({ user: null, oidc: null, branding: { name: 'Gemeinde.App', welcome: '' } });
 
     expect((await localLogin('falsch')).statusCode).toBe(401);
     const res = await localLogin();

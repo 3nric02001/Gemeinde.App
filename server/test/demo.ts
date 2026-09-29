@@ -65,6 +65,13 @@ albums.forEach(([artist, album, year, genre, titles, colors], n) => {
   if (colors && !embedded) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
 });
 // Gottesdienst-Aufnahmen in Datumsordnern für den Reiter "Datum"
+/** Sprecher und Bibelstelle als eigene ID3-Felder, wie sie z. B. mp3tag schreibt */
+function sermonTags(title: string): Record<string, string> {
+  if (!title.startsWith('Predigt')) return {};
+  const passage = /Psalm \d+/.exec(title)?.[0];
+  return { Sprecher: title.includes('Dankbarkeit') ? 'Pastorin Schulz' : 'Pastor Meier', ...(passage ? { Bibelstelle: passage } : {}) };
+}
+
 const services: Array<[string, string[], number[][] | null]> = [
   ['Gottesdienste/2026/2026-09-27 Erntedank', ['Begrüßung', 'Lobpreis', 'Predigt: Dankbarkeit'], [[180, 110, 40], [250, 220, 150]]],
   ['Gottesdienste/2026/2026-09-20', ['Lobpreis', 'Predigt: Psalm 23'], null],
@@ -75,7 +82,11 @@ for (const [folder, titles, colors] of services) {
   titles.forEach((title, i) =>
     cloud.put(
       `${folder}/${String(i + 1).padStart(2, '0')} ${title}.mp3`,
-      mp3({ title, artist: 'MBG Brake', album: folder.split('/').pop(), track: i + 1, genre: 'Gottesdienst', custom: { Kategorie: title.startsWith('Predigt') ? 'Predigt' : 'Musik', ...(title.startsWith('Predigt') ? { Sprecher: 'Pastor Meier' } : {}) }, picture: colors ? { data: png(colors[0]!, colors[1]!), mime: 'image/png' } : undefined }, 4000),
+      mp3(
+        { title, artist: 'MBG Brake', album: folder.split('/').pop(), track: i + 1, genre: 'Gottesdienst', custom: { Kategorie: title.startsWith('Predigt') ? 'Predigt' : 'Musik', ...sermonTags(title) }, picture: colors ? { data: png(colors[0]!, colors[1]!), mime: 'image/png' } : undefined },
+        // Predigten gut 11 Minuten lang, damit Sprünge, Tempo und Weiterhören greifen
+        title.startsWith('Predigt') ? 26_000 : 4000,
+      ),
     ),
   );
 }
@@ -96,4 +107,4 @@ saveGroup(db, 'Musikteam', { enabled: true, role: 'manager' });
 saveGroup(db, 'Gemeinde', { enabled: true, role: 'listener' });
 
 await app.listen({ port: 3000, host: '127.0.0.1' });
-console.log('Demo läuft auf http://localhost:3000 (lokaler Admin: admin / demo, Gemeinde-Konto meldet Anna an)');
+console.log('Demo läuft auf http://localhost:3000 (Gemeinde-Konto meldet Anna an; lokaler Admin unter /?admin: admin / demo)');

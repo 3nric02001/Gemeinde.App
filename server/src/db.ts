@@ -313,6 +313,78 @@ export const migrations: string[] = [
   INSERT INTO track_tags (track_id, tag, value, vkey)
     SELECT id, 'filename', file_stem(path), fold(file_stem(path)) FROM tracks WHERE file_stem(path) <> '';
   `,
+  // Hörer-Funktionen: Datum und Predigt-Infos an Alben, eigene Tag-Felder in der Suche,
+  // Favoriten und Hörfortschritt je Benutzer.
+  `
+  -- Datum aus dem Ordnernamen (JJJJ-MM-TT) und Angaben zur Predigt; beim nächsten rebuildAlbums gefüllt.
+  ALTER TABLE albums ADD COLUMN date TEXT;
+  ALTER TABLE albums ADD COLUMN speaker TEXT;
+  ALTER TABLE albums ADD COLUMN passage TEXT;
+  ALTER TABLE albums ADD COLUMN description TEXT;
+  CREATE INDEX albums_date ON albums(date);
+  ALTER TABLE album_overrides ADD COLUMN speaker TEXT;
+  ALTER TABLE album_overrides ADD COLUMN passage TEXT;
+  ALTER TABLE album_overrides ADD COLUMN description TEXT;
+
+  -- Werte eigener Tag-Felder (Sprecher, Bibelstelle, Dateiname ...) für die Volltextsuche.
+  ALTER TABLE tracks ADD COLUMN search_extra TEXT;
+  UPDATE tracks SET search_extra = (
+    SELECT group_concat(value, ' ') FROM track_tags
+    WHERE track_id = tracks.id AND tag NOT IN ('artist', 'albumartist', 'album', 'genre', 'year')
+  );
+  DROP TRIGGER tracks_ai;
+  DROP TRIGGER tracks_ad;
+  DROP TRIGGER tracks_au;
+  DROP TABLE tracks_fts;
+  CREATE VIRTUAL TABLE tracks_fts USING fts5(
+    title, artist, album, genre, search_extra,
+    content='tracks', content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+  );
+  CREATE TRIGGER tracks_ai AFTER INSERT ON tracks BEGIN
+    INSERT INTO tracks_fts(rowid, title, artist, album, genre, search_extra)
+    VALUES (new.id, new.title, new.artist || ' ' || coalesce(new.album_artist, ''), coalesce(new.album, ''), coalesce(new.genre, ''),
+            coalesce(new.search_extra, ''));
+  END;
+  CREATE TRIGGER tracks_ad AFTER DELETE ON tracks BEGIN
+    INSERT INTO tracks_fts(tracks_fts, rowid, title, artist, album, genre, search_extra)
+    VALUES ('delete', old.id, old.title, old.artist || ' ' || coalesce(old.album_artist, ''), coalesce(old.album, ''),
+            coalesce(old.genre, ''), coalesce(old.search_extra, ''));
+  END;
+  CREATE TRIGGER tracks_au AFTER UPDATE OF title, artist, album_artist, album, genre, search_extra ON tracks BEGIN
+    INSERT INTO tracks_fts(tracks_fts, rowid, title, artist, album, genre, search_extra)
+    VALUES ('delete', old.id, old.title, old.artist || ' ' || coalesce(old.album_artist, ''), coalesce(old.album, ''),
+            coalesce(old.genre, ''), coalesce(old.search_extra, ''));
+    INSERT INTO tracks_fts(rowid, title, artist, album, genre, search_extra)
+    VALUES (new.id, new.title, new.artist || ' ' || coalesce(new.album_artist, ''), coalesce(new.album, ''), coalesce(new.genre, ''),
+            coalesce(new.search_extra, ''));
+  END;
+  INSERT INTO tracks_fts(rowid, title, artist, album, genre, search_extra)
+    SELECT id, title, artist || ' ' || coalesce(album_artist, ''), coalesce(album, ''), coalesce(genre, ''), coalesce(search_extra, '')
+    FROM tracks;
+
+  -- Favoriten je Benutzer: Titel oder Alben (kind 'track' / 'album').
+  CREATE TABLE favorites (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL,
+    item_id    INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, kind, item_id)
+  ) WITHOUT ROWID;
+
+  -- Zuletzt gehört und Stelle zum Weiterhören, je Benutzer und Titel.
+  CREATE TABLE listening (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    track_id   INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    position   REAL NOT NULL,
+    -- Länge, die der Browser gemessen hat; genauer als der Scan, der nur den Dateianfang liest
+    duration   REAL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, track_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX listening_recent ON listening(user_id, updated_at);
+  CREATE INDEX listening_track ON listening(track_id);
+  `,
 ];
 
 export function openDatabase(path: string): DB {

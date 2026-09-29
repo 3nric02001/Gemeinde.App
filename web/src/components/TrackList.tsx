@@ -1,6 +1,7 @@
 import { Fragment } from 'preact';
 import { trackCoverUrl, type Track } from '../api';
-import { formatTime } from '../format';
+import { albumLabel, formatTime } from '../format';
+import { isFavorite, savedProgress, toggleFavorite, useMe } from '../me';
 import { player, usePlayerSelect } from '../player';
 import { navigate } from '../router';
 import { Cover } from './Cover';
@@ -23,6 +24,9 @@ export function trackMenu(track: Track) {
   const items = [
     { label: 'Als Nächstes spielen', onSelect: () => player.playNext([track]) },
     { label: 'Zur Warteschlange hinzufügen', onSelect: () => player.append([track]) },
+    isFavorite('track', track.id)
+      ? { label: 'Aus den Favoriten entfernen', onSelect: () => void toggleFavorite('track', track) }
+      : { label: 'Zu den Favoriten', onSelect: () => void toggleFavorite('track', track) },
   ];
   if (track.albumId) items.push({ label: 'Zum Album', onSelect: () => navigate(`/album/${track.albumId}`) });
   items.push({ label: 'Zum Interpreten', onSelect: () => navigate(`/interpret/${encodeURIComponent(track.artist)}`) });
@@ -32,6 +36,7 @@ export function trackMenu(track: Track) {
 export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordinal = false }: Props) {
   const currentId = usePlayerSelect((s) => s.current?.id);
   const playing = usePlayerSelect((s) => s.playing);
+  useMe(); // Herzen und Fortschritt aktuell halten
   const multiDisc = variant === 'album' && !ordinal && new Set(tracks.map((t) => t.discNo ?? 1)).size > 1;
 
   const play = (index: number) => {
@@ -46,6 +51,10 @@ export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordin
         const isCurrent = track.id === currentId;
         const disc = track.discNo ?? 1;
         const showDisc = multiDisc && (index === 0 || (tracks[index - 1]!.discNo ?? 1) !== disc);
+        const resume = savedProgress(track);
+        const album = albumLabel(track.album, track.albumDate);
+        // In der Albumansicht Interpret nur, wenn er abweicht; der Sprecher einer Predigt steht immer da.
+        const who = track.speaker ?? (variant === 'album' && track.artist === albumArtist ? '' : track.artist);
         return (
           <Fragment key={`${track.id}-${index}`}>
             {showDisc && <li class="disc-head">CD {disc}</li>}
@@ -57,7 +66,7 @@ export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordin
                 {variant === 'album' ? (
                   <span class="track-no">{ordinal ? index + 1 : (track.trackNo ?? index + 1)}</span>
                 ) : (
-                  <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} class="cover-sm" />
+                  <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} date={track.albumDate} class="cover-sm" />
                 )}
                 <button
                   type="button"
@@ -74,11 +83,18 @@ export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordin
               <span class="track-main">
                 <span class="track-title">{track.title}</span>
                 <span class="track-sub">
-                  {variant === 'album' && track.artist === albumArtist ? '' : track.artist}
-                  {variant === 'list' && track.album ? ` · ${track.album}` : ''}
+                  {who}
+                  {variant === 'list' && album ? `${who ? ' · ' : ''}${album}` : ''}
                 </span>
+                {resume && (
+                  <span class="track-progress" title={`Angehört bis ${formatTime(resume.position)}`}>
+                    <i style={{ width: `${Math.min(100, (resume.position / resume.duration) * 100)}%` }} />
+                  </span>
+                )}
               </span>
-              <span class="track-time">{formatTime(track.duration)}</span>
+              <span class="track-time">
+                {resume ? `noch ${formatTime(resume.duration - resume.position)}` : formatTime(track.duration)}
+              </span>
               <Menu label={`Weitere Aktionen für ${track.title}`} items={trackMenu(track)} />
             </li>
           </Fragment>

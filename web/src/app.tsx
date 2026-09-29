@@ -12,6 +12,9 @@ import { Category, CategoryEntry } from './pages/Category';
 import { DateFolder } from './pages/DateFolder';
 import { Dates } from './pages/Dates';
 import { Empty, Loading } from './pages/common';
+import { Favorites } from './pages/Favorites';
+import { More } from './pages/More';
+import { loadMe, resetMe } from './me';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { QueuePage } from './pages/Queue';
@@ -30,6 +33,8 @@ function Page({ location }: { location: Location }) {
   if (path === '/datum') return <Dates />;
   if (path === '/datum/ordner' && params.get('pfad')) return <DateFolder path={params.get('pfad')!} />;
   if (path === '/warteschlange') return <QueuePage />;
+  if (path === '/mehr') return <More />;
+  if (path === '/favoriten') return <Favorites />;
   if (path === '/admin' || path.startsWith('/admin/')) return <Admin location={location} />;
   const album = match('/album/:id', path);
   if (album && /^\d+$/.test(album.id!)) return <Album id={Number(album.id)} />;
@@ -61,6 +66,12 @@ export function App() {
   useEffect(() => {
     if (auth.user === null && player.getState().playing) player.toggle();
   }, [auth.user]);
+  // Favoriten und Hörstand gehören zum Benutzer: nach der Anmeldung laden, nach dem Abmelden vergessen.
+  const userId = auth.user?.id;
+  useEffect(() => {
+    if (userId) void loadMe();
+    else resetMe();
+  }, [userId]);
 
   if (auth.user === undefined) return <Loading />;
   if (auth.user === null) return <Login />;

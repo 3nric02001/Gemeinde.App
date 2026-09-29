@@ -12,7 +12,11 @@ const RESULTS: Record<string, string> = {
 
 export function Login() {
   const auth = useAuth();
-  const result = new URLSearchParams(window.location.search).get('anmeldung');
+  const params = new URLSearchParams(window.location.search);
+  const result = params.get('anmeldung');
+  // Der lokale Admin ist ein Notzugang: mit Gemeinde-Konto nur über /?admin sichtbar, damit Hörer nicht rätseln.
+  const [adminLink] = useState(() => params.has('admin'));
+  const showLocal = !auth.oidc || adminLink;
   const [local, setLocal] = useState(!auth.oidc);
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
@@ -40,9 +44,14 @@ export function Login() {
           <span class="brand-mark">
             <Icon name="cross" size={18} />
           </span>
-          <span>Gemeinde.App</span>
+          <span>{auth.branding.name}</span>
         </p>
         <h1 class="page-title">Anmelden</h1>
+        {(auth.branding.welcome || auth.oidc) && (
+          <p class="login-welcome">
+            {auth.branding.welcome || 'Melde dich mit deinem Gemeinde-Konto an, um Predigten und Musik zu hören.'}
+          </p>
+        )}
         {notice && (
           <p class="admin-error" role="alert">
             {notice}
@@ -54,7 +63,7 @@ export function Login() {
           </button>
         )}
         {!auth.oidc && <p class="admin-hint">Die Anmeldung über das Gemeinde-Konto ist noch nicht eingerichtet.</p>}
-        {local ? (
+        {!showLocal ? null : local ? (
           <form class="admin-login" onSubmit={submit}>
             <label class="field">
               <span>Benutzername</span>

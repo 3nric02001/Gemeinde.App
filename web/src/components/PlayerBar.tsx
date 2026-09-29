@@ -1,6 +1,6 @@
 import { trackCoverUrl } from '../api';
 import { player, usePlayerSelect } from '../player';
-import { Controls, Volume } from './Controls';
+import { Controls, RateButton, Volume } from './Controls';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
 import { Seek } from './Seek';
@@ -17,7 +17,7 @@ export function PlayerBar({ onExpand }: { onExpand: () => void }) {
       <div class="player-now" onClick={() => track && onExpand()}>
         {track ? (
           <>
-            <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} class="cover-bar" />
+            <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} date={track.albumDate} class="cover-bar" />
             <div class="player-meta">
               <a
                 class="player-title"
@@ -31,7 +31,7 @@ export function PlayerBar({ onExpand }: { onExpand: () => void }) {
                 href={`/interpret/${encodeURIComponent(track.artist)}`}
                 onClick={(event) => event.stopPropagation()}
               >
-                {error ?? track.artist}
+                {error ?? track.speaker ?? track.artist}
               </a>
             </div>
           </>
@@ -46,6 +46,7 @@ export function PlayerBar({ onExpand }: { onExpand: () => void }) {
       </div>
 
       <div class="player-side">
+        <RateButton />
         <a class="icon-button" href="/warteschlange" aria-label="Warteschlange">
           <Icon name="queue" size={20} />
         </a>
