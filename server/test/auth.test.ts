@@ -171,16 +171,27 @@ describe('Lokaler Admin', () => {
     expect((await ctx.app.inject({ method: 'GET', url: '/api/%61lbums' })).statusCode).toBe(401);
   });
 
-  it('lehnt Änderungen von fremden Seiten ab', async () => {
-    await start();
+  it('lehnt Änderungen von fremden Seiten ab, auch wenn PUBLIC_URL nicht zur Adresse passt', async () => {
+    // PUBLIC_URL wie im Beispiel, aufgerufen wird die App aber direkt über den Server
+    await start({ PUBLIC_URL: 'https://musik.gemeinde.de' });
     const cookie = await adminCookie();
-    const res = await as(cookie, {
-      method: 'POST',
-      url: '/api/admin/albums',
-      payload: { title: 'X' },
-      headers: { origin: 'https://boese.example' },
-    });
-    expect(res.statusCode).toBe(403);
+    const post = (headers: Record<string, string>) =>
+      as(cookie, { method: 'POST', url: '/api/admin/albums', payload: { title: 'X' }, headers });
+
+    expect((await post({ origin: 'https://boese.example' })).statusCode).toBe(403);
+    expect((await post({ 'sec-fetch-site': 'cross-site', origin: 'http://localhost' })).statusCode).toBe(403);
+    expect((await post({ 'sec-fetch-site': 'same-site' })).statusCode).toBe(403);
+
+    // Browser auf http://server:3000 hinter keinem Proxy
+    expect((await post({ host: 'server:3000', origin: 'http://server:3000' })).statusCode).toBe(201);
+    // Proxy mit TLS davor, App sieht http
+    expect((await post({ host: 'musik.gemeinde.de', origin: 'https://musik.gemeinde.de' })).statusCode).toBe(201);
+    // Proxy, der den Host umschreibt: PUBLIC_URL passt
+    expect((await post({ host: '127.0.0.1:3000', origin: 'https://musik.gemeinde.de' })).statusCode).toBe(201);
+    // Moderne Browser melden die Herkunft selbst
+    expect((await post({ 'sec-fetch-site': 'same-origin', origin: 'http://anders:8080' })).statusCode).toBe(201);
+    // Ohne Origin (z. B. curl mit Cookie)
+    expect((await post({})).statusCode).toBe(201);
   });
 
   it('übernimmt ADMIN_PASSWORD auch nachträglich, sobald es sich ändert', async () => {
