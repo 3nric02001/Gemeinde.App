@@ -140,7 +140,9 @@ nur „Mit Gemeinde-Konto anmelden“; die Anmeldung des lokalen Admins steht un
 Sitzungen laufen über ein HttpOnly-Cookie (SameSite=Lax, bei https mit Secure) und bleiben 30 Tage
 nach der letzten Nutzung gültig. In der Datenbank steht nur ein Hash der Sitzungs-ID, das Passwort
 des lokalen Admins als scrypt-Hash. Nach zehn Fehlversuchen ist die Passwort-Anmeldung je IP für
-15 Minuten gesperrt.
+15 Minuten gesperrt, nach hundert Fehlversuchen von beliebig vielen IPs auch je Benutzername; es laufen
+höchstens zwei Passwortprüfungen gleichzeitig. Jede Antwort trägt Sicherheits-Header (Content-Security-Policy,
+kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
 
 ![Gruppen in der Verwaltung](docs/screenshots/admin-groups.png)
 
@@ -191,8 +193,15 @@ curl localhost:3000/api/health
 
 Die Datenbank liegt im Volume `gemeinde-data` (`/data` im Container). Die Bibliothek selbst baut
 jeder Scan aus der Nextcloud neu auf, eigene Alben und Korrekturen aus der Verwaltung gibt es aber
-nur in dieser Datenbank: Das Volume gehört deshalb ins Backup. Für den Betrieb im Internet gehört
-ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
+nur in dieser Datenbank: Das Volume gehört deshalb ins Backup.
+
+**Im Internet** gehört ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor, und Port 3000 soll nur
+für ihn erreichbar sein. `docker-compose.yml` bindet den Port deshalb standardmäßig nur an
+`127.0.0.1` (Proxy auf demselben Server). Läuft der Proxy auf einem anderen Rechner, `APP_BIND` in der
+`.env` auf die Adresse im internen Netz setzen; läuft er im selben Docker-Netz, braucht es gar keinen
+veröffentlichten Port. `PUBLIC_URL` gehört dann immer gesetzt. `X-Forwarded-For`/`-Proto`/`-Host` glaubt
+die App nur Absendern aus privaten Netzen (`TRUST_PROXY`), sonst könnte jeder seine IP fälschen und die
+Sperre nach Fehlversuchen umgehen.
 
 | Variable | Standard | Bedeutung |
 | --- | --- | --- |
@@ -202,7 +211,9 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `NEXTCLOUD_MUSIC_PATH` | – (Pflicht) | Ordner, die gescannt werden, relativ zu den Dateien des Service-Accounts, z. B. `/Gemeinde/Medien/Musik`. Mehrere durch Komma, Semikolon oder Zeilenumbruch getrennt. Nur diese Ordner und ihre Unterordner kommen in die Bibliothek. |
 | `ADMIN_PASSWORD` | – | Passwort des lokalen Admins `admin`; gilt nach jedem Neustart, bei dem es sich geändert hat. Ohne Angabe wird beim ersten Start eines erzeugt und geloggt |
 | `RESET_ADMIN_PASSWORD` | `false` | `true` setzt das Passwort des lokalen Admins bei jedem Start auf `ADMIN_PASSWORD` bzw. ein neu erzeugtes zurück |
-| `PUBLIC_URL` | – | Öffentliche Adresse, z. B. `https://musik.gemeinde.de`; ergibt die OIDC-Weiterleitungs-URL. Ohne Angabe aus der Anfrage (Reverse Proxy mit `X-Forwarded-Proto`/`-Host`) |
+| `PUBLIC_URL` | – | Öffentliche Adresse, z. B. `https://musik.gemeinde.de`; ergibt die OIDC-Weiterleitungs-URL und ist Pflicht, um OIDC einzuschalten |
+| `TRUST_PROXY` | private Netze | Wem `X-Forwarded-*` geglaubt wird: `false`, `true` oder Adressen/Netze (z. B. `172.18.0.0/16`). Standard: Loopback und private Netze |
+| `APP_BIND` | `127.0.0.1` | Nur `docker-compose.yml`: Adresse auf dem Host, an die Port 3000 gebunden wird; `0.0.0.0` für alle |
 | `SCAN_INTERVAL_MINUTES` | `60` | Automatischer Scan, `0` = aus |
 | `SCAN_CONCURRENCY` | `4` | Parallele Zugriffe auf die Nextcloud beim Scan |
 | `DATABASE_PATH` | `/data/library.db` | Pfad der SQLite-Datei |

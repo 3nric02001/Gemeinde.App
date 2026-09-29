@@ -33,6 +33,8 @@ export interface OidcView {
   groupsClaim: string;
   label: string;
   redirectUri: string;
+  /** PUBLIC_URL fehlt in der .env; ohne sie lässt sich OIDC nicht einschalten */
+  publicUrlMissing?: boolean;
 }
 
 const ROLES: Role[] = ['listener', 'manager', 'admin'];
@@ -377,7 +379,7 @@ function OidcSettings() {
     event.preventDefault();
     setBusy(true);
     try {
-      const { redirectUri: _r, hasSecret: _h, ...rest } = form;
+      const { redirectUri: _r, hasSecret: _h, publicUrlMissing: _p, ...rest } = form;
       const saved = await adminRequest<OidcView>('PUT', '/api/admin/oidc', {
         ...rest,
         ...(secret ? { clientSecret: secret } : {}),
@@ -411,6 +413,12 @@ function OidcSettings() {
         Lege im Identity Provider (z. B. Keycloak, Authentik, Nextcloud) einen Client an und trage dort diese Weiterleitungs-URL
         ein: <code class="admin-copy">{form.redirectUri}</code>
       </p>
+      {form.publicUrlMissing && (
+        <p class="admin-error" role="alert">
+          PUBLIC_URL fehlt in der .env. Trage dort die öffentliche Adresse der App ein (z. B. https://musik.gemeinde.de) und starte
+          den Container neu, erst dann lässt sich die Anmeldung einschalten.
+        </p>
+      )}
       <label class="admin-check">
         <input
           type="checkbox"

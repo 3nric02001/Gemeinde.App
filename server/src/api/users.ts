@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import type { OidcService, OidcSettings } from '../auth/oidc.js';
-import { deleteGroup, deleteUser, listGroups, listUsers, ROLES, saveGroup, setUserDisabled, type Role } from '../auth/users.js';
+import { AuthError, deleteGroup, deleteUser, listGroups, listUsers, ROLES, saveGroup, setUserDisabled, type Role } from '../auth/users.js';
 import { authErrorHandler, redirectUri } from './auth.js';
 import { getBranding, saveBranding, type Branding } from '../branding.js';
 
@@ -97,7 +97,13 @@ export async function registerUserAdminRoutes(
 
     const view = (request: FastifyRequest, settings: OidcSettings) => {
       const { clientSecret, ...rest } = settings;
-      return { ...rest, hasSecret: Boolean(clientSecret), redirectUri: redirectUri(request, deps.publicUrl) };
+      return {
+        ...rest,
+        hasSecret: Boolean(clientSecret),
+        redirectUri: redirectUri(request, deps.publicUrl),
+        // Ohne PUBLIC_URL käme die Weiterleitungs-URL aus Headern der Anfrage; deshalb Pflicht für OIDC.
+        publicUrlMissing: !deps.publicUrl,
+      };
     };
 
     admin.get('/api/admin/oidc', async (request) => view(request, oidc.settings()));
@@ -122,7 +128,13 @@ export async function registerUserAdminRoutes(
           },
         },
       },
-      async (request) => view(request, oidc.save(request.body as Partial<OidcSettings>)),
+      async (request) => {
+        const body = request.body as Partial<OidcSettings>;
+        if (body.enabled && !deps.publicUrl) {
+          throw new AuthError(400, 'Für die Anmeldung über OIDC muss PUBLIC_URL in der .env gesetzt sein (z. B. https://musik.gemeinde.de)');
+        }
+        return view(request, oidc.save(body));
+      },
     );
 
     admin.post('/api/admin/oidc/test', async () => oidc.test());

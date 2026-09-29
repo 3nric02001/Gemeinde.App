@@ -25,6 +25,7 @@ async function start(env: Record<string, string> = {}) {
       NEXTCLOUD_MUSIC_PATH: '/Musik',
       DATABASE_PATH: ':memory:',
       ADMIN_PASSWORD,
+      PUBLIC_URL: 'http://localhost',
       ...env,
     }),
     { logger: false },
@@ -158,6 +159,38 @@ describe('Lokaler Admin', () => {
     for (let i = 0; i < 10; i++) expect((await localLogin('falsch')).statusCode).toBe(401);
     expect((await localLogin()).statusCode).toBe(429);
   });
+
+  it('glaubt X-Forwarded-For nur einem Proxy aus dem eigenen Netz', async () => {
+    await start();
+    const attempt = (remoteAddress: string, forwarded: string) =>
+      ctx.app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        remoteAddress,
+        headers: { 'x-forwarded-for': forwarded },
+        payload: { username: 'admin', password: 'falsch' },
+      });
+    // Direkt aus dem Internet: Die gefälschte IP zählt nicht, nach 10 Versuchen ist Schluss.
+    for (let i = 0; i < 10; i++) expect((await attempt('203.0.113.9', `198.51.100.${i}`)).statusCode).toBe(401);
+    expect((await attempt('203.0.113.9', '198.51.100.99')).statusCode).toBe(429);
+    // Über den Reverse Proxy im Docker-Netz: jede echte Client-IP für sich.
+    expect((await attempt('172.18.0.2', '198.51.100.7')).statusCode).toBe(401);
+  });
+
+  it('bremst Raten von vielen IPs über den Benutzernamen und lässt nur wenige Prüfungen gleichzeitig zu', async () => {
+    await start({ TRUST_PROXY: 'false' });
+    const from = (ip: string, password = 'falsch') =>
+      ctx.app.inject({ method: 'POST', url: '/api/auth/login', remoteAddress: ip, payload: { username: 'admin', password } });
+    for (let i = 0; i < 100; i++) expect((await from(`198.51.100.${i}`)).statusCode).toBe(401);
+    expect((await from('198.51.100.200', ADMIN_PASSWORD)).statusCode).toBe(429);
+
+    await ctx.app.close();
+    await start();
+    const burst = await Promise.all(Array.from({ length: 6 }, (_, i) => from(`192.0.2.${i}`)));
+    const codes = burst.map((r) => r.statusCode);
+    expect(codes.filter((c) => c === 429).length).toBeGreaterThan(0);
+    expect(codes.filter((c) => c === 401).length).toBeGreaterThanOrEqual(2);
+  }, 60_000);
 
   it('lässt sich nicht mit kodierten Pfaden umgehen', async () => {
     await start();
@@ -387,6 +420,19 @@ describe('OIDC', () => {
 
     expect((await oidcLogin('//boese.example')).location).toBe('/');
     expect((await oidcLogin('https://boese.example')).location).toBe('/');
+  });
+
+  it('lässt sich ohne PUBLIC_URL nicht einschalten', async () => {
+    await start({ PUBLIC_URL: '' });
+    const admin = await adminCookie();
+    const res = await as(admin, {
+      method: 'PUT',
+      url: '/api/admin/oidc',
+      payload: { enabled: true, issuer: idp.url, clientId: CLIENT_ID },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('PUBLIC_URL');
+    expect((await as(admin, { method: 'GET', url: '/api/admin/oidc' })).json()).toMatchObject({ enabled: false, publicUrlMissing: true });
   });
 
   it('prüft die Einstellungen', async () => {

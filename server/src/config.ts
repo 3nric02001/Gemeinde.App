@@ -22,6 +22,11 @@ export interface Config {
   resetAdminPassword: boolean;
   /** Öffentliche Adresse, z. B. https://musik.gemeinde.de; sonst aus der Anfrage abgeleitet */
   publicUrl: string | undefined;
+  /**
+   * Wem X-Forwarded-For/-Proto/-Host geglaubt wird: true, false oder Adressen/Netze.
+   * Standard: nur Absendern aus privaten Netzen (Reverse Proxy im selben Docker-Netz oder LAN).
+   */
+  trustProxy: boolean | string[];
   /** Ordner mit der gebauten Weboberfläche; fehlt er, liefert der Server nur die API aus */
   webDir: string;
   nextcloud: NextcloudConfig;
@@ -86,6 +91,17 @@ function publicUrl(raw: string | undefined): string | undefined {
   return url.origin;
 }
 
+/** Private Netze und Loopback: Dort sitzt der Reverse Proxy, das Internet nicht. */
+export const DEFAULT_TRUST_PROXY = ['loopback', 'linklocal', 'uniquelocal'];
+
+function trustProxy(raw: string | undefined): boolean | string[] {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return DEFAULT_TRUST_PROXY;
+  if (['true', 'ja', 'yes'].includes(value)) return true;
+  if (['false', 'nein', 'no', '0'].includes(value)) return false;
+  return value.split(/[,\s]+/).filter(Boolean);
+}
+
 function musicPaths(raw: string): string[] {
   const paths = parseMusicPaths(raw);
   if (paths.length === 0) throw new Error('Umgebungsvariable NEXTCLOUD_MUSIC_PATH fehlt');
@@ -102,6 +118,7 @@ export function loadConfig(env: Env = process.env): Config {
     adminPassword: env.ADMIN_PASSWORD?.trim() || undefined,
     resetAdminPassword: ['1', 'true', 'ja', 'yes'].includes(env.RESET_ADMIN_PASSWORD?.trim().toLowerCase() ?? ''),
     publicUrl: publicUrl(env.PUBLIC_URL),
+    trustProxy: trustProxy(env.TRUST_PROXY),
     webDir: env.WEB_DIR?.trim() || '../web/dist',
     nextcloud: {
       url: required(env, 'NEXTCLOUD_URL').replace(/\/+$/, ''),

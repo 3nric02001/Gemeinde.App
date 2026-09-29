@@ -22,8 +22,9 @@ export interface AppContext {
 export async function buildApp(config: Config, options: { fetch?: typeof fetch; logger?: boolean; requestTimeoutMs?: number } = {}): Promise<AppContext> {
   const app = Fastify({
     logger: options.logger === false ? false : { level: config.logLevel },
-    // Hinter einem Reverse Proxy (Traefik, nginx) die echte Client-IP verwenden.
-    trustProxy: true,
+    // Hinter einem Reverse Proxy (Traefik, nginx) die echte Client-IP verwenden, aber nur,
+    // wenn die Anfrage wirklich vom Proxy kommt (TRUST_PROXY); sonst könnte jeder seine IP fälschen.
+    trustProxy: config.trustProxy,
   });
   const db = openDatabase(config.databasePath);
   const client = new NextcloudClient(config.nextcloud, options.fetch, options.requestTimeoutMs);
@@ -32,6 +33,9 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
 
   await ensureLocalAdmin(db, { password: config.adminPassword, reset: config.resetAdminPassword }, app.log);
   const oidc = new OidcService(db);
+  if (oidc.isReady() && !config.publicUrl) {
+    app.log.warn('OIDC ist eingeschaltet, aber PUBLIC_URL fehlt: bitte in der .env setzen, sonst stammt die Weiterleitungs-URL aus der Anfrage');
+  }
 
   registerSecurityHeaders(app);
   // Zuerst: Der Zugriffsschutz muss vor allen API-Routen stehen.

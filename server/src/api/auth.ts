@@ -38,24 +38,34 @@ function safeReturnTo(value: unknown): string {
     : '/';
 }
 
-/** Einfache Bremse gegen Passwort-Raten: nach 10 Fehlversuchen je IP 15 Minuten Pause. */
+/**
+ * Bremse gegen Passwort-Raten: nach `limit` Fehlversuchen je Schlüssel 15 Minuten Pause.
+ * Schlüssel sind die IP (10 Versuche) und der Benutzername (100 Versuche, gegen Raten von vielen IPs).
+ */
 class LoginThrottle {
   private readonly failures = new Map<string, { count: number; until: number }>();
-  blocked(ip: string): boolean {
-    const entry = this.failures.get(ip);
-    return Boolean(entry && entry.count >= 10 && entry.until > Date.now());
+  constructor(private readonly limit: number) {}
+  blocked(key: string): boolean {
+    const entry = this.failures.get(key);
+    return Boolean(entry && entry.count >= this.limit && entry.until > Date.now());
   }
-  fail(ip: string): void {
+  fail(key: string): void {
     const now = Date.now();
-    const entry = this.failures.get(ip);
+    const entry = this.failures.get(key);
     const count = entry && entry.until > now ? entry.count + 1 : 1;
-    this.failures.set(ip, { count, until: now + 15 * 60 * 1000 });
+    this.failures.set(key, { count, until: now + 15 * 60 * 1000 });
     if (this.failures.size > 10_000) this.failures.delete(this.failures.keys().next().value!);
   }
-  succeed(ip: string): void {
-    this.failures.delete(ip);
+  succeed(key: string): void {
+    this.failures.delete(key);
   }
 }
+
+/**
+ * Höchstens so viele Passwortprüfungen gleichzeitig. scrypt belegt je Prüfung 16 MB und einen Platz im
+ * Threadpool, den auch das Ausliefern der Dateien braucht; eine Flut von Anmeldungen soll ihn nicht füllen.
+ */
+export const MAX_PARALLEL_LOGINS = 2;
 
 export function authErrorHandler(error: Error, request: FastifyRequest, reply: FastifyReply) {
   if (error instanceof AuthError) return reply.code(error.status).send({ error: error.message });
@@ -114,7 +124,9 @@ export const redirectUri = (request: FastifyRequest, publicUrl: string | undefin
  */
 export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promise<void> {
   const { db, oidc, publicUrl } = deps;
-  const throttle = new LoginThrottle();
+  const ipThrottle = new LoginThrottle(10);
+  const userThrottle = new LoginThrottle(100);
+  let checking = 0;
   await app.register(fastifyCookie);
 
   const cookieOptions = (request: FastifyRequest) => ({
@@ -176,17 +188,29 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
         },
       },
       async (request, reply) => {
-        if (throttle.blocked(request.ip)) {
+        const { username, password } = request.body as { username: string; password: string };
+        const userKey = username.trim().toLowerCase();
+        if (ipThrottle.blocked(request.ip) || userThrottle.blocked(userKey)) {
           return reply.code(429).send({ error: 'Zu viele Fehlversuche, bitte in 15 Minuten erneut versuchen' });
         }
-        const { username, password } = request.body as { username: string; password: string };
-        const user = await checkLocalLogin(db, username, password);
+        if (checking >= MAX_PARALLEL_LOGINS) {
+          return reply.code(429).send({ error: 'Gerade melden sich viele an, bitte gleich noch einmal versuchen' });
+        }
+        checking++;
+        let user;
+        try {
+          user = await checkLocalLogin(db, username, password);
+        } finally {
+          checking--;
+        }
         if (!user) {
-          throttle.fail(request.ip);
-          request.log.warn({ username }, 'Fehlgeschlagene Anmeldung');
+          ipThrottle.fail(request.ip);
+          userThrottle.fail(userKey);
+          request.log.warn({ username, ip: request.ip }, 'Fehlgeschlagene Anmeldung');
           return reply.code(401).send({ error: 'Benutzername oder Passwort stimmt nicht' });
         }
-        throttle.succeed(request.ip);
+        ipThrottle.succeed(request.ip);
+        userThrottle.succeed(userKey);
         startSession(request, reply, user.id);
         return { user: { id: user.id, name: user.name, role: user.role, kind: user.kind } };
       },
