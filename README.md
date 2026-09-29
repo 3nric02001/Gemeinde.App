@@ -204,6 +204,19 @@ docker compose up -d --build
 curl localhost:3000/api/health
 ```
 
+**Docker in einer Proxmox-LXC:** Bricht der Build mit `failed to solve: exit code: 1` ab (oft schon
+bei `Dockerfile:1`) oder startet der Container nicht, verweigert meist AppArmor Docker die eigenen
+Profile. In `/etc/pve/lxc/<ID>.conf` auf dem Proxmox-Host helfen dann:
+
+```
+features: keyctl=1,nesting=1
+lxc.apparmor.profile: unconfined
+lxc.mount.entry: /dev/null sys/module/apparmor/parameters/enabled none bind 0 0
+```
+
+Danach die LXC neu starten (`pct reboot <ID>`). Die ganze Fehlermeldung zeigt
+`docker compose build --progress=plain`.
+
 Die Datenbank liegt im Volume `gemeinde-data` (`/data` im Container). Die Bibliothek selbst baut
 jeder Scan aus der Nextcloud neu auf, eigene Alben und Korrekturen aus der Verwaltung gibt es aber
 nur in dieser Datenbank: Das Volume gehört deshalb ins Backup.
