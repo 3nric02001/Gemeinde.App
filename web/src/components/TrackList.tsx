@@ -15,6 +15,8 @@ interface Props {
   albumArtist?: string;
   /** Wird statt `tracks` in die Warteschlange gelegt, z. B. alle Treffer statt der sichtbaren */
   onPlay?: (index: number) => void;
+  /** Laufende Nummer statt Tracknummer, z. B. in selbst zusammengestellten Alben */
+  ordinal?: boolean;
 }
 
 export function trackMenu(track: Track) {
@@ -27,10 +29,10 @@ export function trackMenu(track: Track) {
   return items;
 }
 
-export function TrackList({ tracks, variant = 'list', albumArtist, onPlay }: Props) {
+export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordinal = false }: Props) {
   const currentId = usePlayerSelect((s) => s.current?.id);
   const playing = usePlayerSelect((s) => s.playing);
-  const multiDisc = variant === 'album' && new Set(tracks.map((t) => t.discNo ?? 1)).size > 1;
+  const multiDisc = variant === 'album' && !ordinal && new Set(tracks.map((t) => t.discNo ?? 1)).size > 1;
 
   const play = (index: number) => {
     if (tracks[index]?.id === currentId) player.toggle();
@@ -53,7 +55,7 @@ export function TrackList({ tracks, variant = 'list', albumArtist, onPlay }: Pro
             >
               <span class="track-lead">
                 {variant === 'album' ? (
-                  <span class="track-no">{track.trackNo ?? index + 1}</span>
+                  <span class="track-no">{ordinal ? index + 1 : (track.trackNo ?? index + 1)}</span>
                 ) : (
                   <Cover albumId={track.albumId} title={track.album ?? track.title} class="cover-sm" />
                 )}

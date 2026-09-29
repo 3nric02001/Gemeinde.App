@@ -52,11 +52,18 @@ for (const [artist, album, year, genre, titles, colors] of albums) {
   );
   if (colors) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
 }
+// Gottesdienst-Mitschnitte mit Predigten, um eigene Alben im Admin-Bereich auszuprobieren
+for (const [date, preacher, text] of [['2024-03-03', 'Pastor Meier', 'Psalm 23'], ['2024-03-10', 'Pastorin Schulz', 'Römer 8']] as const) {
+  const album = `Gottesdienst ${date}`;
+  cloud.put(`Gottesdienste/${date}/01 Begrüßung.mp3`, mp3({ title: 'Begrüßung', artist: 'Gemeinde', album, track: 1, year: 2024, genre: 'Gottesdienst' }, 2000));
+  cloud.put(`Gottesdienste/${date}/02 Lobpreis.mp3`, mp3({ title: 'Lobpreis', artist: 'Lobpreisteam', album, track: 2, year: 2024, genre: 'Gottesdienst' }, 3000));
+  cloud.put(`Gottesdienste/${date}/03 Predigt ${text}.mp3`, mp3({ title: `Predigt: ${text}`, artist: preacher, album, track: 3, year: 2024, genre: 'Gottesdienst' }, 5000));
+}
 const config = loadConfig({
   NEXTCLOUD_URL: cloud.url, NEXTCLOUD_USER: USER, NEXTCLOUD_PASSWORD: PASSWORD, NEXTCLOUD_MUSIC_PATH: '/Musik',
-  DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000',
+  DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000', ADMIN_TOKEN: 'demo',
 });
 const { app, scanner } = await buildApp(config, { logger: false });
 await scanner.scan();
 await app.listen({ port: 3000, host: '127.0.0.1' });
-console.log('Demo läuft auf http://localhost:3000');
+console.log('Demo läuft auf http://localhost:3000 (Verwaltung unter /admin, Token: demo)');

@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
 import type { LibraryScanner } from '../library/scanner.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
+import { registerAdminRoutes } from './admin.js';
 import {
   getAlbum,
   getAlbumCover,
@@ -167,4 +168,6 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     void scanner.scan();
     return reply.code(202).send({ started: !alreadyRunning, status: scanner.getStatus() });
   });
+
+  await registerAdminRoutes(app, { db, authorize: (request) => isAdmin(request, deps.adminToken) });
 }

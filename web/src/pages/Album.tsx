@@ -57,7 +57,7 @@ export function Album({ id }: { id: number }) {
         />
       </div>
 
-      <TrackList tracks={album.tracks} variant="album" albumArtist={album.artist} />
+      <TrackList tracks={album.tracks} variant="album" albumArtist={album.artist} ordinal={album.kind === 'manual'} />
 
       {others.length > 0 && (
         <section class="shelf">

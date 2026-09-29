@@ -8,7 +8,7 @@ export type DB = Database.Database;
  * Jede Migration läuft genau einmal; der Stand steht in PRAGMA user_version.
  * Neue Migrationen nur anhängen, bestehende nie ändern.
  */
-const migrations: string[] = [
+export const migrations: string[] = [
   `
   CREATE TABLE albums (
     id          INTEGER PRIMARY KEY,
@@ -75,6 +75,81 @@ const migrations: string[] = [
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+  `,
+  // Manuelle Alben und Korrekturen an automatischen Alben. Alles, was ein Admin festlegt,
+  // steht in eigenen Tabellen (nach Dateipfad bzw. Albumschlüssel) und übersteht so jeden Scan.
+  // albums/album_tracks/tracks.album_id sind dagegen abgeleitet und werden von rebuildAlbums neu berechnet.
+  `
+  ALTER TABLE albums ADD COLUMN kind TEXT NOT NULL DEFAULT 'auto';
+  ALTER TABLE albums ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+
+  -- Welche Titel in welchem Album stehen, in Abspielreihenfolge. Ein Titel kann in mehreren Alben sein;
+  -- tracks.album_id bleibt sein Hauptalbum (für Cover und "Zum Album").
+  CREATE TABLE album_tracks (
+    album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (album_id, track_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX album_tracks_track ON album_tracks(track_id);
+  INSERT INTO album_tracks (album_id, track_id, position)
+    SELECT album_id, id, row_number() OVER (
+      PARTITION BY album_id ORDER BY coalesce(disc_no, 1), track_no IS NULL, track_no, path
+    ) FROM tracks WHERE album_id IS NOT NULL;
+
+  -- Bestes Coverbild je Ordner, damit Alben auch außerhalb eines Scans neu gebildet werden können.
+  CREATE TABLE folder_covers (
+    folder TEXT PRIMARY KEY,
+    path   TEXT NOT NULL
+  ) WITHOUT ROWID;
+  INSERT OR IGNORE INTO folder_covers (folder, path)
+    SELECT substr(dir, 1, max(length(dir) - 1, 0)), cover_path
+    FROM (SELECT rtrim(cover_path, replace(cover_path, '/', '')) AS dir, cover_path FROM albums WHERE cover_path IS NOT NULL);
+
+  -- Vom Admin festgelegte Werte je Albumschlüssel; NULL heißt "automatisch".
+  CREATE TABLE album_overrides (
+    key    TEXT PRIMARY KEY,
+    title  TEXT,
+    artist TEXT,
+    year   INTEGER,
+    genre  TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0
+  ) WITHOUT ROWID;
+
+  -- Titel, die ein Admin aus ihrem automatischen Album herausgenommen hat.
+  CREATE TABLE track_exclusions (
+    path      TEXT NOT NULL,
+    album_key TEXT NOT NULL,
+    PRIMARY KEY (path, album_key)
+  ) WITHOUT ROWID;
+
+  -- Inhalt manueller Alben. Über den Pfad statt die Titel-ID, damit ein Titel, der beim Scan
+  -- kurz fehlt und wieder auftaucht, wieder im Album landet.
+  CREATE TABLE manual_album_tracks (
+    album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    path     TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (album_id, path)
+  ) WITHOUT ROWID;
+  CREATE INDEX manual_album_tracks_path ON manual_album_tracks(path);
+
+  -- Albumtitel durchsuchbar machen, auch wenn sie nicht aus den Tags stammen.
+  CREATE VIRTUAL TABLE albums_fts USING fts5(
+    title, artist,
+    content='albums', content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+  );
+  CREATE TRIGGER albums_ai AFTER INSERT ON albums BEGIN
+    INSERT INTO albums_fts(rowid, title, artist) VALUES (new.id, new.title, new.artist);
+  END;
+  CREATE TRIGGER albums_ad AFTER DELETE ON albums BEGIN
+    INSERT INTO albums_fts(albums_fts, rowid, title, artist) VALUES ('delete', old.id, old.title, old.artist);
+  END;
+  CREATE TRIGGER albums_au AFTER UPDATE OF title, artist ON albums BEGIN
+    INSERT INTO albums_fts(albums_fts, rowid, title, artist) VALUES ('delete', old.id, old.title, old.artist);
+    INSERT INTO albums_fts(rowid, title, artist) VALUES (new.id, new.title, new.artist);
+  END;
+  INSERT INTO albums_fts(albums_fts) VALUES ('rebuild');
   `,
 ];
 

@@ -22,6 +22,8 @@ export interface Album {
   trackCount: number;
   duration: number;
   hasCover: boolean;
+  /** "manual" für vom Admin zusammengestellte Alben */
+  kind?: 'auto' | 'manual';
 }
 
 export interface AlbumDetail extends Album {
@@ -95,6 +97,10 @@ export async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> 
   cache.set(url, { at: Date.now(), data });
   if (cache.size > 200) cache.delete(cache.keys().next().value!);
   return data;
+}
+
+export function clearCache(): void {
+  cache.clear();
 }
 
 export function peekJson<T>(url: string): T | undefined {
