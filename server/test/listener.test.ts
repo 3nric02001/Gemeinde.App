@@ -68,6 +68,16 @@ describe('Alben mit Datum', () => {
     ]);
     expect(page.items[1]).toMatchObject({ speaker: 'Pastor Meier', passage: 'Psalm 23' });
 
+    // Gottesdienste und Musik getrennt abfragen (Startseite)
+    expect((await get('/api/albums?dated=true&sort=date')).items.map((a: any) => a.date)).toEqual([
+      '2026-09-27', '2026-09-20', '2026-09-13', '2026-08-30',
+    ]);
+    expect((await get('/api/albums?dated=false')).items.map((a: any) => a.title)).toEqual(['Let There Be Light']);
+    // Die Verwaltung listet ebenfalls neueste Gottesdienste zuerst
+    expect((await get('/api/admin/albums')).items.map((a: any) => a.date ?? a.title)).toEqual([
+      '2026-09-27', '2026-09-20', '2026-09-13', '2026-08-30', 'Let There Be Light',
+    ]);
+
     const byDate = await get('/api/albums?sort=date');
     expect(byDate.items.at(-1).title).toBe('Let There Be Light');
     expect(byDate.items.at(-1).date).toBeNull();

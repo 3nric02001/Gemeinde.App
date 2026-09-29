@@ -86,12 +86,20 @@ export function formatCompactDate(iso: string): string {
 const WEEKDAYS = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
 
 /**
- * Anzeigename eines Albums: bei Gottesdiensten (Datum im Ordnernamen) der Anlass ohne Datum,
- * z. B. "Erntedank"; ohne Anlass das Datum selbst ("Sonntag, 20.09.2026").
+ * Anzeigename eines Gottesdienstes oder Albums: bei Datum im Ordnernamen der Anlass ohne Datum,
+ * z. B. "Erntedank"; ohne Anlass einfach "Gottesdienst". Das Datum steht dann in der Zeile darunter.
  */
 export function albumTitle(title: string, date: string | null | undefined): string {
   if (!date) return title;
-  return withoutDate(title) || formatShortDate(date);
+  return withoutDate(title) || 'Gottesdienst';
+}
+
+/** Überschrift über einem Gottesdienst; heißt er selbst schon so, führt sie als "Datum" zurück zur Übersicht */
+export const serviceEyebrow = (title: string) => (title === 'Gottesdienst' ? 'Datum' : 'Gottesdienst');
+
+/** Zeile unter einem Gottesdienst: "So., 20.09.2026 · Pastor Meier" */
+export function serviceLine(date: string, speaker?: string | null): string {
+  return [formatCompactDate(date), speaker].filter(Boolean).join(' · ');
 }
 
 /** Album eines Titels in Listen: "Erntedank, So., 27.09.2026" bzw. nur das Datum */
@@ -101,8 +109,8 @@ export function albumLabel(album: string | null, date: string | null | undefined
   return rest ? `${rest}, ${formatCompactDate(date)}` : formatCompactDate(date);
 }
 
-/** Zeile unter einem Albumtitel: bei Gottesdiensten das Datum (wenn der Titel es nicht schon zeigt), sonst Interpret · Jahr */
-export function albumSubtitle(album: { title: string; artist: string; year: number | null; date?: string | null }): string {
-  if (album.date) return withoutDate(album.title) ? formatCompactDate(album.date) : album.artist;
+/** Zeile unter einem Albumtitel: bei Gottesdiensten Datum und Sprecher, sonst Interpret · Jahr */
+export function albumSubtitle(album: { artist: string; year: number | null; date?: string | null; speaker?: string | null }): string {
+  if (album.date) return serviceLine(album.date, album.speaker);
   return [album.artist, album.year].filter(Boolean).join(' · ');
 }

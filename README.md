@@ -15,7 +15,7 @@ Bedienung wie bei Spotify oder Apple Music, Farben schlicht schwarz auf weiß wi
 mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 
 - **Start**: Begrüßung mit Vornamen, der neueste Gottesdienst groß oben, „Weiterhören“ (angefangene
-  Predigten mit Fortschritt), „Zuletzt gehört“, „Neu hinzugefügt“, Gottesdienste nach Datum, eigene
+  Predigten mit Fortschritt), „Zuletzt gehört“, weitere Gottesdienste, „Neue Musik“ (ohne Gottesdienste), eigene
   Favoriten, Genres als Kacheln und Jahrzehnte
 - **Gottesdienste**: Alben mit Datum im Ordnernamen heißen nach dem Anlass mit Wochentag und Datum
   („Erntedank, So., 27.09.2026“) und bekommen ohne eigenes Bild ein Kalenderblatt als Cover.
@@ -279,7 +279,7 @@ sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 
 | Methode und Pfad | Zweck |
 | --- | --- |
-| `GET /api/albums?q=&artist=&genre=&year=&decade=&sort=artist\|title\|year\|recent\|date\|popular&limit=&offset=` | Alben suchen und filtern |
+| `GET /api/albums?q=&artist=&genre=&year=&decade=&dated=&sort=artist\|title\|year\|recent\|date\|popular&limit=&offset=` | Alben suchen und filtern; `dated=true` nur Gottesdienste (Datum im Ordnernamen), `dated=false` nur Musik |
 | `GET /api/albums/:id` | Album mit Titelliste |
 | `GET /api/albums/:id/cover` | Albumcover (Bild im Ordner, sonst eingebettet) |
 | `GET /api/tracks/:id/cover` | Bild des Titels, sonst Albumcover |

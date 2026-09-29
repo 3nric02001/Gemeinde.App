@@ -3,7 +3,7 @@ import { coverUrl, query, type Page } from '../api';
 import { hasRole, useAuth } from '../auth';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
-import { plural } from '../format';
+import { albumTitle, formatCompactDate, plural } from '../format';
 import { useDebounced } from '../hooks';
 import { match, navigate, type Location } from '../router';
 import { Empty, ErrorNote, Loading } from '../pages/common';
@@ -68,7 +68,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
     try {
       const page = await adminRequest<Page<AdminAlbum>>(
         'GET',
-        `/api/admin/albums${query({ q, kind, sort: 'title', limit: PAGE, offset })}`,
+        `/api/admin/albums${query({ q, kind, sort: 'date', limit: PAGE, offset })}`,
       );
       setAlbums((prev) => (offset ? [...(prev ?? []), ...page.items] : page.items));
       setTotal(page.total);
@@ -137,11 +137,15 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
             {albums.map((album) => (
               <li key={album.id}>
                 <a href={`/admin/album/${album.id}`} class="admin-row">
-                  <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} class="cover-sm" />
+                  <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-sm" />
                   <span class="track-main">
-                    <span class="track-title">{album.title}</span>
+                    {/* Name wie bei den Hörern; bei Gottesdiensten der gespeicherte Name klein dahinter */}
+                    <span class="track-title">{albumTitle(album.title, album.date)}</span>
                     <span class="track-sub">
-                      {album.artist} · {plural(album.trackCount, 'Titel', 'Titel')}
+                      {[album.date && formatCompactDate(album.date), album.artist, plural(album.trackCount, 'Titel', 'Titel')]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      {album.date && ` · „${album.title}“`}
                     </span>
                   </span>
                   <span class="admin-badges">

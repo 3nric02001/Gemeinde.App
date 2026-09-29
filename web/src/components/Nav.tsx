@@ -97,11 +97,37 @@ export function TabBar({ path }: { path: string }) {
   return (
     <nav class="tabbar" aria-label="Hauptnavigation">
       {tabs.map((item) => (
-        <a key={item.href} href={item.href} class={item.match(path) ? 'is-active' : ''} aria-current={item.match(path) ? 'page' : undefined}>
+        <a
+          key={item.href}
+          href={item.href}
+          class={item.match(path) ? 'is-active' : ''}
+          aria-current={item.match(path) ? 'page' : undefined}
+          onClick={(event) => {
+            if (path === item.href) onActiveTab(event, item.href);
+          }}
+        >
           <Icon name={item.icon} size={22} />
           <span>{item.label}</span>
         </a>
       ))}
     </nav>
   );
+}
+
+/**
+ * Tipp auf den Tab, in dem man schon ist: nach oben scrollen, oben angekommen bei der Suche ins Suchfeld.
+ * Ersetzt das Tippen auf die Statusleiste, das beim eigenen Scrollbereich auf dem iPhone nicht mehr greift.
+ */
+function onActiveTab(event: MouseEvent, href: string): void {
+  const main = document.querySelector<HTMLElement>('.main');
+  if (main && main.scrollTop > 0) {
+    event.preventDefault();
+    main.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  const input = href === '/suche' ? document.querySelector<HTMLInputElement>('.main input[type="search"]') : null;
+  if (input) {
+    event.preventDefault();
+    input.focus();
+  }
 }

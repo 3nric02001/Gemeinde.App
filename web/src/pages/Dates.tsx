@@ -3,7 +3,7 @@ import type { DatedFolder, DatedFolderDetail } from '../api';
 import { getJson, query, trackCoverUrl } from '../api';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
-import { formatLongDate, formatMonth, formatShortDate, plural, withoutDate } from '../format';
+import { albumTitle, formatLongDate, formatMonth, serviceLine } from '../format';
 import { usePaged } from '../hooks';
 import { player } from '../player';
 import { Empty, ErrorNote, Loading } from './common';
@@ -15,9 +15,9 @@ export async function playFolder(folder: string, shuffle = false) {
   player.playList(detail.tracks, 0, { shuffle });
 }
 
-/** Zusatzzeile unter dem Datum: Ordnername ohne das Datum, sonst Sprecher oder die Anzahl Titel */
+/** Zeile unter dem Anlass: Datum und Sprecher */
 export function folderSubtitle(folder: DatedFolder): string {
-  return withoutDate(folder.name) || folder.speaker || plural(folder.trackCount, 'Titel', 'Titel');
+  return serviceLine(folder.date, folder.speaker);
 }
 
 function DateCard({ folder }: { folder: DatedFolder }) {
@@ -29,7 +29,7 @@ function DateCard({ folder }: { folder: DatedFolder }) {
           title={folder.name}
           date={folder.date}
         />
-        <span class="card-title">{formatShortDate(folder.date)}</span>
+        <span class="card-title">{albumTitle(folder.name, folder.date)}</span>
         <span class="card-sub">{folderSubtitle(folder)}</span>
       </a>
       <button

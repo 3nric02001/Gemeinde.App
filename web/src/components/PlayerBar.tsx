@@ -63,7 +63,9 @@ export function PlayerBar({ onExpand }: { onExpand: () => void }) {
       >
         <Icon name={playing ? 'pause' : 'play'} size={26} />
       </button>
-      <div class="mini-progress" style={{ width: `${progress}%` }} />
+      <div class="mini-track">
+        <div class="mini-progress" style={{ width: `${progress}%` }} />
+      </div>
     </footer>
   );
 }
