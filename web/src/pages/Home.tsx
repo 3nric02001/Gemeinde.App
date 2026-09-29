@@ -132,7 +132,7 @@ export function Home() {
 
 /** Große Karte ganz oben: der neueste Gottesdienst zum direkten Abspielen */
 function LatestService({ folder }: { folder: DatedFolder }) {
-  const occasion = withoutDate(folder.name);
+  const occasion = withoutDate(folder.title ?? folder.name);
   return (
     <section class="latest">
       <a class="latest-link" href={folderHref(folder.folder)}>

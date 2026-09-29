@@ -46,6 +46,13 @@ export function searchExtra(tags: Array<[string, string]>): string | null {
   const values = tags.filter(([tag]) => !CORE_TAGS.has(tag)).map(([, value]) => value);
   return values.length ? values.join(' ') : null;
 }
+
+/** Ein in der Verwaltung gesetzter Sprecher soll in der Suche genauso zählen wie einer aus den Tags. */
+export function withSpeakerOverride(extra: string | null, speaker: string | null | undefined): string | null {
+  if (!speaker) return extra;
+  return extra ? `${extra} ${speaker}` : speaker;
+}
+
 const MAX_TAGS = 60;
 
 /** Mehrfachwerte ("Lobpreis; Chor") aufteilen, leere und überlange verwerfen */

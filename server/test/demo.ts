@@ -94,6 +94,7 @@ for (const [folder, titles, colors] of services) {
 const config = loadConfig({
   NEXTCLOUD_URL: cloud.url, NEXTCLOUD_USER: USER, NEXTCLOUD_PASSWORD: PASSWORD, NEXTCLOUD_MUSIC_PATH: '/Musik',
   DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000', ADMIN_PASSWORD: 'demo',
+  PUBLIC_URL: 'http://localhost:3000',
 });
 const { app, db, scanner } = await buildApp(config, { logger: false });
 await scanner.scan();

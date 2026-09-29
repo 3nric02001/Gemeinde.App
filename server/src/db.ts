@@ -429,6 +429,30 @@ export const migrations: string[] = [
   ) WITHOUT ROWID;
   CREATE INDEX track_plays_track ON track_plays(track_id);
   `,
+  `
+  -- Korrekturen einzelner Titel aus der Verwaltung (Titelname, Sprecher), je Pfad wie die übrigen
+  -- Korrekturen. Der Scan übernimmt sie; tag_title hält den Namen aus der Datei fürs Zurücksetzen.
+  ALTER TABLE tracks ADD COLUMN tag_title TEXT;
+  UPDATE tracks SET tag_title = title;
+  CREATE TABLE track_overrides (
+    path    TEXT PRIMARY KEY,
+    title   TEXT,
+    speaker TEXT
+  ) WITHOUT ROWID;
+  -- Hochgeladenes Titelbild eines Albums; liegt wie eingebettete Bilder in covers.
+  ALTER TABLE album_overrides ADD COLUMN cover_id INTEGER REFERENCES covers(id) ON DELETE SET NULL;
+  -- Wer hat in der Verwaltung was geändert (library/changes.ts).
+  CREATE TABLE changes (
+    id        INTEGER PRIMARY KEY,
+    at        INTEGER NOT NULL,
+    user_id   INTEGER,
+    user_name TEXT NOT NULL,
+    action    TEXT NOT NULL,
+    target    TEXT,
+    album_id  INTEGER
+  );
+  CREATE INDEX changes_album ON changes(album_id, id);
+  `,
 ];
 
 export function openDatabase(path: string): DB {

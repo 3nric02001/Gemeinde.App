@@ -17,6 +17,8 @@ export interface DatedFolder {
 }
 
 export interface SermonInfo {
+  /** Name des Albums, z. B. der in der Verwaltung korrigierte Anlass */
+  title: string | null;
   speaker: string | null;
   passage: string | null;
   description: string | null;
@@ -27,13 +29,13 @@ export function withSermonInfo<T extends DatedFolder>(db: DB, folders: T[]): Arr
   const ids = folders.map((f) => f.albumId).filter((id): id is number => id !== null);
   const rows = ids.length
     ? (db
-        .prepare('SELECT id, speaker, passage, description FROM albums WHERE id IN (SELECT value FROM json_each(?))')
+        .prepare('SELECT id, title, speaker, passage, description FROM albums WHERE id IN (SELECT value FROM json_each(?))')
         .all(JSON.stringify(ids)) as Array<SermonInfo & { id: number }>)
     : [];
   const byId = new Map(rows.map((row) => [row.id, row]));
   return folders.map((folder) => {
     const info = folder.albumId !== null ? byId.get(folder.albumId) : undefined;
-    return { ...folder, speaker: info?.speaker ?? null, passage: info?.passage ?? null, description: info?.description ?? null };
+    return { ...folder, title: info?.title ?? null, speaker: info?.speaker ?? null, passage: info?.passage ?? null, description: info?.description ?? null };
   });
 }
 

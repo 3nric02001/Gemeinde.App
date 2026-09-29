@@ -1,8 +1,12 @@
 import type { FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
+import { query } from '../api';
 import { ROLE_LABELS, setBranding, useAuth, type Branding, type Role } from '../auth';
+import { Icon } from '../components/Icon';
+import { plural } from '../format';
 import { Empty, ErrorNote, Loading } from '../pages/common';
-import { adminRequest } from './api';
+import { adminRequest, type Change } from './api';
+import { Switch } from './Switch';
 
 export interface AdminUser {
   id: number;
@@ -58,11 +62,22 @@ const ROLE_HINTS: Record<Role, string> = {
   manager: 'Alben und Titel bearbeiten',
   admin: 'alles, auch Benutzer und Anmeldung',
 };
+/** Ausführlicher für die Erklärung unter Gruppen */
+const ROLE_DETAILS: Record<Role, string> = {
+  listener: 'hören Gottesdienste und Musik, merken sich Favoriten.',
+  manager: 'pflegen zusätzlich Alben, Titel und Kategorien.',
+  admin: 'verwalten zusätzlich Benutzer, Gruppen und die Anmeldung und sehen das Änderungsprotokoll.',
+};
 
-export const ACCESS_SECTIONS: Array<{ path: string; label: string; Component: FunctionComponent }> = [
+export interface SectionProps {
+  params: URLSearchParams;
+}
+
+export const ACCESS_SECTIONS: Array<{ path: string; label: string; Component: FunctionComponent<SectionProps> }> = [
   { path: '/admin/benutzer', label: 'Benutzer', Component: UsersAdmin },
   { path: '/admin/gruppen', label: 'Gruppen', Component: GroupsAdmin },
   { path: '/admin/anmeldung', label: 'Anmeldung', Component: LoginAdmin },
+  { path: '/admin/aenderungen', label: 'Änderungen', Component: ChangesAdmin },
 ];
 
 /** Reiter der Verwaltung; Benutzer, Gruppen und Anmeldung nur für Admins. */
@@ -100,9 +115,31 @@ function useLoad<T>(url: string): [T | undefined, string | undefined, (value: T)
 
 // ---------- Benutzer ----------
 
-function UsersAdmin() {
+type UserFilter = '' | Role | 'gesperrt' | 'ohne';
+const USER_FILTERS: Array<{ value: UserFilter; label: string; test: (user: AdminUser) => boolean }> = [
+  { value: '', label: 'Alle', test: () => true },
+  { value: 'listener', label: 'Hörer', test: (u) => !u.disabled && u.role === 'listener' },
+  { value: 'manager', label: 'Manager', test: (u) => !u.disabled && u.role === 'manager' },
+  { value: 'admin', label: 'Admins', test: (u) => !u.disabled && u.role === 'admin' },
+  { value: 'gesperrt', label: 'Gesperrt', test: (u) => u.disabled },
+  { value: 'ohne', label: 'Kein Zugang', test: (u) => !u.disabled && !u.role },
+];
+
+/** Woher die Rolle kommt: die freigeschalteten Gruppen mit genau dieser Rolle, z. B. „Manager über Musikteam“ */
+export function roleOrigin(user: AdminUser, groups: AdminGroup[]): string | undefined {
+  if (user.kind === 'local' || !user.role) return undefined;
+  const via = groups.filter((g) => g.enabled && g.role === user.role && user.groups.includes(g.name)).map((g) => g.name);
+  return via.length ? `${ROLE_LABELS[user.role]} über ${via.join(', ')}` : undefined;
+}
+
+function UsersAdmin({ params }: SectionProps) {
   const [data, error, setData] = useLoad<{ items: AdminUser[] }>('/api/admin/users');
+  const [groups] = useLoad<GroupsData>('/api/admin/groups');
   const [actionError, setActionError] = useState<string | undefined>();
+  const [text, setText] = useState('');
+  const filter = USER_FILTERS.find((f) => f.value === (params.get('rolle') ?? '')) ?? USER_FILTERS[0]!;
+  const group = params.get('gruppe') ?? undefined;
+  const href = (rolle: string, gruppe = group) => `/admin/benutzer${query({ rolle: rolle || undefined, gruppe })}`;
 
   const run = async (action: () => Promise<void>) => {
     try {
@@ -113,6 +150,15 @@ function UsersAdmin() {
       setActionError((e as Error).message);
     }
   };
+
+  // Suche und Gruppe grenzen ein, die Zahlen an den Filtern beziehen sich auf das Ergebnis.
+  const needle = text.trim().toLocaleLowerCase('de');
+  const found = (data?.items ?? []).filter(
+    (user) =>
+      (!group || user.groups.includes(group)) &&
+      (!needle || [user.name, user.email, user.username].some((value) => value?.toLocaleLowerCase('de').includes(needle))),
+  );
+  const visible = found.filter(filter.test);
 
   return (
     <>
@@ -131,60 +177,103 @@ function UsersAdmin() {
       ) : !data ? (
         <Loading />
       ) : (
-        <ul class="admin-list">
-          {data.items.map((user) => (
-            <li key={user.id} class="admin-row admin-user">
-              <span class="track-main">
-                <span class="track-title">{user.name}</span>
-                <span class="track-sub">
-                  {user.kind === 'local'
-                    ? `Lokaler Admin · Benutzername ${user.username}`
-                    : [user.email, user.groups.length ? `Gruppen: ${user.groups.join(', ')}` : 'keine Gruppen']
-                        .filter(Boolean)
-                        .join(' · ')}
-                  {' · '}Zuletzt angemeldet: {dateOf(user.lastLoginAt)}
-                </span>
-              </span>
-              <span class="admin-badges">
-                {user.disabled ? (
-                  <span class="badge badge-muted">Gesperrt</span>
-                ) : user.role ? (
-                  <span class="badge">{ROLE_LABELS[user.role]}</span>
-                ) : (
-                  <span class="badge badge-muted">Kein Zugang</span>
-                )}
-              </span>
-              {user.kind === 'oidc' && (
-                <span class="admin-user-actions">
-                  <button
-                    type="button"
-                    class="button-secondary button-small"
-                    onClick={() =>
-                      void run(() => adminRequest('PATCH', `/api/admin/users/${user.id}`, { disabled: !user.disabled }))
-                    }
-                  >
-                    {user.disabled ? 'Entsperren' : 'Sperren'}
-                  </button>
-                  <button
-                    type="button"
-                    class="button-secondary button-small"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `${user.name} entfernen? Bei der nächsten Anmeldung wird der Benutzer neu angelegt, sofern seine Gruppe freigeschaltet ist.`,
-                        )
-                      ) {
-                        void run(() => adminRequest('DELETE', `/api/admin/users/${user.id}`));
-                      }
-                    }}
-                  >
-                    Entfernen
-                  </button>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          <form class="search-box" role="search" onSubmit={(e) => e.preventDefault()}>
+            <Icon name="search" size={20} />
+            <input
+              type="search"
+              value={text}
+              placeholder="Name oder E-Mail suchen"
+              aria-label="Benutzer suchen"
+              autocomplete="off"
+              onInput={(e) => setText((e.target as HTMLInputElement).value)}
+            />
+          </form>
+          <nav class="chips-row" aria-label="Benutzer filtern">
+            {USER_FILTERS.map((f) => {
+              const count = found.filter(f.test).length;
+              if (f.value && !count && f.value !== filter.value) return null;
+              return (
+                <a
+                  key={f.value}
+                  class={`chip${f.value === filter.value ? ' is-on' : ''}`}
+                  href={href(f.value)}
+                  aria-current={f.value === filter.value ? 'true' : undefined}
+                >
+                  {f.label} <span class="chip-count">{count}</span>
+                </a>
+              );
+            })}
+            {group && (
+              <a class="chip is-on" href={href(filter.value, undefined)} aria-label={`Filter Gruppe ${group} entfernen`}>
+                Gruppe: {group} <Icon name="close" size={14} />
+              </a>
+            )}
+          </nav>
+          {visible.length === 0 ? (
+            <Empty title="Keine Benutzer gefunden" />
+          ) : (
+            <ul class="admin-list">
+              {visible.map((user) => {
+                const origin = roleOrigin(user, groups?.items ?? []);
+                return (
+                  <li key={user.id} class="admin-row admin-user">
+                    <span class="track-main">
+                      <span class="track-title">{user.name}</span>
+                      <span class="track-sub">
+                        {user.kind === 'local'
+                          ? `Lokaler Admin · Benutzername ${user.username}`
+                          : [user.email, `Zuletzt angemeldet: ${dateOf(user.lastLoginAt)}`].filter(Boolean).join(' · ')}
+                      </span>
+                      {user.kind === 'oidc' && (
+                        <span class="track-sub">
+                          {[origin, user.groups.length ? `Gruppen: ${user.groups.join(', ')}` : 'keine Gruppen'].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                    </span>
+                    <span class="admin-badges">
+                      {user.disabled ? (
+                        <span class="badge badge-muted">Gesperrt</span>
+                      ) : user.role ? (
+                        <span class="badge">{ROLE_LABELS[user.role]}</span>
+                      ) : (
+                        <span class="badge badge-muted">Kein Zugang</span>
+                      )}
+                    </span>
+                    {user.kind === 'oidc' && (
+                      <span class="admin-user-actions">
+                        <button
+                          type="button"
+                          class="button-secondary button-small"
+                          onClick={() =>
+                            void run(() => adminRequest('PATCH', `/api/admin/users/${user.id}`, { disabled: !user.disabled }))
+                          }
+                        >
+                          {user.disabled ? 'Entsperren' : 'Sperren'}
+                        </button>
+                        <button
+                          type="button"
+                          class="button-secondary button-small"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `${user.name} entfernen? Bei der nächsten Anmeldung wird der Benutzer neu angelegt, sofern seine Gruppe freigeschaltet ist.`,
+                              )
+                            ) {
+                              void run(() => adminRequest('DELETE', `/api/admin/users/${user.id}`));
+                            }
+                          }}
+                        >
+                          Entfernen
+                        </button>
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
     </>
   );
@@ -192,7 +281,7 @@ function UsersAdmin() {
 
 // ---------- Gruppen ----------
 
-function GroupsAdmin() {
+function GroupsAdmin(_props: SectionProps) {
   const [data, error, setData] = useLoad<GroupsData>('/api/admin/groups');
   const [actionError, setActionError] = useState<string | undefined>();
   const [name, setName] = useState('');
@@ -219,8 +308,16 @@ function GroupsAdmin() {
       <p class="admin-hint">
         Nur wer in einer freigeschalteten Gruppe ist, kann sich über das Gemeinde-Konto anmelden. Gruppen erscheinen hier, sobald
         sich jemand aus ihnen anmeldet; du kannst sie auch vorab eintragen. Wer in mehreren Gruppen ist, bekommt die höchste
-        Rolle.
+        Rolle seiner freigeschalteten Gruppen.
       </p>
+      <dl class="admin-roles" aria-label="Was die Rollen dürfen">
+        {ROLES.map((role) => (
+          <div key={role}>
+            <dt>{ROLE_LABELS[role]}</dt>
+            <dd>{ROLE_DETAILS[role]}</dd>
+          </div>
+        ))}
+      </dl>
       <form
         class="admin-panel admin-inline"
         onSubmit={(event) => {
@@ -258,26 +355,32 @@ function GroupsAdmin() {
       ) : (
         <ul class="admin-list">
           {data.items.map((group) => (
-            <li key={group.name} class="admin-row admin-group">
-              <label class="admin-check">
-                <input
-                  type="checkbox"
-                  checked={group.enabled}
-                  onChange={(e) => void save(group.name, { enabled: (e.target as HTMLInputElement).checked })}
-                />
-                <span class="track-main">
-                  <span class="track-title">{group.name}</span>
-                  <span class="track-sub">
-                    {group.userCount === 1 ? '1 Benutzer' : `${group.userCount} Benutzer`} · zuletzt gesehen:{' '}
-                    {dateOf(group.lastSeenAt)}
-                  </span>
+            <li key={group.name} class={`admin-row admin-group${group.enabled ? '' : ' is-off'}`}>
+              <span class="track-main">
+                <span class="track-title">{group.name}</span>
+                <span class="track-sub">
+                  {group.userCount > 0 ? (
+                    <a href={`/admin/benutzer${query({ gruppe: group.name })}`}>{plural(group.userCount, 'Benutzer', 'Benutzer')}</a>
+                  ) : (
+                    'keine Benutzer'
+                  )}
+                  {' · '}zuletzt gesehen: {dateOf(group.lastSeenAt)}
                 </span>
-              </label>
+                {!group.enabled && group.userCount > 0 && (
+                  <span class="track-sub">Mitglieder kommen nur über eine andere, freigeschaltete Gruppe herein.</span>
+                )}
+              </span>
+              <Switch
+                checked={group.enabled}
+                label="Darf sich anmelden"
+                onChange={(enabled) => void save(group.name, { enabled })}
+              />
               <label class="field admin-role">
                 <span class="visually-hidden">Rolle für {group.name}</span>
                 <select
                   value={group.role}
                   disabled={!group.enabled}
+                  title={group.enabled ? undefined : 'Erst freischalten, dann wirkt die Rolle'}
                   onChange={(e) => void save(group.name, { role: (e.target as HTMLSelectElement).value as Role })}
                 >
                   {ROLES.map((role) => (
@@ -291,9 +394,10 @@ function GroupsAdmin() {
                 type="button"
                 class="icon-button"
                 aria-label={`${group.name} entfernen`}
+                title="Gruppe entfernen"
                 onClick={() => void remove(group.name)}
               >
-                ×
+                <Icon name="close" size={18} />
               </button>
             </li>
           ))}
@@ -352,7 +456,7 @@ function DeniedLoginNote({
 
 // ---------- Anmeldung (OIDC und lokaler Admin) ----------
 
-function LoginAdmin() {
+function LoginAdmin(_props: SectionProps) {
   const { user } = useAuth();
   return (
     <>
@@ -482,20 +586,21 @@ function OidcSettings() {
         Lege im Identity Provider (z. B. Keycloak, Authentik, Nextcloud) einen Client an und trage dort diese Weiterleitungs-URL
         ein: <code class="admin-copy">{form.redirectUri}</code>
       </p>
+      {/* Nur ein Hinweis: Ist die Anmeldung schon an, funktioniert sie auch ohne PUBLIC_URL. Rot wird es erst,
+          wenn „Verbindung testen“ oder Speichern scheitert. */}
       {form.publicUrlMissing && (
-        <p class="admin-error" role="alert">
-          PUBLIC_URL fehlt in der .env. Trage dort die öffentliche Adresse der App ein (z. B. https://musik.gemeinde.de) und starte
-          den Container neu, erst dann lässt sich die Anmeldung einschalten.
+        <p class="admin-note">
+          {data?.enabled
+            ? 'PUBLIC_URL fehlt in der .env. Die Anmeldung läuft, die Weiterleitungs-Adresse stammt dann aber aus der Anfrage. Für den Betrieb hinter einem Proxy trage dort die öffentliche Adresse ein (z. B. https://musik.gemeinde.de) und starte den Container neu.'
+            : 'Zum Einschalten zuerst PUBLIC_URL in der .env setzen (die öffentliche Adresse der App, z. B. https://musik.gemeinde.de) und den Container neu starten.'}
         </p>
       )}
-      <label class="admin-check">
-        <input
-          type="checkbox"
-          checked={form.enabled}
-          onChange={(e) => setForm({ ...form, enabled: (e.target as HTMLInputElement).checked })}
-        />
-        <span>Anmeldung über das Gemeinde-Konto einschalten</span>
-      </label>
+      <Switch
+        checked={form.enabled}
+        disabled={form.publicUrlMissing && !data?.enabled}
+        label="Anmeldung über das Gemeinde-Konto"
+        onChange={(enabled) => setForm({ ...form, enabled })}
+      />
       <label class="field">
         <span>Issuer-URL</span>
         <input type="url" placeholder="https://login.gemeinde.de/realms/gemeinde" {...field('issuer')} />
@@ -600,5 +705,73 @@ function PasswordForm() {
         </button>
       </div>
     </form>
+  );
+}
+
+// ---------- Änderungen ----------
+
+const CHANGES_PAGE = 50;
+
+/** Wer hat in der Verwaltung was geändert, neueste zuerst (nur für Admins). */
+function ChangesAdmin(_props: SectionProps) {
+  const [items, setItems] = useState<Change[] | undefined>();
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | undefined>();
+
+  const load = async (offset: number) => {
+    try {
+      const page = await adminRequest<{ items: Change[]; total: number }>(
+        'GET',
+        `/api/admin/changes${query({ limit: CHANGES_PAGE, offset })}`,
+      );
+      setItems((prev) => (offset ? [...(prev ?? []), ...page.items] : page.items));
+      setTotal(page.total);
+      setError(undefined);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  useEffect(() => void load(0), []);
+
+  return (
+    <>
+      <h1 class="page-title">Änderungen</h1>
+      <p class="admin-hint">
+        Was in der Verwaltung geändert wurde und von wem, neueste zuerst. Die letzten 5.000 Änderungen bleiben erhalten.
+      </p>
+      {error && !items ? (
+        <ErrorNote message={error} />
+      ) : !items ? (
+        <Loading />
+      ) : items.length === 0 ? (
+        <Empty title="Noch keine Änderungen" />
+      ) : (
+        <>
+          <ul class="admin-list admin-changes">
+            {items.map((change) => (
+              <li key={change.id} class="admin-change">
+                <span class="track-title">
+                  {change.action}
+                  {change.target && (
+                    <>
+                      {': '}
+                      {change.albumId ? <a href={`/admin/album/${change.albumId}`}>{change.target}</a> : change.target}
+                    </>
+                  )}
+                </span>
+                <span class="track-sub">
+                  {change.userName} · {new Date(change.at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {items.length < total && (
+            <button type="button" class="button-secondary admin-more" onClick={() => void load(items.length)}>
+              Weitere laden
+            </button>
+          )}
+        </>
+      )}
+    </>
   );
 }

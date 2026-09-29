@@ -2,16 +2,34 @@ import { useEffect, useState } from 'preact/hooks';
 import { coverUrl, query, type Page, type Track } from '../api';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
-import { formatDuration, formatTime, plural } from '../format';
+import { albumTitle, formatCompactDate, formatDuration, formatTime, plural, serviceLine, withoutDate } from '../format';
 import { useDebounced } from '../hooks';
 import { navigate } from '../router';
 import { ErrorNote, Loading } from '../pages/common';
-import { adminRequest, type AdminAlbum, type AdminAlbumDetail, type AlbumFields } from './api';
+import {
+  adminRequest,
+  adminUpload,
+  type AdminAlbum,
+  type AdminAlbumDetail,
+  type AlbumFields,
+  type Change,
+  type TrackEdit,
+} from './api';
 import { Rules } from './Rules';
+import { Switch } from './Switch';
 
 interface Props {
   id: number;
   onError: (error: Error) => void;
+}
+
+/** Bildformate, die der Server beim Hochladen annimmt */
+const COVER_TYPES = 'image/jpeg,image/png,image/webp';
+
+/** "Zuletzt geändert von Anna Beispiel am 29.09.2026, 22:13: Album bearbeitet (Sprecher)" */
+export function describeLastChange(change: Change): string {
+  const when = new Date(change.at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  return `Zuletzt geändert von ${change.userName} am ${when}: ${change.action}`;
 }
 
 export function AlbumEditor({ id, onError }: Props) {
@@ -20,17 +38,27 @@ export function AlbumEditor({ id, onError }: Props) {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [picking, setPicking] = useState(false);
+  const [editing, setEditing] = useState<number | undefined>();
+  // Das Cover bleibt einen Tag im Browser-Cache; nach dem Hochladen die neue Fassung erzwingen.
+  const [coverVersion, setCoverVersion] = useState(0);
+  // Jeder neue Stand vom Server setzt das Formular darauf zurück.
+  const [revision, setRevision] = useState(0);
 
   /** Führt eine Änderung aus; der Server antwortet mit dem neuen Stand des Albums. */
   const run = async (action: () => Promise<AdminAlbumDetail | void>) => {
     setBusy(true);
     try {
       const next = await action();
-      if (next) setAlbum(next);
+      if (next) {
+        setAlbum(next);
+        setRevision((r) => r + 1);
+      }
       setError(undefined);
+      return true;
     } catch (e) {
       onError(e as Error);
       setError((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -41,9 +69,12 @@ export function AlbumEditor({ id, onError }: Props) {
   if (!album) return error ? <ErrorNote message={error} /> : <Loading />;
 
   const manual = album.kind === 'manual';
+  const dated = Boolean(album.date);
+  const name = albumTitle(album.title, album.date);
   const base = `/api/admin/albums/${id}`;
   const ids = album.tracks.map((t) => t.id);
   const viaRule = new Set(album.ruleTrackIds);
+  const edits = new Map(album.trackEdits.map((edit) => [edit.id, edit]));
 
   const move = (index: number, delta: number) => {
     const order = [...ids];
@@ -57,36 +88,81 @@ export function AlbumEditor({ id, onError }: Props) {
     else next.add(trackId);
     setSelected(next);
   };
+  const changeCover = (file: File | null) =>
+    void run(async () => {
+      const next = file
+        ? await adminUpload<AdminAlbumDetail>(`${base}/cover`, file)
+        : await adminRequest<AdminAlbumDetail>('DELETE', `${base}/cover`);
+      setCoverVersion(Date.now());
+      return next;
+    });
 
   return (
     <>
       <a class="more-link admin-back" href="/admin">
         <Icon name="back" size={16} /> Alle Alben
       </a>
+      {/* Kopf wie bei den Hörern, damit man sieht, was man bearbeitet */}
       <header class="hero admin-hero">
-        <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} class="cover-hero" eager />
+        <div class="admin-cover">
+          <Cover
+            src={album.hasCover ? `${coverUrl(album.id)}${coverVersion ? `?v=${coverVersion}` : ''}` : undefined}
+            title={name}
+            date={album.date}
+            class="cover-hero"
+            eager
+          />
+          <div class="admin-cover-actions">
+            <label class={`button-secondary button-small admin-file${busy ? ' is-disabled' : ''}`}>
+              {album.customCover ? 'Bild ersetzen' : 'Bild hochladen'}
+              <input
+                type="file"
+                accept={COVER_TYPES}
+                disabled={busy}
+                onChange={(e) => {
+                  const input = e.target as HTMLInputElement;
+                  const file = input.files?.[0];
+                  input.value = '';
+                  if (file) changeCover(file);
+                }}
+              />
+            </label>
+            {album.customCover && (
+              <button type="button" class="more-link" disabled={busy} onClick={() => changeCover(null)}>
+                Eigenes Bild entfernen
+              </button>
+            )}
+          </div>
+        </div>
         <div class="hero-text">
-          <span class="eyebrow">
-            {manual ? 'Eigenes Album' : 'Automatisches Album'}
-            {album.hidden && ' · ausgeblendet'}
-          </span>
-          <h1>{album.title}</h1>
-          <p class="hero-sub">{album.artist}</p>
+          <span class="eyebrow">{dated ? 'Gottesdienst' : manual ? 'Eigenes Album' : 'Automatisches Album'}</span>
+          <h1>{name}</h1>
+          <p class="hero-sub">{dated ? serviceLine(album.date!, album.speaker) : album.artist}</p>
           <p class="hero-meta">
             {plural(album.trackCount, 'Titel', 'Titel')}, {formatDuration(album.duration)}
-            {!album.hidden && (
-              <>
-                {' · '}
-                <a href={`/album/${album.id}`}>Im Player öffnen</a>
-              </>
-            )}
           </p>
+          <div class="admin-visibility">
+            <Switch
+              checked={!album.hidden}
+              disabled={busy}
+              label="Für Hörer sichtbar"
+              onChange={(visible) => void run(() => adminRequest('PATCH', base, { hidden: !visible }))}
+            />
+            {album.hidden ? (
+              <span class="admin-hint">Hörer finden dieses Album nicht, z. B. weil die Titel jetzt in eigenen Alben stehen.</span>
+            ) : (
+              <a class="button-secondary button-small" href={`/album/${album.id}`}>
+                Ansehen
+              </a>
+            )}
+          </div>
+          {album.lastChange && <p class="admin-hint admin-last">{describeLastChange(album.lastChange)}</p>}
         </div>
       </header>
 
       {error && <p class="admin-error" role="alert">{error}</p>}
 
-      <DetailsForm album={album} busy={busy} onSave={(fields) => run(() => adminRequest('PATCH', base, fields))} />
+      <DetailsForm key={revision} album={album} busy={busy} onSave={(fields) => run(() => adminRequest('PATCH', base, fields))} />
 
       <section class="shelf">
         <div class="section-head">
@@ -106,61 +182,97 @@ export function AlbumEditor({ id, onError }: Props) {
         {album.tracks.length === 0 ? (
           <p class="admin-hint">{manual ? 'Noch keine Titel. Füge unten welche hinzu.' : 'Alle Titel wurden herausgenommen.'}</p>
         ) : (
-          <ol class="admin-tracks">
-            {album.tracks.map((track, index) => (
-              <li key={track.id} class="admin-track">
-                <input
-                  type="checkbox"
-                  checked={selected.has(track.id)}
-                  aria-label={`${track.title} auswählen`}
-                  onChange={() => toggle(track.id)}
-                />
-                <span class="track-no">{index + 1}</span>
-                <span class="track-main">
-                  <span class="track-title">{track.title}</span>
-                  <span class="track-sub">
-                    {track.artist}
-                    {track.album && track.album !== album.title ? ` · ${track.album}` : ''}
-                  </span>
-                </span>
-                <span class="track-time">
-                  {viaRule.has(track.id) && <span class="badge badge-muted" title="Über eine Regel im Album">Regel</span>}{' '}
-                  {formatTime(track.duration)}
-                </span>
-                <span class="admin-track-actions">
-                  {manual && (
-                    <>
-                      <button type="button" class="icon-button" aria-label="Nach oben" disabled={busy || index === 0} onClick={() => move(index, -1)}>
-                        <Icon name="down" size={18} class="flip" />
-                      </button>
+          <>
+            <p class="admin-hint admin-tracks-hint">
+              Mit dem Stift korrigierst du Name und Sprecher eines Titels. Mit den Häkchen wählst du Titel aus, um sie in ein
+              eigenes Album zu übernehmen.
+            </p>
+            <ol class="admin-tracks">
+              {album.tracks.map((track, index) => {
+                const edit = edits.get(track.id);
+                const corrected = Boolean(edit && (edit.title || edit.speaker));
+                return [
+                  <li key={track.id} class="admin-track">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(track.id)}
+                      aria-label={`${track.title} auswählen`}
+                      onChange={() => toggle(track.id)}
+                    />
+                    <span class="track-no">{index + 1}</span>
+                    <span class="track-main">
+                      <span class="track-title">
+                        {track.title}
+                        {corrected && <span class="badge badge-muted admin-inline-badge">korrigiert</span>}
+                      </span>
+                      <span class="track-sub">
+                        {track.speaker ?? track.artist}
+                        {track.album && track.album !== album.title ? ` · ${track.album}` : ''}
+                      </span>
+                    </span>
+                    <span class="track-time">
+                      {viaRule.has(track.id) && <span class="badge badge-muted" title="Über eine Regel im Album">Regel</span>}{' '}
+                      {formatTime(track.duration)}
+                    </span>
+                    <span class="admin-track-actions">
                       <button
                         type="button"
                         class="icon-button"
-                        aria-label="Nach unten"
-                        disabled={busy || index === album.tracks.length - 1}
-                        onClick={() => move(index, 1)}
+                        aria-label={`${track.title} bearbeiten`}
+                        aria-expanded={editing === track.id}
+                        title="Name und Sprecher bearbeiten"
+                        disabled={busy}
+                        onClick={() => setEditing(editing === track.id ? undefined : track.id)}
                       >
-                        <Icon name="down" size={18} />
+                        <Icon name="edit" size={18} />
                       </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    class="icon-button"
-                    aria-label={manual ? `${track.title} entfernen` : `${track.title} aus dem Album nehmen`}
-                    title={manual ? 'Entfernen' : 'Aus dem Album nehmen'}
-                    disabled={busy}
-                    onClick={() => void run(() => adminRequest('DELETE', `${base}/tracks/${track.id}`))}
-                  >
-                    <Icon name="close" size={18} />
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ol>
+                      {manual && (
+                        <>
+                          <button type="button" class="icon-button" aria-label="Nach oben" disabled={busy || index === 0} onClick={() => move(index, -1)}>
+                            <Icon name="down" size={18} class="flip" />
+                          </button>
+                          <button
+                            type="button"
+                            class="icon-button"
+                            aria-label="Nach unten"
+                            disabled={busy || index === album.tracks.length - 1}
+                            onClick={() => move(index, 1)}
+                          >
+                            <Icon name="down" size={18} />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        class="icon-button"
+                        aria-label={manual ? `${track.title} entfernen` : `${track.title} aus dem Album nehmen`}
+                        title={manual ? 'Entfernen' : 'Aus dem Album nehmen'}
+                        disabled={busy}
+                        onClick={() => void run(() => adminRequest('DELETE', `${base}/tracks/${track.id}`))}
+                      >
+                        <Icon name="close" size={18} />
+                      </button>
+                    </span>
+                  </li>,
+                  editing === track.id && (
+                    <li key={`${track.id}-edit`} class="admin-track-edit">
+                      <TrackForm
+                        track={track}
+                        edit={edit}
+                        busy={busy}
+                        onCancel={() => setEditing(undefined)}
+                        onSave={async (fields) => {
+                          if (await run(() => adminRequest('PATCH', `${base}/tracks/${track.id}`, fields))) setEditing(undefined);
+                        }}
+                      />
+                    </li>
+                  ),
+                ];
+              })}
+            </ol>
+          </>
         )}
       </section>
-
       {album.excluded.length > 0 && (
         <section class="shelf">
           <div class="section-head">
@@ -249,8 +361,8 @@ export function AlbumEditor({ id, onError }: Props) {
         />
       )}
 
-      <section class="shelf admin-danger">
-        {manual ? (
+      {manual && (
+        <section class="shelf admin-danger">
           <button
             type="button"
             class="button-secondary"
@@ -265,18 +377,8 @@ export function AlbumEditor({ id, onError }: Props) {
           >
             Album löschen
           </button>
-        ) : (
-          <label class="admin-check">
-            <input
-              type="checkbox"
-              checked={album.hidden}
-              disabled={busy}
-              onChange={(e) => void run(() => adminRequest('PATCH', base, { hidden: (e.target as HTMLInputElement).checked }))}
-            />
-            Für Hörer ausblenden (z. B. wenn die Titel jetzt in eigenen Alben stehen)
-          </label>
-        )}
-      </section>
+        </section>
+      )}
 
       {picking && (
         <AddToAlbum
@@ -297,10 +399,17 @@ export function AlbumEditor({ id, onError }: Props) {
 }
 
 const TEXT_FIELDS = ['title', 'artist', 'genre', 'speaker', 'passage', 'description'] as const;
+type FieldName = (typeof TEXT_FIELDS)[number] | 'year';
+/** Ohne Anlass heißt ein Gottesdienst einfach so (siehe albumTitle) */
+const NO_OCCASION = 'Gottesdienst';
 
 function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: boolean; onSave: (fields: Partial<AlbumFields>) => void }) {
+  const dated = Boolean(album.date);
+  const manual = album.kind === 'manual';
+  // Bei Gottesdiensten bearbeitet man den Anlass; das Datum steckt im Ordnernamen.
+  const shown = (name: (typeof TEXT_FIELDS)[number]) => (name === 'title' && dated ? withoutDate(album.title) : (album[name] ?? ''));
   const initial = () => ({
-    title: album.title,
+    title: shown('title'),
     artist: album.artist,
     year: album.year ? String(album.year) : '',
     genre: album.genre ?? '',
@@ -309,34 +418,63 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
     description: album.description ?? '',
   });
   const [form, setForm] = useState(initial);
-  useEffect(() => setForm(initial()), [album]);
 
   // Nur geänderte Felder senden: Was nicht angefasst wird, bleibt automatisch.
   const changes: Partial<AlbumFields> = {};
   for (const name of TEXT_FIELDS) {
-    if (form[name].trim() !== (album[name] ?? '')) changes[name] = form[name].trim() || null;
+    if (form[name].trim() === shown(name)) continue;
+    changes[name] = form[name].trim() || (name === 'title' && dated ? NO_OCCASION : null);
   }
   if (form.year.trim() !== (album.year ? String(album.year) : '')) changes.year = form.year.trim() ? Number(form.year) : null;
   const yearValid = !form.year.trim() || /^\d{4}$/.test(form.year.trim());
   const dirty = Object.keys(changes).length > 0;
   const overridden = Object.values(album.overrides).some((value) => value !== null);
-  const manual = album.kind === 'manual';
+  // Predigt-Felder bei Musik nur, wenn dort schon etwas steht
+  const sermon = dated || Boolean(album.speaker || album.passage);
 
-  const label = (name: keyof typeof form, text: string) => (
-    <span>
-      {text}
-      {!manual && album.overrides[name] !== null && <em> · angepasst</em>}
-    </span>
+  /** Woher ein Wert kommt; bei automatischen Alben mit „Zurücksetzen“ für Korrekturen */
+  const source = (name: FieldName) => {
+    if (manual) return null;
+    if (album.overrides[name] !== null) {
+      return (
+        <p class="field-source">
+          Von Hand geändert ·{' '}
+          <button type="button" class="link-button" disabled={busy} onClick={() => onSave({ [name]: null })}>
+            Zurücksetzen
+          </button>
+        </p>
+      );
+    }
+    if (!form[name] || form[name] !== initial()[name]) return null;
+    return <p class="field-source">{name === 'title' && dated ? 'Aus dem Ordnernamen' : 'Aus den Dateien'}</p>;
+  };
+  const field = (name: FieldName, text: string, props: Record<string, unknown> = {}) => (
+    <div class="field-wrap">
+      <label class="field">
+        <span>{text}</span>
+        <input
+          value={form[name]}
+          onInput={(e) => setForm({ ...form, [name]: (e.target as HTMLInputElement).value })}
+          {...props}
+        />
+      </label>
+      {source(name)}
+    </div>
   );
-  const field = (name: keyof typeof form, text: string, props: Record<string, unknown> = {}) => (
-    <label class="field">
-      {label(name, text)}
-      <input
-        value={form[name]}
-        onInput={(e) => setForm({ ...form, [name]: (e.target as HTMLInputElement).value })}
-        {...props}
-      />
-    </label>
+  const description = (
+    <div class="field-wrap">
+      <label class="field">
+        <span>Beschreibung für Hörer</span>
+        <textarea
+          rows={3}
+          maxLength={2000}
+          value={form.description}
+          placeholder={dated ? 'Ein, zwei Sätze zum Gottesdienst oder zur Predigt' : 'Ein, zwei Sätze zum Album'}
+          onInput={(e) => setForm({ ...form, description: (e.target as HTMLTextAreaElement).value })}
+        />
+      </label>
+      {source('description')}
+    </div>
   );
 
   return (
@@ -347,24 +485,48 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
         if (dirty && yearValid) onSave(changes);
       }}
     >
-      <div class="admin-fields">
-        {field('title', 'Titel', { maxLength: 200, required: manual })}
-        {field('artist', 'Interpret', { maxLength: 200, placeholder: 'Automatisch aus den Titeln' })}
-        {field('year', 'Jahr', { inputMode: 'numeric', maxLength: 4, placeholder: 'Automatisch' })}
-        {field('genre', 'Genre', { maxLength: 100, placeholder: 'Automatisch' })}
-        {field('speaker', 'Sprecher', { maxLength: 200, placeholder: 'Aus dem Tag „Sprecher“' })}
-        {field('passage', 'Bibelstelle', { maxLength: 200, placeholder: 'z. B. Psalm 23' })}
-      </div>
-      <label class="field">
-        {label('description', 'Beschreibung für Hörer')}
-        <textarea
-          rows={3}
-          maxLength={2000}
-          value={form.description}
-          placeholder="Ein, zwei Sätze zum Gottesdienst oder zur Predigt"
-          onInput={(e) => setForm({ ...form, description: (e.target as HTMLTextAreaElement).value })}
-        />
-      </label>
+      {dated ? (
+        <>
+          <div class="admin-fields admin-fields-2">
+            {field('title', 'Anlass', { maxLength: 200, placeholder: NO_OCCASION })}
+            <div class="field-wrap">
+              <div class="field">
+                <span>Datum</span>
+                <p class="field-static">{formatCompactDate(album.date!)}</p>
+              </div>
+              <p class="field-source">
+                Aus dem Ordner „{album.folder.split('/').pop()}“. Zum Ändern den Ordner in der Nextcloud umbenennen.
+              </p>
+            </div>
+            {field('speaker', 'Sprecher', { maxLength: 200, placeholder: 'z. B. Pastor Meier' })}
+            {field('passage', 'Bibelstelle', { maxLength: 200, placeholder: 'z. B. Psalm 23' })}
+          </div>
+          {description}
+          <details class="admin-more-fields">
+            <summary>Weitere Angaben (Interpret, Genre)</summary>
+            <div class="admin-fields admin-fields-2">
+              {field('artist', 'Interpret', { maxLength: 200, placeholder: 'Automatisch aus den Titeln' })}
+              {field('genre', 'Genre', { maxLength: 100, placeholder: 'Automatisch' })}
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+          <div class="admin-fields">
+            {field('title', 'Titel', { maxLength: 200, required: manual })}
+            {field('artist', 'Interpret', { maxLength: 200, placeholder: 'Automatisch aus den Titeln' })}
+            {field('year', 'Jahr', { inputMode: 'numeric', maxLength: 4, placeholder: 'Automatisch' })}
+            {field('genre', 'Genre', { maxLength: 100, placeholder: 'Automatisch' })}
+          </div>
+          {sermon && (
+            <div class="admin-fields admin-fields-2">
+              {field('speaker', 'Sprecher', { maxLength: 200 })}
+              {field('passage', 'Bibelstelle', { maxLength: 200 })}
+            </div>
+          )}
+          {description}
+        </>
+      )}
       <div class="actions">
         <button type="submit" class="button-primary" disabled={busy || !dirty || !yearValid}>
           Speichern
@@ -383,10 +545,79 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
               onSave({ title: null, artist: null, year: null, genre: null, speaker: null, passage: null, description: null })
             }
           >
-            Automatische Werte wiederherstellen
+            Alles zurücksetzen
           </button>
         )}
         {!yearValid && <span class="admin-error">Jahr bitte vierstellig</span>}
+      </div>
+    </form>
+  );
+}
+
+/** Name und Sprecher eines einzelnen Titels korrigieren; leer heißt: wie in der Datei. */
+function TrackForm({
+  track,
+  edit,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  track: Track;
+  edit: TrackEdit | undefined;
+  busy: boolean;
+  onSave: (fields: { title?: string | null; speaker?: string | null }) => void;
+  onCancel: () => void;
+}) {
+  const currentSpeaker = edit?.speaker ?? edit?.fileSpeaker ?? '';
+  const [title, setTitle] = useState(track.title);
+  const [speaker, setSpeaker] = useState(currentSpeaker);
+  const changes: { title?: string | null; speaker?: string | null } = {};
+  if (title.trim() !== track.title) changes.title = title.trim() || null;
+  if (speaker.trim() !== currentSpeaker) changes.speaker = speaker.trim() || null;
+  const corrected = Boolean(edit?.title || edit?.speaker);
+
+  return (
+    <form
+      class="admin-track-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (Object.keys(changes).length) onSave(changes);
+      }}
+    >
+      <div class="admin-fields admin-fields-2">
+        <div class="field-wrap">
+          <label class="field">
+            <span>Name</span>
+            <input value={title} maxLength={300} placeholder={edit?.fileTitle} autoFocus onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
+          </label>
+          {edit?.title && <p class="field-source">In der Datei: „{edit.fileTitle}“</p>}
+        </div>
+        <div class="field-wrap">
+          <label class="field">
+            <span>Sprecher</span>
+            <input
+              value={speaker}
+              maxLength={200}
+              placeholder={edit?.fileSpeaker ?? 'z. B. Pastor Meier'}
+              onInput={(e) => setSpeaker((e.target as HTMLInputElement).value)}
+            />
+          </label>
+          {edit?.speaker && <p class="field-source">In der Datei: {edit.fileSpeaker ? `„${edit.fileSpeaker}“` : 'kein Sprecher'}</p>}
+        </div>
+      </div>
+      <p class="admin-hint">Die Korrektur bleibt auch nach neuen Scans erhalten; die Datei in der Nextcloud ändert sich nicht.</p>
+      <div class="actions">
+        <button type="submit" class="button-primary button-small" disabled={busy || !Object.keys(changes).length}>
+          Speichern
+        </button>
+        <button type="button" class="button-secondary button-small" onClick={onCancel}>
+          Abbrechen
+        </button>
+        {corrected && (
+          <button type="button" class="more-link" disabled={busy} onClick={() => onSave({ title: null, speaker: null })}>
+            Wie in der Datei
+          </button>
+        )}
       </div>
     </form>
   );

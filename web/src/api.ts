@@ -53,6 +53,8 @@ export interface DatedFolder {
   duration: number;
   coverTrackId: number | null;
   albumId: number | null;
+  /** Name des zugehörigen Albums, z. B. der in der Verwaltung korrigierte Anlass */
+  title?: string | null;
   speaker: string | null;
   passage: string | null;
   description: string | null;

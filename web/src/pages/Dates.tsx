@@ -29,7 +29,7 @@ function DateCard({ folder }: { folder: DatedFolder }) {
           title={folder.name}
           date={folder.date}
         />
-        <span class="card-title">{albumTitle(folder.name, folder.date)}</span>
+        <span class="card-title">{albumTitle(folder.title ?? folder.name, folder.date)}</span>
         <span class="card-sub">{folderSubtitle(folder)}</span>
       </a>
       <button

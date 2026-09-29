@@ -41,6 +41,10 @@ export interface AlbumFilter {
   ids?: number[];
   /** Nur Alben mit (true) bzw. ohne (false) Datum im Ordnernamen, also Gottesdienste oder Musik */
   dated?: boolean;
+  /** Verwaltung: nur ausgeblendete Alben */
+  hidden?: boolean;
+  /** Verwaltung: nur Gottesdienste, bei denen noch kein Sprecher eingetragen ist */
+  noSpeaker?: boolean;
   limit: number;
   offset: number;
 }
@@ -50,7 +54,10 @@ const TRACK_COLUMNS = `
   coalesce((SELECT title FROM albums WHERE id = t.album_id), t.album) AS album, t.album_id AS albumId,
   t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType,
   (SELECT date FROM albums WHERE id = t.album_id) AS albumDate,
-  (SELECT value FROM track_tags WHERE track_id = t.id AND tag IN (${SPEAKER_TAGS.map((tag) => `'${tag}'`).join(', ')}) LIMIT 1) AS speaker,
+  coalesce(
+    (SELECT speaker FROM track_overrides WHERE path = t.path),
+    (SELECT value FROM track_tags WHERE track_id = t.id AND tag IN (${SPEAKER_TAGS.map((tag) => `'${tag}'`).join(', ')}) LIMIT 1)
+  ) AS speaker,
   (t.cover_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
   )) AS hasCover
@@ -187,6 +194,8 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
     where.params.ids = JSON.stringify(filter.ids);
   }
   if (filter.dated !== undefined) where.clauses.push(filter.dated ? 'a.date IS NOT NULL' : 'a.date IS NULL');
+  if (filter.hidden) where.clauses.push('a.hidden = 1');
+  if (filter.noSpeaker) where.clauses.push('a.date IS NOT NULL AND a.speaker IS NULL');
   if (filter.kind) {
     where.clauses.push('a.kind = @kind');
     where.params.kind = filter.kind;
@@ -273,6 +282,13 @@ export function getTrackCover(db: DB, id: number): CoverSource | undefined {
     | { cover_id: number | null; album_id: number | null }
     | undefined;
   if (!row) return undefined;
+  // Ein in der Verwaltung hochgeladenes Albumbild gilt auch für die Titel, sonst zeigte der Player das alte.
+  const uploaded = row.album_id
+    ? (db
+        .prepare('SELECT o.cover_id FROM albums a JOIN album_overrides o ON o.key = a.key WHERE a.id = ? AND o.cover_id IS NOT NULL')
+        .get(row.album_id) as { cover_id: number } | undefined)
+    : undefined;
+  if (uploaded) return { coverId: uploaded.cover_id };
   if (row.cover_id) return { coverId: row.cover_id };
   return row.album_id ? getAlbumCover(db, row.album_id) : undefined;
 }

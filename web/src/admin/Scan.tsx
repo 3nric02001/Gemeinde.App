@@ -47,6 +47,8 @@ function summary(status: ScanStatus): string {
 export function ScanPanel() {
   const [status, setStatus] = useState<ScanStatus | undefined>();
   const [error, setError] = useState<string | undefined>();
+  // Der Abgleich läuft von selbst; Einzelheiten nur bei Bedarf oder wenn etwas nicht stimmt.
+  const [open, setOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -64,6 +66,8 @@ export function ScanPanel() {
   }, [status]);
 
   const start = async (removeMissing = false) => {
+    // Wer selbst scannt, will das Ergebnis sehen: Einzelheiten bleiben danach offen.
+    setOpen(true);
     if (
       removeMissing &&
       !confirm(
@@ -86,6 +90,37 @@ export function ScanPanel() {
   };
 
   const running = status?.state === 'running';
+  const problem = Boolean(
+    error || (status && status.state !== 'running' && (status.state === 'failed' || status.failed > 0 || (status.heldBack ?? 0) > 0)),
+  );
+  const expanded = open || problem || running;
+  const scanButton = (
+    <button type="button" class="button-secondary" disabled={!status || running} onClick={() => void start()}>
+      {running ? 'Scan läuft …' : 'Jetzt scannen'}
+    </button>
+  );
+
+  if (!expanded) {
+    return (
+      <section class="admin-panel scan-panel scan-compact" aria-label="Abgleich mit der Nextcloud">
+        <p class="scan-line" role="status">
+          <strong>Nextcloud:</strong>{' '}
+          {status ? (
+            <>
+              {plural(status.filesSeen, 'Titel', 'Titel')} · abgeglichen {when(status.lastSuccessAt)}
+            </>
+          ) : (
+            'wird geladen …'
+          )}
+        </p>
+        <button type="button" class="more-link" disabled={!status} onClick={() => setOpen(true)}>
+          Details
+        </button>
+        {scanButton}
+      </section>
+    );
+  }
+
   return (
     <section class="admin-panel scan-panel" aria-label="Abgleich mit der Nextcloud">
       <div class="scan-head">
@@ -103,9 +138,7 @@ export function ScanPanel() {
             </p>
           )}
         </div>
-        <button type="button" class="button-secondary" disabled={!status || running} onClick={() => void start()}>
-          {running ? 'Scan läuft …' : 'Jetzt scannen'}
-        </button>
+        {scanButton}
       </div>
       {status && status.state !== 'running' && status.failed > 0 && (
         <p class="admin-error">{plural(status.failed, 'Datei konnte', 'Dateien konnten')} nicht gelesen werden.</p>
@@ -130,6 +163,11 @@ export function ScanPanel() {
         <p class="admin-error" role="alert">
           {error}
         </p>
+      )}
+      {open && !problem && !running && (
+        <button type="button" class="more-link scan-less" onClick={() => setOpen(false)}>
+          Weniger anzeigen
+        </button>
       )}
     </section>
   );

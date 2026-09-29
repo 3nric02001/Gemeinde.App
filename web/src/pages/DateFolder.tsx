@@ -18,7 +18,7 @@ export function DateFolder({ path }: { path: string }) {
   const tracks = data.tracks;
   const artist = mainArtist(tracks);
   const album = folderAlbum(data, artist);
-  const title = albumTitle(data.name, data.date);
+  const title = albumTitle(data.title ?? data.name, data.date);
   return (
     <div class="page">
       <header class="hero">

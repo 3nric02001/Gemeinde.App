@@ -3,7 +3,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { setMeta, type DB } from '../db.js';
 import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextcloud/webdav.js';
 import { rebuildAlbums } from './albums.js';
-import { extractMetadata, searchExtra, tagSpan, type TrackMeta } from './metadata.js';
+import { extractMetadata, searchExtra, tagSpan, withSpeakerOverride, type TrackMeta } from './metadata.js';
 import { basename, coverRank, dirname, isAudioFile } from './pathMeta.js';
 import { foldValue } from './text.js';
 
@@ -204,10 +204,11 @@ export class LibraryScanner {
     if (changed.length > 0) this.log.info({ files: files.length, toRead: changed.length }, 'Bibliotheks-Scan liest Dateien');
 
     const upsert = this.db.prepare(`
-      INSERT INTO tracks (path, etag, size, mime, title, artist, album_artist, album, track_no, disc_no, year, genre, duration, compilation, cover_id, scanned_at)
-      VALUES (@path, @etag, @size, @mime, @title, @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @coverId, @now)
+      INSERT INTO tracks (path, etag, size, mime, title, tag_title, artist, album_artist, album, track_no, disc_no, year, genre, duration, compilation, cover_id, scanned_at)
+      VALUES (@path, @etag, @size, @mime, coalesce((SELECT title FROM track_overrides WHERE path = @path), @title), @title,
+              @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @coverId, @now)
       ON CONFLICT(path) DO UPDATE SET
-        etag = excluded.etag, size = excluded.size, mime = excluded.mime, title = excluded.title,
+        etag = excluded.etag, size = excluded.size, mime = excluded.mime, title = excluded.title, tag_title = excluded.tag_title,
         artist = excluded.artist, album_artist = excluded.album_artist, album = excluded.album,
         track_no = excluded.track_no, disc_no = excluded.disc_no, year = excluded.year, genre = excluded.genre,
         duration = excluded.duration, compilation = excluded.compilation, cover_id = excluded.cover_id,
@@ -217,6 +218,7 @@ export class LibraryScanner {
     const clearTags = this.db.prepare('DELETE FROM track_tags WHERE track_id = ?');
     const addTag = this.db.prepare('INSERT INTO track_tags (track_id, tag, value, vkey) VALUES (?, ?, ?, ?)');
     const setSearchExtra = this.db.prepare('UPDATE tracks SET search_extra = ? WHERE id = ? AND search_extra IS NOT ?');
+    const overrideSpeaker = this.db.prepare('SELECT speaker FROM track_overrides WHERE path = ?');
     const saveCover = this.db.prepare(`
       INSERT INTO covers (hash, mime, data) VALUES (?, ?, ?)
       ON CONFLICT(hash) DO UPDATE SET mime = excluded.mime
@@ -250,7 +252,10 @@ export class LibraryScanner {
         }) as { id: number };
         clearTags.run(id);
         for (const [tag, value] of meta.tags) addTag.run(id, tag, value, foldValue(value));
-        const extra = searchExtra(meta.tags);
+        const extra = withSpeakerOverride(
+          searchExtra(meta.tags),
+          (overrideSpeaker.get(entry.path) as { speaker: string | null } | undefined)?.speaker,
+        );
         setSearchExtra.run(extra, id, extra);
         if (known.has(entry.path)) this.status.updated++;
         else this.status.added++;
@@ -306,7 +311,12 @@ export class LibraryScanner {
     this.saveCovers(covers, keepCovers);
     rebuildAlbums(this.db);
     // Bilder, auf die kein Titel mehr zeigt, wegräumen, ebenso Vorschaubilder verschwundener Quellen.
-    this.db.prepare('DELETE FROM covers WHERE id NOT IN (SELECT cover_id FROM tracks WHERE cover_id IS NOT NULL)').run();
+    this.db
+      .prepare(
+        `DELETE FROM covers WHERE id NOT IN (SELECT cover_id FROM tracks WHERE cover_id IS NOT NULL)
+           AND id NOT IN (SELECT cover_id FROM album_overrides WHERE cover_id IS NOT NULL)`,
+      )
+      .run();
     this.db
       .prepare(
         `DELETE FROM cover_thumbs WHERE source NOT IN (SELECT 'file:' || path FROM folder_covers)

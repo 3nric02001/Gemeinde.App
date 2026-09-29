@@ -31,44 +31,67 @@ export function Admin({ location }: { location: Location }) {
 
   const album = match('/admin/album/:id', location.path);
   const category = match('/admin/kategorie/:id', location.path);
-  const section = hasRole(user, 'admin') ? ACCESS_SECTIONS.find((s) => s.path === location.path) : undefined;
+  const admin = hasRole(user, 'admin');
+  const accessSection = ACCESS_SECTIONS.find((s) => s.path === location.path);
+  const section = admin ? accessSection : undefined;
   let content;
-  if (album && /^\d+$/.test(album.id!)) content = <AlbumEditor key={album.id} id={Number(album.id)} onError={onError} />;
+  // Manager, die einem Link auf eine Admin-Seite folgen, sollen wissen, warum sie nichts sehen.
+  if (accessSection && !admin) {
+    content = (
+      <Empty title="Nur für Admins">
+        „{accessSection.label}“ können nur Admins sehen und ändern. <a href="/admin">Zu den Alben</a>
+      </Empty>
+    );
+  } else if (album && /^\d+$/.test(album.id!)) content = <AlbumEditor key={album.id} id={Number(album.id)} onError={onError} />;
   else if (category && (category.id === 'neu' || /^\d+$/.test(category.id!))) {
     const id = category.id === 'neu' ? undefined : Number(category.id);
     content = <CategoryEditor key={category.id} id={id} onError={onError} />;
   } else if (location.path === '/admin/kategorien') content = <CategoriesAdmin onError={onError} />;
-  else if (section) content = <section.Component />;
+  else if (section) content = <section.Component params={location.params} />;
   else content = <AlbumsAdmin params={location.params} onError={onError} />;
 
   return (
     <div class="page admin">
-      {!album && !category && <AdminTabs path={location.path} admin={hasRole(user, 'admin')} />}
+      {!album && !category && <AdminTabs path={location.path} admin={admin} />}
       {content}
     </div>
   );
 }
 
-type KindFilter = '' | 'manual' | 'auto';
+/** Filter der Albumliste nach dem, was ein Manager sucht, mit ihrer Abfrage an den Server */
+const FILTERS = [
+  { value: '', label: 'Alle', query: {} },
+  { value: 'gottesdienste', label: 'Gottesdienste', query: { dated: 'true' } },
+  { value: 'musik', label: 'Musik', query: { dated: 'false' } },
+  { value: 'eigene', label: 'Eigene Alben', query: { kind: 'manual' } },
+  { value: 'ausgeblendet', label: 'Ausgeblendet', query: { hidden: 'true' } },
+  { value: 'ohne-sprecher', label: 'Sprecher fehlt', query: { noSpeaker: 'true' } },
+] as const;
+const EMPTY: Record<string, string> = {
+  gottesdienste: 'Keine Gottesdienste gefunden',
+  musik: 'Keine Musik gefunden',
+  eigene: 'Noch keine eigenen Alben',
+  ausgeblendet: 'Keine ausgeblendeten Alben',
+  'ohne-sprecher': 'Alle Gottesdienste haben einen Sprecher',
+};
 const PAGE = 100;
 
 function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e: Error) => void }) {
   const [text, setText] = useState(params.get('q') ?? '');
-  const kind = (params.get('art') === 'eigene' ? 'manual' : params.get('art') === 'automatisch' ? 'auto' : '') as KindFilter;
+  const filter = FILTERS.find((f) => f.value === params.get('filter')) ?? FILTERS[0];
   const q = useDebounced(text.trim(), 200);
   const [albums, setAlbums] = useState<AdminAlbum[] | undefined>();
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | undefined>();
   const [creating, setCreating] = useState(false);
 
-  const art = kind === 'manual' ? 'eigene' : kind === 'auto' ? 'automatisch' : undefined;
-  useEffect(() => navigate(`/admin${query({ q, art })}`, { replace: true }), [q, art]);
+  useEffect(() => navigate(`/admin${query({ q, filter: filter.value || undefined })}`, { replace: true }), [q, filter.value]);
 
   const load = async (offset: number) => {
     try {
       const page = await adminRequest<Page<AdminAlbum>>(
         'GET',
-        `/api/admin/albums${query({ q, kind, sort: 'date', limit: PAGE, offset })}`,
+        `/api/admin/albums${query({ q, ...filter.query, sort: 'date', limit: PAGE, offset })}`,
       );
       setAlbums((prev) => (offset ? [...(prev ?? []), ...page.items] : page.items));
       setTotal(page.total);
@@ -78,9 +101,9 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
       setError((e as Error).message);
     }
   };
-  useEffect(() => void load(0), [q, kind]);
+  useEffect(() => void load(0), [q, filter.value]);
 
-  const filterHref = (value: string | undefined) => `/admin${query({ q, art: value })}`;
+  const filterHref = (value: string) => `/admin${query({ q, filter: value || undefined })}`;
 
   return (
     <>
@@ -92,10 +115,6 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
           </button>
         </div>
       </div>
-      <p class="admin-hint">
-        Eigene Alben stellst du aus beliebigen Titeln zusammen; ein Titel kann in mehreren Alben stehen. Automatische Alben
-        lassen sich umbenennen, ausblenden oder um einzelne Titel kürzen. Alle Änderungen bleiben bei neuen Scans erhalten.
-      </p>
 
       <ScanPanel />
 
@@ -112,24 +131,25 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
           onInput={(e) => setText((e.target as HTMLInputElement).value)}
         />
       </form>
-      <div class="chips-row">
-        <a class={`chip${kind === '' ? ' is-on' : ''}`} href={filterHref(undefined)}>
-          Alle
-        </a>
-        <a class={`chip${kind === 'manual' ? ' is-on' : ''}`} href={filterHref('eigene')}>
-          Eigene Alben
-        </a>
-        <a class={`chip${kind === 'auto' ? ' is-on' : ''}`} href={filterHref('automatisch')}>
-          Automatische
-        </a>
-      </div>
+      <nav class="chips-row" aria-label="Alben filtern">
+        {FILTERS.map((f) => (
+          <a
+            key={f.value}
+            class={`chip${f.value === filter.value ? ' is-on' : ''}`}
+            href={filterHref(f.value)}
+            aria-current={f.value === filter.value ? 'true' : undefined}
+          >
+            {f.label}
+          </a>
+        ))}
+      </nav>
 
       {error && !albums ? (
         <ErrorNote message={error} />
       ) : !albums ? (
         <Loading />
       ) : albums.length === 0 ? (
-        <Empty title={kind === 'manual' && !q ? 'Noch keine eigenen Alben' : 'Keine Alben gefunden'} />
+        <Empty title={(!q && EMPTY[filter.value]) || 'Keine Alben gefunden'} />
       ) : (
         <>
           <p class="count">{plural(total, 'Album', 'Alben')}</p>
@@ -142,7 +162,11 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
                     {/* Name wie bei den Hörern; bei Gottesdiensten der gespeicherte Name klein dahinter */}
                     <span class="track-title">{albumTitle(album.title, album.date)}</span>
                     <span class="track-sub">
-                      {[album.date && formatCompactDate(album.date), album.artist, plural(album.trackCount, 'Titel', 'Titel')]
+                      {[
+                        album.date && formatCompactDate(album.date),
+                        album.date ? album.speaker : album.artist,
+                        plural(album.trackCount, 'Titel', 'Titel'),
+                      ]
                         .filter(Boolean)
                         .join(' · ')}
                       {album.date && ` · „${album.title}“`}
@@ -150,6 +174,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
                   </span>
                   <span class="admin-badges">
                     {album.kind === 'manual' && <span class="badge">Eigenes</span>}
+                    {album.date && !album.speaker && <span class="badge badge-attention">Sprecher fehlt</span>}
                     {album.hidden && <span class="badge badge-muted">Ausgeblendet</span>}
                   </span>
                 </a>
@@ -163,6 +188,16 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
           )}
         </>
       )}
+
+      <details class="admin-help">
+        <summary>Wie funktionieren Alben?</summary>
+        <p class="admin-hint">
+          Automatische Alben entstehen beim Abgleich aus Ordnern und Tags in der Nextcloud; Gottesdienste erkennt die App am Datum
+          im Ordnernamen. Du kannst sie umbenennen, ergänzen, ausblenden oder um einzelne Titel kürzen. Eigene Alben stellst du
+          aus beliebigen Titeln zusammen; ein Titel kann in mehreren Alben stehen. Alle Änderungen bleiben bei neuen Scans
+          erhalten.
+        </p>
+      </details>
     </>
   );
 }
