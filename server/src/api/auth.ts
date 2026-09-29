@@ -65,6 +65,29 @@ export function authErrorHandler(error: Error, request: FastifyRequest, reply: F
   return reply.code(500).send({ error: 'Interner Fehler' });
 }
 
+/**
+ * Stammt eine ändernde Anfrage von der App selbst? Moderne Browser sagen das über Sec-Fetch-Site,
+ * das keine Webseite fälschen kann. Sonst entscheidet der Host im Origin-Header, verglichen mit dem
+ * aufgerufenen Host und PUBLIC_URL. Das Schema zählt dabei nicht, weil ein Reverse Proxy mit TLS
+ * davor die App oft per http erreicht; ohne Origin (z. B. curl) greift nur SameSite des Cookies.
+ */
+export function isSameOrigin(request: FastifyRequest, publicUrl: string | undefined): boolean {
+  const site = request.headers['sec-fetch-site'];
+  if (typeof site === 'string') return site === 'same-origin' || site === 'none';
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  let host: string;
+  try {
+    host = new URL(origin).host;
+  } catch {
+    return false;
+  }
+  const allowed = [request.host, request.headers.host, publicUrl && new URL(publicUrl).host];
+  return allowed.some((candidate) => typeof candidate === 'string' && stripDefaultPort(candidate) === stripDefaultPort(host));
+}
+
+const stripDefaultPort = (host: string) => host.toLowerCase().replace(/:(80|443)$/, '');
+
 export interface AuthDeps {
   db: DB;
   oidc: OidcService;
@@ -97,7 +120,8 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
     path: '/',
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: appOrigin(request, publicUrl).startsWith('https:'),
+    // Nach dem tatsächlichen Aufruf: Ein Secure-Cookie über http würde der Browser verwerfen.
+    secure: request.protocol === 'https',
   });
 
   const startSession = (request: FastifyRequest, reply: FastifyReply, userId: number) => {
@@ -111,12 +135,10 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
     const needed = requiredRole(request.method, path);
     if (!needed) return;
     // Änderungen nur von der eigenen Seite aus (zusätzlich zu SameSite=Lax).
-    const origin = request.headers.origin;
-    if (!SAFE_METHODS.has(request.method) && origin && origin !== appOrigin(request, publicUrl)) {
-      // Häufigste Ursache ohne Angriff: Reverse Proxy ohne X-Forwarded-Host/-Proto und ohne PUBLIC_URL.
+    if (!SAFE_METHODS.has(request.method) && !isSameOrigin(request, publicUrl)) {
       request.log.warn(
-        { origin, expected: appOrigin(request, publicUrl) },
-        'Anfrage mit fremdem Origin abgelehnt (PUBLIC_URL gesetzt?)',
+        { origin: request.headers.origin, host: request.host, publicUrl },
+        'Anfrage von fremder Seite abgelehnt',
       );
       return reply.code(403).send({ error: 'Anfrage von fremder Seite abgelehnt' });
     }
