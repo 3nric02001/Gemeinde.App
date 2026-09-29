@@ -76,7 +76,8 @@ export function loadConfig(env: Env = process.env): Config {
     port: integer(env, 'PORT', 3000, 1),
     logLevel: env.LOG_LEVEL?.trim() || 'info',
     databasePath: env.DATABASE_PATH?.trim() || './data/library.db',
-    adminPassword: env.ADMIN_PASSWORD || undefined,
+    // Ohne Leerzeichen/Zeilenende am Rand, die beim Bearbeiten der .env (z. B. unter Windows) mitrutschen.
+    adminPassword: env.ADMIN_PASSWORD?.trim() || undefined,
     resetAdminPassword: ['1', 'true', 'ja', 'yes'].includes(env.RESET_ADMIN_PASSWORD?.trim().toLowerCase() ?? ''),
     publicUrl: publicUrl(env.PUBLIC_URL),
     webDir: env.WEB_DIR?.trim() || '../web/dist',

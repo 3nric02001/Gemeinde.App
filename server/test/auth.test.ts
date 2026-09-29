@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { requiredRole } from '../src/api/auth.js';
 import { buildApp, type AppContext } from '../src/app.js';
 import { claimValues } from '../src/auth/oidc.js';
-import { checkLocalLogin, ensureLocalAdmin, hashPassword, verifyPassword } from '../src/auth/users.js';
+import { changePassword, checkLocalLogin, ensureLocalAdmin, hashPassword, verifyPassword } from '../src/auth/users.js';
 import { openDatabase } from '../src/db.js';
 import { loadConfig } from '../src/config.js';
 import { mp3 } from './helpers/audio.js';
@@ -183,24 +183,46 @@ describe('Lokaler Admin', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('erzeugt ohne ADMIN_PASSWORD ein Startpasswort und setzt es nur auf Wunsch zurück', async () => {
+  it('übernimmt ADMIN_PASSWORD auch nachträglich, sobald es sich ändert', async () => {
     const db = openDatabase(':memory:');
     const logged: Array<Record<string, unknown>> = [];
     const log = { info: (obj: object) => logged.push({ ...obj }), warn: (obj: object) => logged.push({ ...obj }) };
+    const canLogin = async (password: string) => Boolean(await checkLocalLogin(db, 'admin', password));
 
+    // Erster Start ohne ADMIN_PASSWORD: erzeugtes Passwort im Log
     await ensureLocalAdmin(db, {}, log);
     const generated = logged[0]!.password as string;
     expect(generated.length).toBeGreaterThanOrEqual(16);
-    expect(await checkLocalLogin(db, 'admin', generated)).toMatchObject({ role: 'admin', kind: 'local' });
+    expect(await canLogin(generated)).toBe(true);
+    await ensureLocalAdmin(db, {}, log);
+    expect(await canLogin(generated)).toBe(true);
 
-    // Neustart mit ADMIN_PASSWORD ändert ein bestehendes Passwort nicht ...
-    await ensureLocalAdmin(db, { password: 'anderes-passwort' }, log);
-    expect(await checkLocalLogin(db, 'admin', 'anderes-passwort')).toBeUndefined();
-    // ... außer mit RESET_ADMIN_PASSWORD
-    await ensureLocalAdmin(db, { password: 'anderes-passwort', reset: true }, log);
-    expect(await checkLocalLogin(db, 'Admin ', 'anderes-passwort')).toBeDefined();
-    expect(logged.at(-1)!.password).toBeUndefined();
+    // ADMIN_PASSWORD später in die .env geschrieben: gilt nach dem Neustart
+    await ensureLocalAdmin(db, { password: 'aus-der-env-1' }, log);
+    expect(await canLogin('aus-der-env-1')).toBe(true);
+    expect(await canLogin(generated)).toBe(false);
+
+    // In der Verwaltung geändert, .env unverändert: das neue Passwort bleibt
+    const { id } = (await checkLocalLogin(db, 'admin', 'aus-der-env-1'))!;
+    await changePassword(db, id, 'aus-der-env-1', 'in-der-verwaltung', '');
+    await ensureLocalAdmin(db, { password: 'aus-der-env-1' }, log);
+    expect(await canLogin('in-der-verwaltung')).toBe(true);
+
+    // Wert in der .env geändert: gilt wieder
+    await ensureLocalAdmin(db, { password: 'aus-der-env-2' }, log);
+    expect(await canLogin('aus-der-env-2')).toBe(true);
+
+    // RESET_ADMIN_PASSWORD ohne ADMIN_PASSWORD erzeugt ein neues
+    await ensureLocalAdmin(db, { reset: true }, log);
+    expect(await canLogin(logged.at(-1)!.password as string)).toBe(true);
+    expect(await canLogin('aus-der-env-2')).toBe(false);
     db.close();
+  });
+
+  it('ignoriert Leerzeichen und Zeilenenden um ADMIN_PASSWORD', () => {
+    const env = { NEXTCLOUD_URL: 'https://c', NEXTCLOUD_USER: 'u', NEXTCLOUD_PASSWORD: 'p', NEXTCLOUD_MUSIC_PATH: '/M' };
+    expect(loadConfig({ ...env, ADMIN_PASSWORD: ' geheim-passwort\r' }).adminPassword).toBe('geheim-passwort');
+    expect(loadConfig({ ...env, ADMIN_PASSWORD: '  ' }).adminPassword).toBeUndefined();
   });
 
   it('speichert Passwörter nur als scrypt-Hash', async () => {
