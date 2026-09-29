@@ -13,9 +13,11 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo": "tsx test/demo.ts"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.5",
     "better-sqlite3": "^13.0.3",
     "fast-xml-parser": "^5.11.2",
     "fastify": "^5.12.5",

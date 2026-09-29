@@ -3,8 +3,30 @@
 Minimalistischer Musikplayer für die Gemeinde, der seine Musik direkt aus einer Nextcloud liest.
 Alben und Suchfilter entstehen automatisch aus Tags und Ordnerstruktur.
 
-Dieser Stand enthält das Backend für die **Musikbibliothek**. Player-Oberfläche sowie Login (OIDC),
-Benutzer- und Gruppenverwaltung folgen.
+Dieser Stand enthält die **Musikbibliothek** (Backend) und die **Weboberfläche** zum Hören.
+Login (OIDC), Benutzer- und Gruppenverwaltung folgen.
+
+![Album in der Weboberfläche](docs/screenshots/desktop-album.png)
+
+## Weboberfläche
+
+Bedienung wie bei Spotify oder Apple Music, Farben schlicht schwarz auf weiß wie auf
+mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
+
+- **Start**: Genres als Kacheln, „Neu hinzugefügt“, Alben des häufigsten Genres, Jahrzehnte
+- **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; ohne Suchbegriff
+  Stöbern nach Genre
+- **Alben, Interpreten, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach
+- **Album- und Interpretenseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), „Mehr von …“
+- **Player**: Leiste unten mit Zufall, Wiederholen (alle/einen), Spulen und Lautstärke; Warteschlange
+  mit „Als Nächstes spielen“ und „Zur Warteschlange hinzufügen“. Auf dem Handy Mini-Player über der
+  Tab-Leiste, der sich zu „Jetzt läuft“ aufklappt.
+- Steuerung über Sperrbildschirm und Medientasten (Media Session), Leertaste spielt/pausiert, `/`
+  öffnet die Suche. Warteschlange und Position überstehen ein Neuladen.
+
+Die Farben stehen als CSS-Variablen oben in `web/src/styles.css` und lassen sich dort zentral anpassen.
+Die Oberfläche ist mit Vite und Preact gebaut (ca. 17 KB JavaScript, gzip) und wird vom selben Server
+unter `/` ausgeliefert; es ist kein zweiter Container nötig.
 
 ## So funktioniert es
 
@@ -53,6 +75,7 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `SCAN_INTERVAL_MINUTES` | `60` | Automatischer Scan, `0` = aus |
 | `SCAN_CONCURRENCY` | `4` | Parallele Zugriffe auf die Nextcloud beim Scan |
 | `DATABASE_PATH` | `/data/library.db` | Pfad der SQLite-Datei |
+| `WEB_DIR` | `/app/public` | Ordner der gebauten Weboberfläche; fehlt er, läuft nur die API |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | Adresse des HTTP-Servers |
 | `LOG_LEVEL` | `info` | Log-Level (JSON-Logs) |
 
@@ -80,8 +103,16 @@ cd server
 npm install
 npm test            # Vitest, inkl. simulierter Nextcloud
 npm run typecheck
-NEXTCLOUD_URL=… NEXTCLOUD_USER=… NEXTCLOUD_PASSWORD=… npm run dev
+NEXTCLOUD_URL=… NEXTCLOUD_USER=… NEXTCLOUD_PASSWORD=… NEXTCLOUD_MUSIC_PATH=… npm run dev
+
+cd web
+npm install
+npm test            # Warteschlange, Formatierung, Titelliste
+npm run dev         # Oberfläche mit Hot Reload, /api geht an localhost:3000
 ```
+
+Ohne Nextcloud ausprobieren: `cd web && npm run build && cd ../server && npm run demo` startet den
+Server mit einer simulierten Nextcloud und ein paar Beispielalben unter http://localhost:3000.
 
 Die Tests erzeugen winzige MP3- und FLAC-Dateien im Speicher und starten einen WebDAV-Server,
 der sich wie Nextcloud verhält. Echte Musikdateien sind dafür nicht nötig.

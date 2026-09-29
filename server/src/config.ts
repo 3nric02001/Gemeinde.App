@@ -17,6 +17,8 @@ export interface Config {
   logLevel: string;
   databasePath: string;
   adminToken: string | undefined;
+  /** Ordner mit der gebauten Weboberfläche; fehlt er, liefert der Server nur die API aus */
+  webDir: string;
   nextcloud: NextcloudConfig;
   /** Intervall für automatische Scans in Minuten, 0 schaltet sie ab */
   scanIntervalMinutes: number;
@@ -57,6 +59,7 @@ export function loadConfig(env: Env = process.env): Config {
     logLevel: env.LOG_LEVEL?.trim() || 'info',
     databasePath: env.DATABASE_PATH?.trim() || './data/library.db',
     adminToken: env.ADMIN_TOKEN?.trim() || undefined,
+    webDir: env.WEB_DIR?.trim() || '../web/dist',
     nextcloud: {
       url: required(env, 'NEXTCLOUD_URL').replace(/\/+$/, ''),
       user: required(env, 'NEXTCLOUD_USER'),
