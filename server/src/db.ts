@@ -414,6 +414,21 @@ export const migrations: string[] = [
     created_at INTEGER NOT NULL
   ) WITHOUT ROWID;
   `,
+  `
+  -- Verdecktes Scoring (library/popularity.ts): Wiedergaben je Titel über alle Hörer, mit Verfall.
+  CREATE TABLE track_popularity (
+    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    score    REAL NOT NULL
+  );
+  -- Wann eine Person einen Titel zuletzt gezählt bekam, für die Sperrfrist.
+  CREATE TABLE track_plays (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    track_id   INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    counted_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, track_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX track_plays_track ON track_plays(track_id);
+  `,
 ];
 
 export function openDatabase(path: string): DB {

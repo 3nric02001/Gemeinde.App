@@ -152,3 +152,29 @@ describe('Favoriten', () => {
     expect(getMe().trackIds.has(42)).toBe(true);
   });
 });
+
+describe('Wiedergaben zählen', () => {
+  it('meldet einen Titel einmal, sobald 30 Sekunden wirklich gehört sind; Springen zählt nicht', () => {
+    const fetchMock = mockServer();
+    vi.spyOn(player.audio, 'play').mockResolvedValue(undefined);
+    vi.spyOn(player.audio, 'paused', 'get').mockReturnValue(false);
+    player.playList([song], 0, { shuffle: false });
+    const plays = () => fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/plays/42' && init?.method === 'POST');
+    const listen = (from: number, to: number) => {
+      for (let time = from; time <= to; time += 0.25) {
+        player.audio.currentTime = time;
+        player.audio.dispatchEvent(new Event('timeupdate'));
+      }
+    };
+
+    listen(0, 20);
+    // Sprung nach vorne: die übersprungene Zeit gilt nicht als gehört
+    player.audio.currentTime = 150;
+    player.audio.dispatchEvent(new Event('timeupdate'));
+    expect(plays()).toHaveLength(0);
+    listen(150, 162);
+    expect(plays()).toHaveLength(1);
+    listen(162, 200);
+    expect(plays()).toHaveLength(1);
+  });
+});

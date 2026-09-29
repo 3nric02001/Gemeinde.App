@@ -33,7 +33,10 @@ export function Home() {
   const recent = useApi<Page<Album>>('/api/albums?sort=recent&limit=12');
   const facets = useApi<Facets>('/api/facets');
   const topGenre = facets.data?.genres[0]?.value;
-  const genreAlbums = useApi<Page<Album>>(topGenre ? `/api/albums${query({ genre: topGenre, limit: 12, sort: 'year' })}` : undefined);
+  const genreAlbums = useApi<Page<Album>>(
+    // Vorschläge aus dem häufigsten Genre: oft Gehörtes zuerst
+    topGenre ? `/api/albums${query({ genre: topGenre, limit: 12, sort: 'popular' })}` : undefined,
+  );
   const name = firstName(user?.name, user?.kind);
   const title = name ? `${greeting()}, ${name}` : greeting();
 

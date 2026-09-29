@@ -79,7 +79,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function send(method: 'PUT' | 'DELETE', url: string, body?: unknown): Promise<void> {
+async function send(method: 'PUT' | 'POST' | 'DELETE', url: string, body?: unknown): Promise<void> {
   const res = await fetch(url, {
     method,
     headers: body === undefined ? { accept: 'application/json' } : { accept: 'application/json', 'content-type': 'application/json' },
@@ -140,4 +140,9 @@ export function saveProgress(track: Pick<Track, 'id' | 'duration'>, position: nu
     position: round(position),
     ...(duration > 0 ? { duration: round(duration) } : {}),
   }).catch(() => undefined);
+}
+
+/** Meldet eine Wiedergabe fürs verdeckte Scoring; geht sie verloren, fehlt eben ein Zähler. */
+export function countPlay(track: Pick<Track, 'id'>): void {
+  void send('POST', `/api/me/plays/${track.id}`).catch(() => undefined);
 }

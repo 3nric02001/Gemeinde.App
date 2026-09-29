@@ -1,6 +1,7 @@
 import type { DB } from '../db.js';
 import type { CategoryFilter } from './categories.js';
 import { SPEAKER_TAGS } from './metadata.js';
+import { albumTierSql, decayFactor, trackTierSql } from './popularity.js';
 
 export interface Page<T> {
   items: T[];
@@ -22,7 +23,7 @@ export interface TrackFilter {
   offset: number;
 }
 
-export const ALBUM_SORTS = ['title', 'artist', 'year', 'recent', 'date'] as const;
+export const ALBUM_SORTS = ['title', 'artist', 'year', 'recent', 'date', 'popular'] as const;
 export type AlbumSort = (typeof ALBUM_SORTS)[number];
 
 export interface AlbumFilter {
@@ -131,13 +132,16 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
   const { total } = db.prepare(`SELECT count(*) AS total FROM tracks t ${sql(where)}`).get(where.params) as {
     total: number;
   };
+  // Bei einer Suche: oft Gehörtes zuerst, innerhalb gleicher Beliebtheit die neuesten Gottesdienste.
   const items = db
     .prepare(
       `SELECT ${TRACK_COLUMNS} FROM tracks t ${sql(where)}
-       ORDER BY ${fts ? 'albumDate DESC NULLS LAST, ' : ''}t.artist COLLATE NOCASE, t.album COLLATE NOCASE, t.disc_no, t.track_no, t.title COLLATE NOCASE
+       ORDER BY ${fts ? `${trackTierSql('t')} DESC, albumDate DESC NULLS LAST, ` : ''}t.artist COLLATE NOCASE, t.album COLLATE NOCASE, t.disc_no, t.track_no, t.title COLLATE NOCASE
        LIMIT @limit OFFSET @offset`,
     )
-    .all({ ...where.params, limit: filter.limit, offset: filter.offset }) as Array<{ hasCover: number }>;
+    .all({ ...where.params, ...(fts ? { decay: decayFactor() } : {}), limit: filter.limit, offset: filter.offset }) as Array<{
+    hasCover: number;
+  }>;
   return { items: items.map(coerceHasCover), total, limit: filter.limit, offset: filter.offset };
 }
 
@@ -149,7 +153,12 @@ const ALBUM_SORT: Record<AlbumSort, string> = {
   recent: 'a.created_at DESC, a.date DESC NULLS LAST, a.id DESC',
   // Alben mit Datum im Ordnernamen zuerst (neueste oben), danach der Rest nach Interpret
   date: 'a.date DESC NULLS LAST, a.artist COLLATE NOCASE, a.year, a.title COLLATE NOCASE',
+  // Für Vorschläge: oft Gehörtes zuerst, sonst wie nach Datum
+  popular: `${albumTierSql('a')} DESC, a.date DESC NULLS LAST, a.year DESC, a.title COLLATE NOCASE`,
 };
+
+/** Sortierungen, bei denen eine Suche oft Gehörtes nach vorne holt; die übrigen wählt man bewusst. */
+const SEARCH_BOOSTED: ReadonlySet<AlbumSort> = new Set(['artist', 'date']);
 
 export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, unknown>> {
   const where: Where = { clauses: [], params: {} };
@@ -187,12 +196,19 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
   const { total } = db.prepare(`SELECT count(*) AS total FROM albums a ${sql(where)}`).get(where.params) as {
     total: number;
   };
+  const boost = fts && SEARCH_BOOSTED.has(filter.sort) ? `${albumTierSql('a')} DESC, ` : '';
+  const order = `${boost}${ALBUM_SORT[filter.sort]}`;
   const items = (
     db
       .prepare(
-        `SELECT ${ALBUM_COLUMNS}${filter.includeHidden ? ', a.hidden' : ''} FROM albums a ${sql(where)} ORDER BY ${ALBUM_SORT[filter.sort]} LIMIT @limit OFFSET @offset`,
+        `SELECT ${ALBUM_COLUMNS}${filter.includeHidden ? ', a.hidden' : ''} FROM albums a ${sql(where)} ORDER BY ${order} LIMIT @limit OFFSET @offset`,
       )
-      .all({ ...where.params, limit: filter.limit, offset: filter.offset }) as Array<{ hasCover: number }>
+      .all({
+        ...where.params,
+        ...(order.includes('@decay') ? { decay: decayFactor() } : {}),
+        limit: filter.limit,
+        offset: filter.offset,
+      }) as Array<{ hasCover: number }>
   ).map(coerceHasCover);
   return { items, total, limit: filter.limit, offset: filter.offset };
 }
