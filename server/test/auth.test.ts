@@ -422,6 +422,24 @@ describe('OIDC', () => {
     expect((await oidcLogin('https://boese.example')).location).toBe('/');
   });
 
+  it('beendet OIDC-Sitzungen spätestens 30 Tage nach der Anmeldung, auch bei täglicher Nutzung', async () => {
+    await start();
+    const admin = await adminCookie();
+    await configureOidc(admin);
+    await setGroup(admin, 'musik', { enabled: true, role: 'listener' });
+    idp.user = { sub: 'anna', name: 'Anna', email: 'anna@example.org', groups: ['musik'] };
+    const { cookie } = await oidcLogin();
+    expect((await as(cookie, { method: 'GET', url: '/api/albums' })).statusCode).toBe(200);
+
+    const age = (days: number) => ctx.db.prepare('UPDATE sessions SET created_at = ?').run(Date.now() - days * 24 * 60 * 60 * 1000);
+    age(29);
+    expect((await as(cookie, { method: 'GET', url: '/api/albums' })).statusCode).toBe(200);
+    age(31);
+    expect((await as(cookie, { method: 'GET', url: '/api/albums' })).statusCode).toBe(401);
+    // Der lokale Admin hat keinen Identity Provider, seine Sitzung läuft weiter.
+    expect((await as(admin, { method: 'GET', url: '/api/albums' })).statusCode).toBe(200);
+  });
+
   it('lässt sich ohne PUBLIC_URL nicht einschalten', async () => {
     await start({ PUBLIC_URL: '' });
     const admin = await adminCookie();

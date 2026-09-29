@@ -138,7 +138,10 @@ nur „Mit Gemeinde-Konto anmelden“; die Anmeldung des lokalen Admins steht un
 | Hörer | nur den Player nutzen; die Verwaltung ist ausgeblendet |
 
 Sitzungen laufen über ein HttpOnly-Cookie (SameSite=Lax, bei https mit Secure) und bleiben 30 Tage
-nach der letzten Nutzung gültig. In der Datenbank steht nur ein Hash der Sitzungs-ID, das Passwort
+nach der letzten Nutzung gültig. Anmeldungen über OIDC enden zusätzlich spätestens 30 Tage nach der
+Anmeldung; danach geht es einmal über den Identity Provider, der dabei die aktuellen Gruppen liefert.
+Wer dort aus einer Gruppe entfernt wird, verliert den Zugang also spätestens nach 30 Tagen (sofort:
+Benutzer in der Verwaltung sperren). In der Datenbank steht nur ein Hash der Sitzungs-ID, das Passwort
 des lokalen Admins als scrypt-Hash. Nach zehn Fehlversuchen ist die Passwort-Anmeldung je IP für
 15 Minuten gesperrt, nach hundert Fehlversuchen von beliebig vielen IPs auch je Benutzername; es laufen
 höchstens zwei Passwortprüfungen gleichzeitig. Jede Antwort trägt Sicherheits-Header (Content-Security-Policy,

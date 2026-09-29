@@ -5,6 +5,11 @@ import type { Role } from './users.js';
 export const SESSION_COOKIE = 'gemeinde_session';
 /** Wer die App mindestens alle 30 Tage öffnet, bleibt angemeldet. */
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * OIDC-Sitzungen enden spätestens so lange nach der Anmeldung, auch bei täglicher Nutzung. Die Rolle
+ * kommt aus den Gruppen beim Identity Provider; wer dort entfernt wird, soll nicht für immer Zugang behalten.
+ */
+export const OIDC_SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000;
 // Ablauf höchstens einmal pro Stunde verlängern, sonst schriebe jeder Stream-Abruf in die Datenbank.
 const TOUCH_AFTER_MS = 60 * 60 * 1000;
 
@@ -30,7 +35,9 @@ export function createSession(db: DB, userId: number): string {
     now + SESSION_TTL_MS,
   );
   // Gelegentlich aufräumen, ohne eigenen Timer.
-  db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(now);
+  db.prepare(
+    "DELETE FROM sessions WHERE expires_at < ? OR (created_at < ? AND user_id IN (SELECT id FROM users WHERE kind = 'oidc'))",
+  ).run(now, now - OIDC_SESSION_MAX_MS);
   return id;
 }
 
@@ -42,9 +49,10 @@ export function sessionUser(db: DB, id: string | undefined): SessionUser | undef
   const row = db
     .prepare(
       `SELECT u.id, u.kind, u.name, u.role, s.last_seen_at FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.id_hash = ? AND s.expires_at > ? AND u.disabled = 0 AND u.role IS NOT NULL`,
+       WHERE s.id_hash = ? AND s.expires_at > ? AND u.disabled = 0 AND u.role IS NOT NULL
+         AND (u.kind = 'local' OR s.created_at > ?)`,
     )
-    .get(hash, now) as { id: number; kind: 'local' | 'oidc'; name: string; role: Role; last_seen_at: number } | undefined;
+    .get(hash, now, now - OIDC_SESSION_MAX_MS) as { id: number; kind: 'local' | 'oidc'; name: string; role: Role; last_seen_at: number } | undefined;
   if (!row) return undefined;
   if (now - row.last_seen_at > TOUCH_AFTER_MS) {
     db.prepare('UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id_hash = ?').run(now, now + SESSION_TTL_MS, hash);
