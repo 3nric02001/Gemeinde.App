@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { ApiError, query, type Page } from '../api';
+import { ApiError, coverUrl, query, type Page } from '../api';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { plural } from '../format';
@@ -186,7 +186,7 @@ function AlbumsAdmin({ params, onError, onLogout }: { params: URLSearchParams; o
             {albums.map((album) => (
               <li key={album.id}>
                 <a href={`/admin/album/${album.id}`} class="admin-row">
-                  <Cover albumId={album.id} hasCover={album.hasCover} title={album.title} class="cover-sm" />
+                  <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} class="cover-sm" />
                   <span class="track-main">
                     <span class="track-title">{album.title}</span>
                     <span class="track-sub">

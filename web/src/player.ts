@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { coverUrl, streamUrl, type Track } from './api';
+import { streamUrl, trackCoverUrl, type Track } from './api';
 import { Queue, type QueueState, type RepeatMode } from './queue';
 
 /** Jeder Eintrag ist ein eigenes Objekt, damit derselbe Titel mehrfach in der Warteschlange stehen kann. */
@@ -279,11 +279,12 @@ export class Player {
   private updateMediaSession(): void {
     const track = this.queue.current?.track;
     if (!track || !('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+    const artwork = trackCoverUrl(track);
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
       artist: track.artist,
       album: track.album ?? '',
-      artwork: track.albumId ? [{ src: coverUrl(track.albumId) }] : [],
+      artwork: artwork ? [{ src: artwork }] : [],
     });
   }
 }

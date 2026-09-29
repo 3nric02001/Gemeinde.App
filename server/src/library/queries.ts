@@ -35,11 +35,14 @@ export interface AlbumFilter {
 const TRACK_COLUMNS = `
   t.id, t.title, t.artist, t.album_artist AS albumArtist,
   coalesce((SELECT title FROM albums WHERE id = t.album_id), t.album) AS album, t.album_id AS albumId,
-  t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType
+  t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType,
+  (t.cover_id IS NOT NULL OR EXISTS (
+    SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
+  )) AS hasCover
 `;
 const ALBUM_COLUMNS = `
   a.id, a.title, a.artist, a.year, a.genre, a.track_count AS trackCount, a.duration,
-  (a.cover_path IS NOT NULL) AS hasCover, a.kind
+  (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover, a.kind
 `;
 
 /**
@@ -112,8 +115,8 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
        ORDER BY t.artist COLLATE NOCASE, t.album COLLATE NOCASE, t.disc_no, t.track_no, t.title COLLATE NOCASE
        LIMIT @limit OFFSET @offset`,
     )
-    .all({ ...where.params, limit: filter.limit, offset: filter.offset }) as Record<string, unknown>[];
-  return { items, total, limit: filter.limit, offset: filter.offset };
+    .all({ ...where.params, limit: filter.limit, offset: filter.offset }) as Array<{ hasCover: number }>;
+  return { items: items.map(coerceHasCover), total, limit: filter.limit, offset: filter.offset };
 }
 
 const ALBUM_SORT: Record<AlbumFilter['sort'], string> = {
@@ -176,9 +179,19 @@ export function getAlbum(
       `SELECT ${TRACK_COLUMNS} FROM album_tracks at JOIN tracks t ON t.id = at.track_id
        WHERE at.album_id = ? ORDER BY at.position`,
     )
-    .all(id) as Array<Record<string, unknown>>;
+    .all(id) as Array<{ hasCover: number }>;
   const { hidden, ...rest } = coerceHasCover(album);
-  return { ...rest, ...(options.includeHidden ? { hidden } : {}), tracks };
+  return { ...rest, ...(options.includeHidden ? { hidden } : {}), tracks: tracks.map(coerceHasCover) };
+}
+
+/** Titel in der angegebenen Reihenfolge */
+export function getTracksByIds(db: DB, ids: number[]): Record<string, unknown>[] {
+  if (!ids.length) return [];
+  const rows = db
+    .prepare(`SELECT ${TRACK_COLUMNS} FROM tracks t WHERE t.id IN (SELECT value FROM json_each(?))`)
+    .all(JSON.stringify(ids)) as Array<{ id: number; hasCover: number }>;
+  const byId = new Map(rows.map((row) => [row.id, coerceHasCover(row)]));
+  return ids.map((id) => byId.get(id)).filter((row) => row !== undefined);
 }
 
 export function getTrackFile(db: DB, id: number): { path: string; mime: string | null } | undefined {
@@ -187,9 +200,33 @@ export function getTrackFile(db: DB, id: number): { path: string; mime: string |
     | undefined;
 }
 
-export function getAlbumCover(db: DB, id: number): string | undefined {
-  const row = db.prepare('SELECT cover_path FROM albums WHERE id = ?').get(id) as { cover_path: string | null } | undefined;
-  return row?.cover_path ?? undefined;
+/** Bild im Ordner (liegt in der Nextcloud) oder eingebettetes Bild (liegt in der Datenbank) */
+export type CoverSource = { path: string } | { coverId: number };
+
+/** Albumcover: Bild im Albumordner hat Vorrang vor dem eingebetteten. */
+export function getAlbumCover(db: DB, id: number): CoverSource | undefined {
+  const row = db.prepare('SELECT cover_path, cover_id FROM albums WHERE id = ?').get(id) as
+    | { cover_path: string | null; cover_id: number | null }
+    | undefined;
+  if (row?.cover_path) return { path: row.cover_path };
+  if (row?.cover_id) return { coverId: row.cover_id };
+  return undefined;
+}
+
+/** Titelcover: eingebettetes Bild des Titels, sonst das Albumcover (wichtig für Sampler). */
+export function getTrackCover(db: DB, id: number): CoverSource | undefined {
+  const row = db.prepare('SELECT cover_id, album_id FROM tracks WHERE id = ?').get(id) as
+    | { cover_id: number | null; album_id: number | null }
+    | undefined;
+  if (!row) return undefined;
+  if (row.cover_id) return { coverId: row.cover_id };
+  return row.album_id ? getAlbumCover(db, row.album_id) : undefined;
+}
+
+export function getCoverImage(db: DB, id: number): { hash: string; mime: string; data: Buffer } | undefined {
+  return db.prepare('SELECT hash, mime, data FROM covers WHERE id = ?').get(id) as
+    | { hash: string; mime: string; data: Buffer }
+    | undefined;
 }
 
 export function listArtists(db: DB, q: string | undefined, limit: number, offset: number) {

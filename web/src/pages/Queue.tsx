@@ -1,3 +1,4 @@
+import { trackCoverUrl } from '../api';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { Equalizer } from '../components/TrackList';
@@ -10,7 +11,7 @@ function Row({ entry, index, current, playing }: { entry: Entry; index: number; 
   return (
     <li class={`track${current ? ' is-current' : ''}`} onClick={() => (current ? player.toggle() : player.jump(index))}>
       <span class="track-lead">
-        <Cover albumId={track.albumId} title={track.album ?? track.title} class="cover-sm" />
+        <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} class="cover-sm" />
         <span class="track-play" aria-hidden="true">
           {current && playing ? <Equalizer /> : <Icon name="play" size={18} />}
         </span>

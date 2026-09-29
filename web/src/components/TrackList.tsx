@@ -1,5 +1,5 @@
 import { Fragment } from 'preact';
-import type { Track } from '../api';
+import { trackCoverUrl, type Track } from '../api';
 import { formatTime } from '../format';
 import { player, usePlayerSelect } from '../player';
 import { navigate } from '../router';
@@ -57,7 +57,7 @@ export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordin
                 {variant === 'album' ? (
                   <span class="track-no">{ordinal ? index + 1 : (track.trackNo ?? index + 1)}</span>
                 ) : (
-                  <Cover albumId={track.albumId} title={track.album ?? track.title} class="cover-sm" />
+                  <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} class="cover-sm" />
                 )}
                 <button
                   type="button"

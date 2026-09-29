@@ -12,15 +12,22 @@ export interface Tags {
   year?: number;
   genre?: string;
   compilation?: boolean;
+  /** Eingebettetes Cover (APIC bzw. FLAC PICTURE) */
+  picture?: { data: Buffer; mime: string };
 }
 
 function syncsafe(value: number): Buffer {
   return Buffer.from([(value >> 21) & 0x7f, (value >> 14) & 0x7f, (value >> 7) & 0x7f, value & 0x7f]);
 }
 
-function id3Frame(id: string, value: string): Buffer {
-  const body = Buffer.concat([Buffer.from([3]), Buffer.from(value, 'utf8')]);
+function id3Frame(id: string, value: string | Buffer): Buffer {
+  const body = typeof value === 'string' ? Buffer.concat([Buffer.from([3]), Buffer.from(value, 'utf8')]) : value;
   return Buffer.concat([Buffer.from(id, 'latin1'), syncsafe(body.length), Buffer.from([0, 0]), body]);
+}
+
+function apic(picture: { data: Buffer; mime: string }): Buffer {
+  // Kodierung Latin-1, MIME-Typ, Bildtyp 3 (Vorderseite), leere Beschreibung, Bilddaten
+  return Buffer.concat([Buffer.from([0]), Buffer.from(picture.mime, 'latin1'), Buffer.from([0, 3, 0]), picture.data]);
 }
 
 export function mp3(tags: Tags, frames = 20): Buffer {
@@ -35,7 +42,9 @@ export function mp3(tags: Tags, frames = 20): Buffer {
     ['TCON', tags.genre],
     ['TCMP', tags.compilation ? '1' : undefined],
   ];
-  const body = Buffer.concat(entries.filter(([, v]) => v !== undefined).map(([id, v]) => id3Frame(id, v!)));
+  const frames3 = entries.filter(([, v]) => v !== undefined).map(([id, v]) => id3Frame(id, v!));
+  if (tags.picture) frames3.push(id3Frame('APIC', apic(tags.picture)));
+  const body = Buffer.concat(frames3);
   const header = Buffer.concat([Buffer.from('ID3', 'latin1'), Buffer.from([4, 0, 0]), syncsafe(body.length)]);
   // MPEG-1 Layer III, 128 kbit/s, 44,1 kHz: 417 Byte pro Frame
   const frame = Buffer.alloc(417);
@@ -81,11 +90,24 @@ export function flac(tags: Tags, seconds = 180): Buffer {
     u32(comments.length),
     ...comments.flatMap((c) => [u32(c.length), c]),
   ]);
+  const u32be = (n: number) => {
+    const b = Buffer.alloc(4);
+    b.writeUInt32BE(n);
+    return b;
+  };
+  const blocks: Array<[number, Buffer]> = [
+    [0, streamInfo],
+    [4, vorbis],
+  ];
+  if (tags.picture) {
+    const mime = Buffer.from(tags.picture.mime, 'latin1');
+    blocks.push([
+      6,
+      Buffer.concat([u32be(3), u32be(mime.length), mime, u32be(0), u32be(1), u32be(1), u32be(24), u32be(0), u32be(tags.picture.data.length), tags.picture.data]),
+    ]);
+  }
   return Buffer.concat([
     Buffer.from('fLaC', 'latin1'),
-    flacBlockHeader(0, streamInfo.length, false),
-    streamInfo,
-    flacBlockHeader(4, vorbis.length, true),
-    vorbis,
+    ...blocks.flatMap(([type, data], i) => [flacBlockHeader(type, data.length, i === blocks.length - 1), data]),
   ]);
 }

@@ -2,18 +2,23 @@ import { timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
+import { datedFolderTrackIds, listDatedFolders } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
 import { registerAdminRoutes } from './admin.js';
 import {
   getAlbum,
   getAlbumCover,
+  getCoverImage,
   getFacets,
+  getTrackCover,
   getTrackFile,
+  getTracksByIds,
   listArtists,
   searchAlbums,
   searchTracks,
   type AlbumFilter,
+  type CoverSource,
 } from '../library/queries.js';
 
 export interface RouteDeps {
@@ -87,6 +92,22 @@ async function proxyFile(
   return reply.send(Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream));
 }
 
+async function sendCover(
+  deps: RouteDeps,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  source: CoverSource | undefined,
+): Promise<FastifyReply> {
+  if (!source) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
+  if ('path' in source) return proxyFile(deps, request, reply, source.path, null);
+  const image = getCoverImage(deps.db, source.coverId);
+  if (!image) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
+  const etag = `"${image.hash.slice(0, 32)}"`;
+  reply.header('etag', etag).header('cache-control', 'private, max-age=86400');
+  if (request.headers['if-none-match'] === etag) return reply.code(304).send();
+  return reply.type(image.mime).send(image.data);
+}
+
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {
   const { db, scanner } = deps;
 
@@ -130,9 +151,11 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   });
 
   app.get('/api/albums/:id/cover', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
-    const cover = getAlbumCover(db, request.params.id);
-    if (!cover) return reply.code(404).send({ error: 'Kein Cover vorhanden' });
-    return proxyFile(deps, request, reply, cover, null);
+    return sendCover(deps, request, reply, getAlbumCover(db, request.params.id));
+  });
+
+  app.get('/api/tracks/:id/cover', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
+    return sendCover(deps, request, reply, getTrackCover(db, request.params.id));
   });
 
   app.get('/api/tracks/:id/stream', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
@@ -159,6 +182,45 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   );
 
   app.get('/api/facets', async () => getFacets(db));
+
+  // Unterste Ordner mit Datum im Namen, z. B. Gottesdienst-Aufnahmen
+  app.get(
+    '/api/dates',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: { ...paging, limit: { ...paging.limit, maximum: 1000 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request) => {
+      const { limit, offset } = request.query as { limit: number; offset: number };
+      const folders = listDatedFolders(db);
+      return { items: folders.slice(offset, offset + limit), total: folders.length, limit, offset };
+    },
+  );
+
+  app.get(
+    '/api/dates/folder',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['path'],
+          properties: { path: { type: 'string', maxLength: 2000 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { path } = request.query as { path: string };
+      const folder = listDatedFolders(db).find((f) => f.folder === path);
+      if (!folder) return reply.code(404).send({ error: 'Ordner nicht gefunden' });
+      return { ...folder, tracks: getTracksByIds(db, datedFolderTrackIds(db, folder.folder)) };
+    },
+  );
 
   app.get('/api/scan', async () => ({ ...scanner.getStatus(), lastSuccessAt: getMeta(db, 'lastScanAt') ?? null }));
 

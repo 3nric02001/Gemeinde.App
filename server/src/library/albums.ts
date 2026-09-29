@@ -19,6 +19,7 @@ interface TrackRow {
   track_no: number | null;
   disc_no: number | null;
   album_id: number | null;
+  cover_id: number | null;
 }
 
 interface AlbumDraft {
@@ -82,7 +83,7 @@ interface Override {
   hidden: number;
 }
 
-const COMPARED = ['title', 'artist', 'year', 'genre', 'folder', 'cover', 'count', 'duration', 'hidden'] as const;
+const COMPARED = ['title', 'artist', 'year', 'genre', 'folder', 'cover', 'coverId', 'count', 'duration', 'hidden'] as const;
 
 export const MANUAL_KEY_PREFIX = 'manual:';
 
@@ -115,7 +116,8 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
   db.transaction(() => {
     const tracks = db
       .prepare(
-        `SELECT id, path, title, artist, album_artist, album, year, genre, duration, compilation, track_no, disc_no, album_id
+        `SELECT id, path, title, artist, album_artist, album, year, genre, duration, compilation, track_no, disc_no, album_id,
+                cover_id
          FROM tracks`,
       )
       .all() as TrackRow[];
@@ -161,6 +163,8 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         genre: override?.genre ?? mostCommon(draft.tracks.map((t) => t.genre)) ?? null,
         folder: draft.folder,
         cover: cover ?? null,
+        // Eingebettetes Bild, das die meisten Titel tragen (bei Gleichstand das des ersten Titels)
+        coverId: mostCommon(draft.tracks.map((t) => t.cover_id)) ?? null,
         count: draft.tracks.length,
         duration: draft.tracks.reduce((sum, t) => sum + (t.duration ?? 0), 0),
         hidden: override?.hidden ? 1 : 0,
@@ -169,23 +173,23 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     };
 
     const upsertAuto = db.prepare(`
-      INSERT INTO albums (key, title, artist, year, genre, folder, cover_path, track_count, duration, hidden, created_at)
-      VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @count, @duration, @hidden, @now)
+      INSERT INTO albums (key, title, artist, year, genre, folder, cover_path, cover_id, track_count, duration, hidden, created_at)
+      VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @coverId, @count, @duration, @hidden, @now)
       ON CONFLICT(key) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, year = excluded.year, genre = excluded.genre,
-        folder = excluded.folder, cover_path = excluded.cover_path,
+        folder = excluded.folder, cover_path = excluded.cover_path, cover_id = excluded.cover_id,
         track_count = excluded.track_count, duration = excluded.duration, hidden = excluded.hidden
       RETURNING id
     `);
     const updateManual = db.prepare(`
       UPDATE albums SET title = @title, artist = @artist, year = @year, genre = @genre, folder = @folder,
-        cover_path = @cover, track_count = @count, duration = @duration, hidden = @hidden
+        cover_path = @cover, cover_id = @coverId, track_count = @count, duration = @duration, hidden = @hidden
       WHERE id = @id
     `);
 
     const existing = db
       .prepare(
-        `SELECT id, key, kind, title, artist, year, genre, folder, cover_path AS cover, track_count AS count, duration, hidden
+        `SELECT id, key, kind, title, artist, year, genre, folder, cover_path AS cover, cover_id AS coverId, track_count AS count, duration, hidden
          FROM albums`,
       )
       .all() as Array<AlbumRow & Record<string, unknown>>;

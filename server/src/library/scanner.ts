@@ -1,12 +1,15 @@
+import { createHash } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
 import { setMeta, type DB } from '../db.js';
 import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextcloud/webdav.js';
 import { rebuildAlbums } from './albums.js';
-import { extractMetadata, type TrackMeta } from './metadata.js';
+import { extractMetadata, tagSpan, type TrackMeta } from './metadata.js';
 import { coverRank, dirname, isAudioFile } from './pathMeta.js';
 
-/** So viel vom Dateianfang lesen wir für Tags; reicht für ID3v2, FLAC und Ogg ohne eingebettete Riesencover. */
+/** So viel vom Dateianfang lesen wir zuerst für Tags; reicht für ID3v2, FLAC und Ogg ohne großes Cover. */
 export const HEAD_BYTES = 256 * 1024;
+/** Größere Tag-Blöcke (meist wegen eines eingebetteten Covers) werden bis zu dieser Größe nachgeladen. */
+export const MAX_TAG_BYTES = 8 * 1024 * 1024;
 const WRITE_BATCH = 50;
 
 export interface ScanStatus {
@@ -166,17 +169,28 @@ export class LibraryScanner {
     const changed = files.filter((file) => known.get(file.path) !== file.etag || !file.etag);
 
     const upsert = this.db.prepare(`
-      INSERT INTO tracks (path, etag, size, mime, title, artist, album_artist, album, track_no, disc_no, year, genre, duration, compilation, scanned_at)
-      VALUES (@path, @etag, @size, @mime, @title, @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @now)
+      INSERT INTO tracks (path, etag, size, mime, title, artist, album_artist, album, track_no, disc_no, year, genre, duration, compilation, cover_id, scanned_at)
+      VALUES (@path, @etag, @size, @mime, @title, @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @coverId, @now)
       ON CONFLICT(path) DO UPDATE SET
         etag = excluded.etag, size = excluded.size, mime = excluded.mime, title = excluded.title,
         artist = excluded.artist, album_artist = excluded.album_artist, album = excluded.album,
         track_no = excluded.track_no, disc_no = excluded.disc_no, year = excluded.year, genre = excluded.genre,
-        duration = excluded.duration, compilation = excluded.compilation, scanned_at = excluded.scanned_at
+        duration = excluded.duration, compilation = excluded.compilation, cover_id = excluded.cover_id,
+        scanned_at = excluded.scanned_at
+    `);
+    const saveCover = this.db.prepare(`
+      INSERT INTO covers (hash, mime, data) VALUES (?, ?, ?)
+      ON CONFLICT(hash) DO UPDATE SET mime = excluded.mime
+      RETURNING id
     `);
     const flush = this.db.transaction((results: ScanResult[]) => {
       const now = Date.now();
       for (const { entry, meta } of results) {
+        let coverId: number | null = null;
+        if (meta.picture) {
+          const hash = createHash('sha256').update(meta.picture.data).digest('hex');
+          coverId = (saveCover.get(hash, meta.picture.mime, meta.picture.data) as { id: number }).id;
+        }
         upsert.run({
           path: entry.path,
           etag: entry.etag,
@@ -192,6 +206,7 @@ export class LibraryScanner {
           genre: meta.genre ?? null,
           duration: meta.duration ?? null,
           compilation: meta.compilation ? 1 : 0,
+          coverId,
           now,
         });
         if (known.has(entry.path)) this.status.updated++;
@@ -202,7 +217,7 @@ export class LibraryScanner {
     let pending: ScanResult[] = [];
     await mapLimit(changed, this.concurrency, async (entry) => {
       try {
-        const head = await this.client.readHead(entry.path, HEAD_BYTES);
+        const head = await this.readTags(entry.path);
         pending.push({ entry, meta: await extractMetadata(entry.path, head, entry.contentType) });
       } catch (error) {
         this.status.failed++;
@@ -227,6 +242,8 @@ export class LibraryScanner {
 
     this.saveCovers(covers, isUnderUnreadable);
     rebuildAlbums(this.db);
+    // Bilder, auf die kein Titel mehr zeigt, wegräumen.
+    this.db.prepare('DELETE FROM covers WHERE id NOT IN (SELECT cover_id FROM tracks WHERE cover_id IS NOT NULL)').run();
   }
 
   private saveCovers(covers: Map<string, string>, isUnderUnreadable: (path: string) => boolean): void {
@@ -239,5 +256,20 @@ export class LibraryScanner {
       for (const { folder, path } of known) if (!covers.has(folder) && !isUnderUnreadable(path)) remove.run(folder);
       for (const [folder, path] of covers) upsert.run(folder, path);
     })();
+  }
+
+  /** Liest den Dateianfang; ist der Tag-Block (z. B. wegen eines großen Covers) länger, wird nachgeladen. */
+  private async readTags(path: string): Promise<Buffer> {
+    let requested = HEAD_BYTES;
+    let head = await this.client.readHead(path, requested);
+    for (let round = 0; round < 4; round++) {
+      const needed = tagSpan(head);
+      // Datei kürzer als angefragt: mehr gibt es nicht.
+      if (needed === undefined || needed <= head.length || head.length < requested) break;
+      requested = Math.min(needed, MAX_TAG_BYTES);
+      if (requested <= head.length) break;
+      head = await this.client.readHead(path, requested);
+    }
+    return head;
   }
 }

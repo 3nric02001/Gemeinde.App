@@ -16,7 +16,13 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - **Start**: Genres als Kacheln, „Neu hinzugefügt“, Alben des häufigsten Genres, Jahrzehnte
 - **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; ohne Suchbegriff
   Stöbern nach Genre
-- **Alben, Interpreten, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach
+- **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach
+- **Datum**: Jeder unterste Ordner, dessen Name ein Datum enthält, erscheint als eigenes „Album“ mit
+  Wochentag und Datum, neueste zuerst und nach Monaten gruppiert. Erkannt werden z. B.
+  `2026-09-27 Gottesdienst`, `20260927`, `27.09.2026`, `27.9.26` und `27. September 2026`. Das Datum
+  kommt aus dem Ordnernamen, nicht aus den Tags; Ordner ohne Datum im Namen stehen nur unter Alben.
+  Disc-Unterordner (`CD 1`, `CD 2`) zählen zum Elternordner. Interpreten sind weiter über Suche und
+  Links erreichbar.
 - **Album- und Interpretenseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), „Mehr von …“
 - **Player**: Leiste unten mit Zufall, Wiederholen (alle/einen), Spulen und Lautstärke; Warteschlange
   mit „Als Nächstes spielen“ und „Zur Warteschlange hinzufügen“. Auf dem Handy Mini-Player über der
@@ -55,15 +61,19 @@ verschoben, muss sie im eigenen Album neu eingetragen werden.
   angegeben werden. Nutzer brauchen keinen Nextcloud-Zugang. Den genauen Pfad zeigt die
   Nextcloud-Weboberfläche des Service-Accounts in der Brotkrumen-Navigation.
 - Der **Scan** läuft beim Start und danach im eingestellten Intervall. Er ist inkrementell:
-  Nur neue Dateien und solche mit geändertem ETag werden gelesen, und davon nur die ersten 256 KB
-  für die Tags. Gelöschte Dateien verschwinden aus der Bibliothek; Ordner, die gerade nicht lesbar
+  Nur neue Dateien und solche mit geändertem ETag werden gelesen, und davon nur der Anfang mit den
+  Tags (256 KB, bei großen eingebetteten Covern etwas mehr). Nach dem Update auf diese Version
+  liest der erste Scan alle Dateien einmal neu, um die Cover zu übernehmen. Gelöschte Dateien verschwinden aus der Bibliothek; Ordner, die gerade nicht lesbar
   sind, bleiben unangetastet.
 - **Metadaten** kommen aus den Tags (MP3, FLAC, Ogg, Opus, …). Fehlt etwas, wird es aus dem Pfad
   abgeleitet, z. B. `Interpret/Album (2021)/CD 2/03 - Titel.mp3`.
 - **Alben** werden pro Albumordner und Albumname gebildet. Disc-Ordner (`CD 1`, `Disc 2`) werden
   zusammengefasst, Sampler mit vielen Interpreten bleiben ein Album („Verschiedene Interpreten“),
-  Sammelordner mit Titeln aus mehreren Alben werden aufgeteilt. Als Cover dient `cover.jpg`,
-  `folder.jpg`, `front.jpg` o. ä. im Albumordner.
+  Sammelordner mit Titeln aus mehreren Alben werden aufgeteilt. Als Albumcover dient `cover.jpg`,
+  `folder.jpg`, `front.jpg` o. ä. im Albumordner, sonst das in die Dateien eingebettete Bild.
+- **Titelbilder**: In MP3 (ID3) und FLAC eingebettete Cover werden beim Scan gelesen und in der
+  Datenbank abgelegt (gleiche Bilder nur einmal). Jeder Titel zeigt sein eigenes Bild, ohne eigenes
+  Bild das Albumcover. Große Tag-Blöcke werden dafür bis 8 MB nachgeladen.
 - **Suche und Filter**: Volltextsuche mit Präfix und ohne Rücksicht auf Umlaute/Akzente (SQLite FTS5),
   Filter nach Interpret, Genre, Jahr und Jahrzehnt.
 - **Streaming** läuft über den Server mit Range-Unterstützung (Spulen im Browser), die
@@ -105,10 +115,13 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | --- | --- |
 | `GET /api/albums?q=&artist=&genre=&year=&decade=&sort=artist\|title\|year\|recent&limit=&offset=` | Alben suchen und filtern |
 | `GET /api/albums/:id` | Album mit Titelliste |
-| `GET /api/albums/:id/cover` | Coverbild |
+| `GET /api/albums/:id/cover` | Albumcover (Bild im Ordner, sonst eingebettet) |
+| `GET /api/tracks/:id/cover` | Bild des Titels, sonst Albumcover |
 | `GET /api/tracks?q=&artist=&genre=&year=&decade=&albumId=&limit=&offset=` | Titel suchen und filtern |
 | `GET /api/tracks/:id/stream` | Audio streamen (unterstützt `Range`) |
 | `GET /api/artists?q=` | Interpreten mit Anzahl Alben und Titel |
+| `GET /api/dates?limit=&offset=` | Unterste Ordner mit Datum im Namen, neueste zuerst |
+| `GET /api/dates/folder?path=` | Ein Datumsordner mit seinen Titeln |
 | `GET /api/facets` | Genres, Jahrzehnte und Gesamtzahlen für die Filterleiste |
 | `GET /api/scan` | Status des letzten Scans |
 | `POST /api/scan` | Scan starten (`Authorization: Bearer <ADMIN_TOKEN>`) |

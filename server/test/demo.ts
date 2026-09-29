@@ -46,19 +46,37 @@ const albums: Array<[string, string, number, string, string[], number[][] | null
   ['Jugendchor', 'Sommerfreizeit', 2023, 'Chor', ['Du bist Herr', 'Meine Hoffnung', 'Vater unser'], null],
   ['Sefora Nelson', 'Liebe, die bleibt', 2019, 'Pop', ['Liebe, die bleibt', 'Gnade'], [[70, 60, 120], [240, 200, 220]]],
 ];
-for (const [artist, album, year, genre, titles, colors] of albums) {
+albums.forEach(([artist, album, year, genre, titles, colors], n) => {
+  // Mal liegt das Cover als Bild im Ordner, mal steckt es in den Dateien; beim Sampler hat jeder Titel ein eigenes.
+  const sampler = album.startsWith('Feiert Jesus');
+  const embedded = colors && (sampler || n % 2 === 1);
+  titles.forEach((title, i) => {
+    const picture = !embedded
+      ? undefined
+      : { data: png(sampler ? [40 + i * 50, 80, 200 - i * 40] : colors[0]!, sampler ? [250, 200 - i * 30, 90 + i * 40] : colors[1]!), mime: 'image/png' };
+    cloud.put(
+      `${artist}/${album}/${String(i + 1).padStart(2, '0')} ${title}.mp3`,
+      mp3({ title, artist, album, track: i + 1, year, genre, picture }, 3000 + i * 800),
+    );
+  });
+  if (colors && !embedded) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
+});
+// Gottesdienst-Aufnahmen in Datumsordnern für den Reiter "Datum"
+const services: Array<[string, string[], number[][] | null]> = [
+  ['Gottesdienste/2026/2026-09-27 Erntedank', ['Begrüßung', 'Lobpreis', 'Predigt: Dankbarkeit'], [[180, 110, 40], [250, 220, 150]]],
+  ['Gottesdienste/2026/2026-09-20', ['Lobpreis', 'Predigt: Psalm 23'], null],
+  ['Gottesdienste/2026/13.09.2026 Taufgottesdienst', ['Taufe', 'Predigt'], [[40, 90, 150], [200, 225, 245]]],
+  ['Gottesdienste/2026/2026-08-30 Jugendgottesdienst', ['Band', 'Input'], [[60, 60, 60], [210, 210, 210]]],
+];
+for (const [folder, titles, colors] of services) {
   titles.forEach((title, i) =>
-    cloud.put(`${artist}/${album}/${String(i + 1).padStart(2, '0')} ${title}.mp3`, mp3({ title, artist, album, track: i + 1, year, genre }, 3000 + i * 800)),
+    cloud.put(
+      `${folder}/${String(i + 1).padStart(2, '0')} ${title}.mp3`,
+      mp3({ title, artist: 'MBG Brake', album: folder.split('/').pop(), track: i + 1, genre: 'Gottesdienst', picture: colors ? { data: png(colors[0]!, colors[1]!), mime: 'image/png' } : undefined }, 4000),
+    ),
   );
-  if (colors) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
 }
-// Gottesdienst-Mitschnitte mit Predigten, um eigene Alben im Admin-Bereich auszuprobieren
-for (const [date, preacher, text] of [['2024-03-03', 'Pastor Meier', 'Psalm 23'], ['2024-03-10', 'Pastorin Schulz', 'Römer 8']] as const) {
-  const album = `Gottesdienst ${date}`;
-  cloud.put(`Gottesdienste/${date}/01 Begrüßung.mp3`, mp3({ title: 'Begrüßung', artist: 'Gemeinde', album, track: 1, year: 2024, genre: 'Gottesdienst' }, 2000));
-  cloud.put(`Gottesdienste/${date}/02 Lobpreis.mp3`, mp3({ title: 'Lobpreis', artist: 'Lobpreisteam', album, track: 2, year: 2024, genre: 'Gottesdienst' }, 3000));
-  cloud.put(`Gottesdienste/${date}/03 Predigt ${text}.mp3`, mp3({ title: `Predigt: ${text}`, artist: preacher, album, track: 3, year: 2024, genre: 'Gottesdienst' }, 5000));
-}
+
 const config = loadConfig({
   NEXTCLOUD_URL: cloud.url, NEXTCLOUD_USER: USER, NEXTCLOUD_PASSWORD: PASSWORD, NEXTCLOUD_MUSIC_PATH: '/Musik',
   DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000', ADMIN_TOKEN: 'demo',

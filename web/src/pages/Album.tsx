@@ -7,7 +7,7 @@ import { TrackList } from '../components/TrackList';
 import { formatDuration, plural } from '../format';
 import { useApi } from '../hooks';
 import { player } from '../player';
-import { query, type Album as AlbumType, type Page } from '../api';
+import { coverUrl, query, type Album as AlbumType, type Page } from '../api';
 import { ErrorNote, Loading } from './common';
 
 export function Album({ id }: { id: number }) {
@@ -21,7 +21,7 @@ export function Album({ id }: { id: number }) {
   return (
     <div class="page">
       <header class="hero">
-        <Cover albumId={album.id} hasCover={album.hasCover} title={album.title} class="cover-hero" eager />
+        <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} class="cover-hero" eager />
         <div class="hero-text">
           <span class="eyebrow">Album</span>
           <h1>{album.title}</h1>

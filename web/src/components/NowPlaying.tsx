@@ -1,4 +1,5 @@
 import { useEffect } from 'preact/hooks';
+import { trackCoverUrl } from '../api';
 import { navigate } from '../router';
 import { usePlayerSelect } from '../player';
 import { Controls, Volume } from './Controls';
@@ -32,7 +33,7 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
           <Icon name="queue" size={22} />
         </button>
       </div>
-      <Cover albumId={track.albumId} title={track.album ?? track.title} class="cover-now" eager />
+      <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} class="cover-now" eager />
       <div class="now-meta">
         <button type="button" class="now-title" onClick={() => track.albumId && go(`/album/${track.albumId}`)}>
           {track.title}

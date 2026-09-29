@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { query, type Page, type Track } from '../api';
+import { coverUrl, query, type Page, type Track } from '../api';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { formatDuration, formatTime, plural } from '../format';
@@ -62,7 +62,7 @@ export function AlbumEditor({ id, onError }: Props) {
         <Icon name="back" size={16} /> Alle Alben
       </a>
       <header class="hero admin-hero">
-        <Cover albumId={album.id} hasCover={album.hasCover} title={album.title} class="cover-hero" eager />
+        <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} class="cover-hero" eager />
         <div class="hero-text">
           <span class="eyebrow">
             {manual ? 'Eigenes Album' : 'Automatisches Album'}
