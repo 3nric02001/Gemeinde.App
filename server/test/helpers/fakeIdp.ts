@@ -23,10 +23,19 @@ export class FakeIdp {
   user: Record<string, unknown> = { sub: 'u1', name: 'Anna Beispiel', email: 'anna@example.org', groups: ['musik'] };
   /** Zusätzliche Claims nur über den Userinfo-Endpunkt */
   userinfo: Record<string, unknown> = {};
+  /** Pfad des Issuers, z. B. wie bei Authentik "/application/o/gemeinde/" mit Schrägstrich am Ende */
+  issuerPath = '';
   private server: Server | undefined;
   private key: CryptoKey | undefined;
   private jwk: JWK | undefined;
   private readonly codes = new Map<string, PendingCode>();
+
+  /** Issuer, den das Discovery-Dokument meldet, falls er nicht zur Adresse passen soll */
+  issuerOverride: string | undefined;
+
+  get issuer(): string {
+    return this.issuerOverride ?? this.url + this.issuerPath;
+  }
 
   async start(): Promise<void> {
     const { privateKey, publicKey } = await generateKeyPair('RS256');
@@ -48,9 +57,9 @@ export class FakeIdp {
       res.end(JSON.stringify(body));
     };
 
-    if (url.pathname === '/.well-known/openid-configuration') {
+    if (url.pathname === `${this.issuerPath.replace(/\/$/, '')}/.well-known/openid-configuration`) {
       return json(200, {
-        issuer: this.url,
+        issuer: this.issuer,
         authorization_endpoint: `${this.url}/authorize`,
         token_endpoint: `${this.url}/token`,
         userinfo_endpoint: `${this.url}/userinfo`,
@@ -78,7 +87,7 @@ export class FakeIdp {
       const target = new URL(p.get('redirect_uri')!);
       target.searchParams.set('code', code);
       target.searchParams.set('state', p.get('state')!);
-      target.searchParams.set('iss', this.url);
+      target.searchParams.set('iss', this.issuer);
       res.writeHead(302, { location: target.href });
       return void res.end();
     }
@@ -102,7 +111,7 @@ export class FakeIdp {
       }
       const idToken = await new SignJWT({ ...pending.claims, nonce: pending.nonce })
         .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
-        .setIssuer(this.url)
+        .setIssuer(this.issuer)
         .setAudience(CLIENT_ID)
         .setIssuedAt()
         .setExpirationTime('5m')
