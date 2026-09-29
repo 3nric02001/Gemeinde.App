@@ -2115,3 +2115,23 @@ h2 {
   font-weight: 600;
   margin: 0;
 }
+
+.scan-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.scan-summary {
+  margin: 4px 0;
+}
+
+.scan-panel .admin-hint {
+  margin: 0;
+}
+
+.scan-panel .admin-error {
+  overflow-wrap: anywhere;
+}

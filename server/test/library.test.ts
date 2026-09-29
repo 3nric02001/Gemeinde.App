@@ -1,3 +1,4 @@
+import { createServer, type AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { InjectOptions } from 'fastify';
 import { buildApp, type AppContext } from '../src/app.js';
@@ -231,6 +232,65 @@ describe('Inkrementeller Scan', () => {
     await other.app.close();
     expect(status.state).toBe('failed');
     expect(status.lastError).toBe('Musikordner nicht gefunden: /Gibt es nicht (NEXTCLOUD_MUSIC_PATH prüfen)');
+  });
+
+  it('zeigt den Fortschritt und die erste Ursache, wenn einzelne Dateien nicht lesbar sind', async () => {
+    cloud.brokenFiles.add('Downloads/a.mp3');
+    const status = await ctx.scanner.scan();
+    expect(status).toMatchObject({ state: 'idle', filesSeen: 11, toRead: 11, read: 11, added: 10, failed: 1 });
+    expect(status.lastError).toBe('Downloads/a.mp3: GET Downloads/a.mp3 fehlgeschlagen: HTTP 500');
+    // Beim nächsten Scan wird nur die fehlende Datei erneut versucht.
+    cloud.brokenFiles.clear();
+    expect(await ctx.scanner.scan()).toMatchObject({ toRead: 1, read: 1, added: 1, failed: 0, lastError: null });
+  });
+
+  it('bleibt nicht an einem hängenden Download stehen', async () => {
+    const quick = await buildApp(
+      loadConfig({
+        NEXTCLOUD_URL: cloud.url,
+        NEXTCLOUD_USER: USER,
+        NEXTCLOUD_PASSWORD: PASSWORD,
+        NEXTCLOUD_MUSIC_PATH: '/Musik Bibliothek',
+        DATABASE_PATH: ':memory:',
+      }),
+      { logger: false, requestTimeoutMs: 200 },
+    );
+    cloud.stalledFiles.add('Downloads/b.mp3');
+    const status = await quick.scanner.scan();
+    await quick.app.close();
+    expect(status).toMatchObject({ state: 'idle', added: 10, failed: 1 });
+    expect(status.lastError).toBe('Downloads/b.mp3: GET Downloads/b.mp3: Nextcloud hat nicht innerhalb von 1 s geantwortet');
+  });
+
+  it('meldet falsche Zugangsdaten und eine nicht erreichbare Nextcloud verständlich', async () => {
+    const scanWith = async (env: Record<string, string>) => {
+      const other = await buildApp(
+        loadConfig({
+          NEXTCLOUD_URL: cloud.url,
+          NEXTCLOUD_USER: USER,
+          NEXTCLOUD_PASSWORD: PASSWORD,
+          NEXTCLOUD_MUSIC_PATH: '/Musik Bibliothek',
+          DATABASE_PATH: ':memory:',
+          ...env,
+        }),
+        { logger: false },
+      );
+      const status = await other.scanner.scan();
+      await other.app.close();
+      return status;
+    };
+    expect(await scanWith({ NEXTCLOUD_PASSWORD: 'falsch' })).toMatchObject({
+      state: 'failed',
+      lastError: 'PROPFIND /: Nextcloud lehnt die Anmeldung ab (NEXTCLOUD_USER/NEXTCLOUD_PASSWORD prüfen)',
+    });
+    // Ein Port, auf dem sicher niemand mehr lauscht
+    const closed = createServer();
+    await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
+    const { port } = closed.address() as AddressInfo;
+    await new Promise((resolve) => closed.close(resolve));
+    const offline = await scanWith({ NEXTCLOUD_URL: `http://127.0.0.1:${port}` });
+    expect(offline.state).toBe('failed');
+    expect(offline.lastError).toBe('PROPFIND /: Nextcloud nicht erreichbar (ECONNREFUSED, NEXTCLOUD_URL prüfen)');
   });
 
   it('funktioniert auch mit Servern, die Range ignorieren', async () => {

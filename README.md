@@ -135,7 +135,10 @@ des lokalen Admins als scrypt-Hash. Nach zehn Fehlversuchen ist die Passwort-Anm
   Nur neue Dateien und solche mit geändertem ETag werden gelesen, und davon nur der Anfang mit den
   Tags (256 KB, bei großen eingebetteten Covern etwas mehr). Nach dem Update auf diese Version
   liest der erste Scan alle Dateien einmal neu, um die Cover zu übernehmen. Gelöschte Dateien verschwinden aus der Bibliothek; Ordner, die gerade nicht lesbar
-  sind, bleiben unangetastet.
+  sind, bleiben unangetastet. Stand, Fortschritt und letzten Fehler zeigt die Verwaltung unter
+  **Alben** („Abgleich mit der Nextcloud“), dort startet „Jetzt scannen“ einen Scan sofort.
+  Antwortet die Nextcloud auf eine Anfrage 60 Sekunden lang nicht, wird sie abgebrochen, damit ein
+  einzelner hängender Download den Scan nicht aufhält.
 - **Metadaten** kommen aus den Tags (MP3, FLAC, Ogg, Opus, …). Fehlt etwas, wird es aus dem Pfad
   abgeleitet, z. B. `Interpret/Album (2021)/CD 2/03 - Titel.mp3`.
 - **Alben** werden pro Albumordner und Albumname gebildet. Disc-Ordner (`CD 1`, `Disc 2`) werden

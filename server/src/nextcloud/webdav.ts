@@ -45,6 +45,21 @@ function encodePath(path: string): string {
     .join('/');
 }
 
+/** So lange darf eine einzelne Anfrage des Scanners an die Nextcloud dauern, bevor sie abgebrochen wird. */
+export const REQUEST_TIMEOUT_MS = 60_000;
+
+/** Verständliche Meldung für Netzwerkfehler und Zeitüberschreitungen statt "fetch failed". */
+function networkError(error: unknown, what: string, timeoutMs: number): Error {
+  if (error instanceof WebDavError) return error;
+  const name = (error as { name?: string }).name;
+  if (name === 'TimeoutError' || name === 'AbortError') {
+    return new WebDavError(`${what}: Nextcloud hat nicht innerhalb von ${Math.ceil(timeoutMs / 1000)} s geantwortet`, 0);
+  }
+  const cause = (error as { cause?: { code?: string; message?: string } }).cause;
+  const detail = cause?.code ?? cause?.message ?? (error instanceof Error ? error.message : String(error));
+  return new WebDavError(`${what}: Nextcloud nicht erreichbar (${detail}, NEXTCLOUD_URL prüfen)`, 0);
+}
+
 /**
  * Minimaler WebDAV-Client für genau das, was der Scanner braucht:
  * Ordner auflisten (Depth 1, weil viele Server Depth infinity sperren)
@@ -59,6 +74,7 @@ export class NextcloudClient {
   constructor(
     config: NextcloudConfig,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly timeoutMs = REQUEST_TIMEOUT_MS,
   ) {
     this.baseUrl = `${config.url}/remote.php/dav/files/${encodeURIComponent(config.user)}/${encodePath(config.musicPath)}`.replace(
       /\/+$/,
@@ -76,25 +92,43 @@ export class NextcloudClient {
 
   async list(dir: string): Promise<RemoteEntry[]> {
     const url = this.fileUrl(dir) + '/';
-    const res = await this.fetchImpl(url, {
-      method: 'PROPFIND',
-      headers: {
-        Authorization: this.authorization,
-        Depth: '1',
-        'Content-Type': 'application/xml; charset=utf-8',
-      },
-      body: PROPFIND_BODY,
-    });
-    if (res.status !== 207) {
-      throw new WebDavError(`PROPFIND ${dir || '/'} fehlgeschlagen: HTTP ${res.status}`, res.status);
+    const what = `PROPFIND ${dir || '/'}`;
+    let xml: string;
+    try {
+      const res = await this.fetchImpl(url, {
+        method: 'PROPFIND',
+        headers: {
+          Authorization: this.authorization,
+          Depth: '1',
+          'Content-Type': 'application/xml; charset=utf-8',
+        },
+        body: PROPFIND_BODY,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      if (res.status === 401) {
+        throw new WebDavError(`${what}: Nextcloud lehnt die Anmeldung ab (NEXTCLOUD_USER/NEXTCLOUD_PASSWORD prüfen)`, 401);
+      }
+      if (res.status !== 207) throw new WebDavError(`${what} fehlgeschlagen: HTTP ${res.status}`, res.status);
+      xml = await res.text();
+    } catch (error) {
+      throw networkError(error, what, this.timeoutMs);
     }
     const self = dir.replace(/^\/+|\/+$/g, '');
-    return this.parseMultistatus(await res.text()).filter((entry) => entry.path !== self);
+    return this.parseMultistatus(xml).filter((entry) => entry.path !== self);
   }
 
   /** Liest die ersten `length` Bytes einer Datei (für Tags reicht meist der Dateianfang). */
   async readHead(path: string, length: number): Promise<Buffer> {
-    const res = await this.get(path, { Range: `bytes=0-${length - 1}` });
+    try {
+      return await this.fetchHead(path, length);
+    } catch (error) {
+      throw networkError(error, `GET ${path}`, this.timeoutMs);
+    }
+  }
+
+  private async fetchHead(path: string, length: number): Promise<Buffer> {
+    // Das Zeitlimit gilt für die ganze Anfrage samt Lesen, damit eine stockende Übertragung den Scan nicht aufhält.
+    const res = await this.get(path, { Range: `bytes=0-${length - 1}` }, AbortSignal.timeout(this.timeoutMs));
     if (res.status !== 206 && res.status !== 200) {
       throw new WebDavError(`GET ${path} fehlgeschlagen: HTTP ${res.status}`, res.status);
     }
