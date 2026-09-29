@@ -19,10 +19,15 @@ export interface ScanStatus {
   finishedAt: string | null;
   /** Gefundene Audiodateien in der Nextcloud */
   filesSeen: number;
+  /** Neue oder geänderte Dateien, deren Tags dieser Scan liest */
+  toRead: number;
+  /** Davon schon gelesen (auch fehlgeschlagene) */
+  read: number;
   added: number;
   updated: number;
   removed: number;
   failed: number;
+  /** Warum der Scan abgebrochen ist, oder bei einzelnen unlesbaren Dateien die erste Ursache */
   lastError: string | null;
 }
 
@@ -49,6 +54,8 @@ export class LibraryScanner {
     startedAt: null,
     finishedAt: null,
     filesSeen: 0,
+    toRead: 0,
+    read: 0,
     added: 0,
     updated: 0,
     removed: 0,
@@ -88,6 +95,8 @@ export class LibraryScanner {
       startedAt: new Date().toISOString(),
       finishedAt: null,
       filesSeen: 0,
+      toRead: 0,
+      read: 0,
       added: 0,
       updated: 0,
       removed: 0,
@@ -129,6 +138,7 @@ export class LibraryScanner {
               throw error;
             }
             this.log.warn({ err: error, dir }, 'Ordner konnte nicht gelesen werden, wird übersprungen');
+            this.status.lastError ??= error instanceof Error ? error.message : String(error);
             unreadable.push(dir);
             return;
           }
@@ -168,6 +178,8 @@ export class LibraryScanner {
     );
     const remotePaths = new Set(files.map((f) => f.path));
     const changed = files.filter((file) => known.get(file.path) !== file.etag || !file.etag);
+    this.status.toRead = changed.length;
+    if (changed.length > 0) this.log.info({ files: files.length, toRead: changed.length }, 'Bibliotheks-Scan liest Dateien');
 
     const upsert = this.db.prepare(`
       INSERT INTO tracks (path, etag, size, mime, title, artist, album_artist, album, track_no, disc_no, year, genre, duration, compilation, cover_id, scanned_at)
@@ -227,8 +239,11 @@ export class LibraryScanner {
         pending.push({ entry, meta: await extractMetadata(entry.path, head, entry.contentType) });
       } catch (error) {
         this.status.failed++;
+        // Die erste Ursache reicht für die Anzeige in der Verwaltung; alle stehen im Log.
+        this.status.lastError ??= `${entry.path}: ${error instanceof Error ? error.message : String(error)}`;
         this.log.warn({ err: error, path: entry.path }, 'Datei konnte nicht gelesen werden');
       }
+      this.status.read++;
       if (pending.length >= WRITE_BATCH) {
         const batch = pending;
         pending = [];

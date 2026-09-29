@@ -22,6 +22,10 @@ export class FakeNextcloud {
   readonly files = new Map<string, FakeFile>();
   /** Ordner, deren Auflistung mit 500 fehlschlägt */
   readonly brokenDirs = new Set<string>();
+  /** Dateien, deren Download mit 500 fehlschlägt */
+  readonly brokenFiles = new Set<string>();
+  /** Dateien, deren Download nach den ersten Bytes stehen bleibt */
+  readonly stalledFiles = new Set<string>();
   readonly requests: Array<{ method: string; path: string; range?: string }> = [];
   ignoreRange = false;
   private server: Server | undefined;
@@ -48,6 +52,7 @@ export class FakeNextcloud {
   }
 
   async stop(): Promise<void> {
+    this.server?.closeAllConnections();
     await new Promise<void>((resolve) => this.server?.close(() => resolve()));
   }
 
@@ -134,6 +139,15 @@ export class FakeNextcloud {
       return;
     }
     const type = path.endsWith('.flac') ? 'audio/flac' : path.endsWith('.mp3') ? 'audio/mpeg' : 'image/jpeg';
+    if (this.brokenFiles.has(path)) {
+      res.writeHead(500).end();
+      return;
+    }
+    if (this.stalledFiles.has(path)) {
+      res.writeHead(200, { 'Content-Type': type, 'Content-Length': file.data.length });
+      res.write(file.data.subarray(0, 16));
+      return;
+    }
     const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? '');
     if (range && !this.ignoreRange) {
       const start = Number(range[1]);

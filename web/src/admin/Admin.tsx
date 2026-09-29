@@ -11,6 +11,7 @@ import { AdminTabs, ACCESS_SECTIONS } from './Access';
 import { adminRequest, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
 import { CategoriesAdmin, CategoryEditor } from './Categories';
+import { ScanPanel } from './Scan';
 
 /** Verwaltung unter /admin: Alben für Manager und Admins, Benutzer, Gruppen und Anmeldung nur für Admins. */
 export function Admin({ location }: { location: Location }) {
@@ -95,6 +96,8 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
         Eigene Alben stellst du aus beliebigen Titeln zusammen; ein Titel kann in mehreren Alben stehen. Automatische Alben
         lassen sich umbenennen, ausblenden oder um einzelne Titel kürzen. Alle Änderungen bleiben bei neuen Scans erhalten.
       </p>
+
+      <ScanPanel />
 
       {creating && <NewAlbum onCancel={() => setCreating(false)} onError={onError} />}
 

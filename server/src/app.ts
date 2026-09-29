@@ -16,14 +16,14 @@ export interface AppContext {
   scanner: LibraryScanner;
 }
 
-export async function buildApp(config: Config, options: { fetch?: typeof fetch; logger?: boolean } = {}): Promise<AppContext> {
+export async function buildApp(config: Config, options: { fetch?: typeof fetch; logger?: boolean; requestTimeoutMs?: number } = {}): Promise<AppContext> {
   const app = Fastify({
     logger: options.logger === false ? false : { level: config.logLevel },
     // Hinter einem Reverse Proxy (Traefik, nginx) die echte Client-IP verwenden.
     trustProxy: true,
   });
   const db = openDatabase(config.databasePath);
-  const client = new NextcloudClient(config.nextcloud, options.fetch);
+  const client = new NextcloudClient(config.nextcloud, options.fetch, options.requestTimeoutMs);
   const scanner = new LibraryScanner(db, client, app.log, config.scanConcurrency);
 
   await ensureLocalAdmin(db, { password: config.adminPassword, reset: config.resetAdminPassword }, app.log);
