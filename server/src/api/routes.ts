@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
+import { datedFolderTrackIds, listDatedFolders } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
 import {
@@ -11,6 +12,7 @@ import {
   getFacets,
   getTrackCover,
   getTrackFile,
+  getTracksByIds,
   listArtists,
   searchAlbums,
   searchTracks,
@@ -179,6 +181,45 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   );
 
   app.get('/api/facets', async () => getFacets(db));
+
+  // Unterste Ordner mit Datum im Namen, z. B. Gottesdienst-Aufnahmen
+  app.get(
+    '/api/dates',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: { ...paging, limit: { ...paging.limit, maximum: 1000 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request) => {
+      const { limit, offset } = request.query as { limit: number; offset: number };
+      const folders = listDatedFolders(db);
+      return { items: folders.slice(offset, offset + limit), total: folders.length, limit, offset };
+    },
+  );
+
+  app.get(
+    '/api/dates/folder',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['path'],
+          properties: { path: { type: 'string', maxLength: 2000 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { path } = request.query as { path: string };
+      const folder = listDatedFolders(db).find((f) => f.folder === path);
+      if (!folder) return reply.code(404).send({ error: 'Ordner nicht gefunden' });
+      return { ...folder, tracks: getTracksByIds(db, datedFolderTrackIds(db, folder.folder)) };
+    },
+  );
 
   app.get('/api/scan', async () => ({ ...scanner.getStatus(), lastSuccessAt: getMeta(db, 'lastScanAt') ?? null }));
 

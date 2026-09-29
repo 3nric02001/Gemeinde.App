@@ -20,6 +20,27 @@ export function plural(count: number, one: string, many: string): string {
   return `${count.toLocaleString('de-DE')} ${count === 1 ? one : many}`;
 }
 
+const dateOnly = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y!, m! - 1, d!);
+};
+
+/** "Sonntag, 27. September 2026" */
+export function formatLongDate(iso: string): string {
+  return dateOnly(iso).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/** "Sonntag, 27.09.2026" für Karten, wo der Platz knapp ist */
+export function formatShortDate(iso: string): string {
+  const date = dateOnly(iso);
+  return `${date.toLocaleDateString('de-DE', { weekday: 'long' })}, ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+}
+
+/** "September 2026" für Zwischenüberschriften */
+export function formatMonth(iso: string): string {
+  return dateOnly(iso).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+}
+
 export function decadeLabel(decade: number): string {
   return `${decade}er`;
 }

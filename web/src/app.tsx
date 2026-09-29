@@ -6,6 +6,8 @@ import { Album } from './pages/Album';
 import { Albums } from './pages/Albums';
 import { Artist } from './pages/Artist';
 import { Artists } from './pages/Artists';
+import { DateFolder } from './pages/DateFolder';
+import { Dates } from './pages/Dates';
 import { Empty } from './pages/common';
 import { Home } from './pages/Home';
 import { QueuePage } from './pages/Queue';
@@ -21,6 +23,8 @@ function Page({ location }: { location: Location }) {
   if (path === '/alben') return <Albums params={params} />;
   if (path === '/titel') return <Tracks params={params} />;
   if (path === '/interpreten') return <Artists />;
+  if (path === '/datum') return <Dates />;
+  if (path === '/datum/ordner' && params.get('pfad')) return <DateFolder path={params.get('pfad')!} />;
   if (path === '/warteschlange') return <QueuePage />;
   const album = match('/album/:id', path);
   if (album && /^\d+$/.test(album.id!)) return <Album id={Number(album.id)} />;

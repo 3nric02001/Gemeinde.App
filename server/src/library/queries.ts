@@ -164,6 +164,16 @@ export function getAlbum(db: DB, id: number): Record<string, unknown> | undefine
   return { ...coerceHasCover(album), tracks: tracks.map(coerceHasCover) };
 }
 
+/** Titel in der angegebenen Reihenfolge */
+export function getTracksByIds(db: DB, ids: number[]): Record<string, unknown>[] {
+  if (!ids.length) return [];
+  const rows = db
+    .prepare(`SELECT ${TRACK_COLUMNS} FROM tracks t WHERE t.id IN (SELECT value FROM json_each(?))`)
+    .all(JSON.stringify(ids)) as Array<{ id: number; hasCover: number }>;
+  const byId = new Map(rows.map((row) => [row.id, coerceHasCover(row)]));
+  return ids.map((id) => byId.get(id)).filter((row) => row !== undefined);
+}
+
 export function getTrackFile(db: DB, id: number): { path: string; mime: string | null } | undefined {
   return db.prepare('SELECT path, mime FROM tracks WHERE id = ?').get(id) as
     | { path: string; mime: string | null }

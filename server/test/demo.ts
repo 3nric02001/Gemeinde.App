@@ -61,6 +61,22 @@ albums.forEach(([artist, album, year, genre, titles, colors], n) => {
   });
   if (colors && !embedded) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
 });
+// Gottesdienst-Aufnahmen in Datumsordnern für den Reiter "Datum"
+const services: Array<[string, string[], number[][] | null]> = [
+  ['Gottesdienste/2026/2026-09-27 Erntedank', ['Begrüßung', 'Lobpreis', 'Predigt: Dankbarkeit'], [[180, 110, 40], [250, 220, 150]]],
+  ['Gottesdienste/2026/2026-09-20', ['Lobpreis', 'Predigt: Psalm 23'], null],
+  ['Gottesdienste/2026/13.09.2026 Taufgottesdienst', ['Taufe', 'Predigt'], [[40, 90, 150], [200, 225, 245]]],
+  ['Gottesdienste/2026/2026-08-30 Jugendgottesdienst', ['Band', 'Input'], [[60, 60, 60], [210, 210, 210]]],
+];
+for (const [folder, titles, colors] of services) {
+  titles.forEach((title, i) =>
+    cloud.put(
+      `${folder}/${String(i + 1).padStart(2, '0')} ${title}.mp3`,
+      mp3({ title, artist: 'MBG Brake', album: folder.split('/').pop(), track: i + 1, genre: 'Gottesdienst', picture: colors ? { data: png(colors[0]!, colors[1]!), mime: 'image/png' } : undefined }, 4000),
+    ),
+  );
+}
+
 const config = loadConfig({
   NEXTCLOUD_URL: cloud.url, NEXTCLOUD_USER: USER, NEXTCLOUD_PASSWORD: PASSWORD, NEXTCLOUD_MUSIC_PATH: '/Musik',
   DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000',

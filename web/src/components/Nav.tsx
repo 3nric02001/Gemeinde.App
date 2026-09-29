@@ -4,12 +4,7 @@ const items: Array<{ href: string; label: string; icon: IconName; match: (path: 
   { href: '/', label: 'Start', icon: 'home', match: (p) => p === '/' },
   { href: '/suche', label: 'Suche', icon: 'search', match: (p) => p.startsWith('/suche') },
   { href: '/alben', label: 'Alben', icon: 'albums', match: (p) => p.startsWith('/alben') || p.startsWith('/album/') },
-  {
-    href: '/interpreten',
-    label: 'Interpreten',
-    icon: 'artists',
-    match: (p) => p.startsWith('/interpret'),
-  },
+  { href: '/datum', label: 'Datum', icon: 'calendar', match: (p) => p.startsWith('/datum') },
   { href: '/titel', label: 'Titel', icon: 'tracks', match: (p) => p.startsWith('/titel') },
 ];
 

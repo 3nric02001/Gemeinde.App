@@ -16,7 +16,13 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - **Start**: Genres als Kacheln, „Neu hinzugefügt“, Alben des häufigsten Genres, Jahrzehnte
 - **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; ohne Suchbegriff
   Stöbern nach Genre
-- **Alben, Interpreten, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach
+- **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach
+- **Datum**: Jeder unterste Ordner, dessen Name ein Datum enthält, erscheint als eigenes „Album“ mit
+  Wochentag und Datum, neueste zuerst und nach Monaten gruppiert. Erkannt werden z. B.
+  `2026-09-27 Gottesdienst`, `20260927`, `27.09.2026`, `27.9.26` und `27. September 2026`. Das Datum
+  kommt aus dem Ordnernamen, nicht aus den Tags; Ordner ohne Datum im Namen stehen nur unter Alben.
+  Disc-Unterordner (`CD 1`, `CD 2`) zählen zum Elternordner. Interpreten sind weiter über Suche und
+  Links erreichbar.
 - **Album- und Interpretenseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), „Mehr von …“
 - **Player**: Leiste unten mit Zufall, Wiederholen (alle/einen), Spulen und Lautstärke; Warteschlange
   mit „Als Nächstes spielen“ und „Zur Warteschlange hinzufügen“. Auf dem Handy Mini-Player über der
@@ -94,6 +100,8 @@ ein Reverse Proxy mit TLS (Traefik, Caddy, nginx) davor.
 | `GET /api/tracks?q=&artist=&genre=&year=&decade=&albumId=&limit=&offset=` | Titel suchen und filtern |
 | `GET /api/tracks/:id/stream` | Audio streamen (unterstützt `Range`) |
 | `GET /api/artists?q=` | Interpreten mit Anzahl Alben und Titel |
+| `GET /api/dates?limit=&offset=` | Unterste Ordner mit Datum im Namen, neueste zuerst |
+| `GET /api/dates/folder?path=` | Ein Datumsordner mit seinen Titeln |
 | `GET /api/facets` | Genres, Jahrzehnte und Gesamtzahlen für die Filterleiste |
 | `GET /api/scan` | Status des letzten Scans |
 | `POST /api/scan` | Scan starten (`Authorization: Bearer <ADMIN_TOKEN>`) |

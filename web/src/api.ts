@@ -30,6 +30,21 @@ export interface AlbumDetail extends Album {
   tracks: Track[];
 }
 
+/** Unterster Ordner mit Datum im Namen, z. B. eine Gottesdienst-Aufnahme */
+export interface DatedFolder {
+  folder: string;
+  name: string;
+  /** JJJJ-MM-TT */
+  date: string;
+  trackCount: number;
+  duration: number;
+  coverTrackId: number | null;
+}
+
+export interface DatedFolderDetail extends DatedFolder {
+  tracks: Track[];
+}
+
 export interface Artist {
   name: string;
   albumCount: number;
