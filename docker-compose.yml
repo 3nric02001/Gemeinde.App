@@ -9,6 +9,12 @@ services:
       - "${APP_BIND:-127.0.0.1}:3000:3000"
     volumes:
       - gemeinde-data:/data
+    # Nur /data ist beschreibbar; der Prozess kann sich keine weiteren Rechte verschaffen.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   gemeinde-data:

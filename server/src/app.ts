@@ -1,3 +1,4 @@
+import { dirname, join } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerAuth } from './api/auth.js';
 import { registerRoutes } from './api/routes.js';
@@ -32,7 +33,15 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
   relocateLibrary(db, client.base, config.nextcloud.musicPaths, app.log);
   const scanner = new LibraryScanner(db, client, app.log, config.scanConcurrency);
 
-  await ensureLocalAdmin(db, { password: config.adminPassword, reset: config.resetAdminPassword }, app.log);
+  await ensureLocalAdmin(
+    db,
+    {
+      password: config.adminPassword,
+      reset: config.resetAdminPassword,
+      passwordFile: config.databasePath === ':memory:' ? undefined : join(dirname(config.databasePath), 'admin-password.txt'),
+    },
+    app.log,
+  );
   const oidc = new OidcService(db);
   if (oidc.isReady() && !config.publicUrl) {
     app.log.warn('OIDC ist eingeschaltet, aber PUBLIC_URL fehlt: bitte in der .env setzen, sonst stammt die Weiterleitungs-URL aus der Anfrage');

@@ -114,8 +114,10 @@ nur „Mit Gemeinde-Konto anmelden“; die Anmeldung des lokalen Admins steht un
 - **Lokaler Admin** `admin`: Das Passwort kommt aus `ADMIN_PASSWORD`. Ein neuer oder geänderter
   Wert gilt nach dem nächsten Neustart (`docker compose up -d`), auch wenn die Datenbank schon
   existiert. Solange der Wert gleich bleibt, gilt ein unter Verwaltung → Anmeldung geändertes
-  Passwort weiter. Ohne `ADMIN_PASSWORD` wird beim ersten Start eines erzeugt und einmal ins Log
-  geschrieben (`docker compose logs gemeinde-app`); `RESET_ADMIN_PASSWORD=true` erzeugt ein neues.
+  Passwort weiter. Ohne `ADMIN_PASSWORD` wird beim ersten Start eines erzeugt und in
+  `/data/admin-password.txt` geschrieben, nicht ins Log
+  (`docker compose exec gemeinde-app cat /data/admin-password.txt`; nach dem Ändern in der Verwaltung
+  die Datei löschen); `RESET_ADMIN_PASSWORD=true` erzeugt ein neues.
   Enthält das Passwort ein `$`, muss es in der `.env` als `$$` geschrieben werden, weil Docker
   Compose `$` als Variable liest.
 - **Alle anderen** melden sich über OIDC mit ihrem Gemeinde-Konto an (Keycloak, Authentik, Nextcloud,

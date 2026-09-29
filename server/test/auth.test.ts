@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { InjectOptions } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { requiredRole } from '../src/api/auth.js';
@@ -261,6 +264,24 @@ describe('Lokaler Admin', () => {
     expect(await canLogin(logged.at(-1)!.password as string)).toBe(true);
     expect(await canLogin('aus-der-env-2')).toBe(false);
     db.close();
+  });
+
+  it('schreibt ein erzeugtes Passwort in eine Datei statt ins Log', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gemeinde-admin-'));
+    const file = join(dir, 'admin-password.txt');
+    const db = openDatabase(':memory:');
+    const logged: Array<Record<string, unknown>> = [];
+    const log = { info: (obj: object) => logged.push({ ...obj }), warn: (obj: object) => logged.push({ ...obj }) };
+    await ensureLocalAdmin(db, { passwordFile: file }, log);
+    expect(logged.some((entry) => 'password' in entry)).toBe(false);
+    const password = readFileSync(file, 'utf8').trim().split('\n').at(-1)!;
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(await checkLocalLogin(db, 'admin', password)).toBeDefined();
+    // Kommt später ADMIN_PASSWORD, verschwindet die veraltete Datei.
+    await ensureLocalAdmin(db, { password: 'aus-der-env-3', passwordFile: file }, log);
+    expect(existsSync(file)).toBe(false);
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it('ignoriert Leerzeichen und Zeilenenden um ADMIN_PASSWORD', () => {
