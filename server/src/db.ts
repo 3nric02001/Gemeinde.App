@@ -258,6 +258,55 @@ export const migrations: string[] = [
     (2, 'Genre', 'genre', 1, 0, unixepoch() * 1000);
   INSERT INTO category_fields (category_id, tag) VALUES (1, 'artist'), (1, 'albumartist'), (2, 'genre');
   `,
+  // Benutzer, Sitzungen und OIDC-Gruppen. Der lokale Admin meldet sich mit Passwort an,
+  // alle anderen über OIDC; ihre Rolle ergibt sich aus den freigeschalteten Gruppen.
+  `
+  CREATE TABLE users (
+    id            INTEGER PRIMARY KEY,
+    kind          TEXT NOT NULL,
+    username      TEXT,
+    password_hash TEXT,
+    issuer        TEXT,
+    subject       TEXT,
+    name          TEXT NOT NULL,
+    email         TEXT,
+    -- NULL: in keiner freigeschalteten Gruppe, also kein Zugang
+    role          TEXT,
+    groups        TEXT NOT NULL DEFAULT '[]',
+    disabled      INTEGER NOT NULL DEFAULT 0,
+    created_at    INTEGER NOT NULL,
+    last_login_at INTEGER
+  );
+  CREATE UNIQUE INDEX users_local ON users(username) WHERE kind = 'local';
+  CREATE UNIQUE INDEX users_oidc ON users(issuer, subject) WHERE kind = 'oidc';
+
+  -- Nur ein Hash der Sitzungs-ID wird gespeichert, damit ein Datenbank-Backup keine gültigen Cookies enthält.
+  CREATE TABLE sessions (
+    id_hash      TEXT PRIMARY KEY,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at   INTEGER NOT NULL,
+    last_seen_at INTEGER NOT NULL,
+    expires_at   INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  CREATE INDEX sessions_user ON sessions(user_id);
+
+  -- Gruppen aus dem Identity Provider: beim Login gesehen oder vom Admin eingetragen.
+  CREATE TABLE oidc_groups (
+    name         TEXT PRIMARY KEY,
+    enabled      INTEGER NOT NULL DEFAULT 0,
+    role         TEXT NOT NULL DEFAULT 'listener',
+    last_seen_at INTEGER
+  ) WITHOUT ROWID;
+
+  -- Laufende OIDC-Anmeldungen zwischen Weiterleitung und Rückkehr.
+  CREATE TABLE oidc_logins (
+    state      TEXT PRIMARY KEY,
+    verifier   TEXT NOT NULL,
+    nonce      TEXT NOT NULL,
+    return_to  TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

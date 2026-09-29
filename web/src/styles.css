@@ -1986,3 +1986,132 @@ h2 {
 .rule-group.is-nested .button-secondary {
   background: var(--surface);
 }
+
+/* ---------- Anmeldung, Benutzer und Gruppen ---------- */
+
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  display: grid;
+  gap: 16px;
+}
+
+.login-card .page-title {
+  margin-bottom: 0;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.login-oidc {
+  justify-content: center;
+}
+
+.link-button {
+  justify-self: start;
+  padding: 0;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: underline;
+}
+
+.link-button:hover {
+  color: var(--text);
+}
+
+.sidebar-foot {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(var(--bar) + 16px);
+  display: grid;
+  gap: 2px;
+}
+
+.sidebar-foot .sidebar-admin {
+  position: static;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-tabs {
+  margin-bottom: 24px;
+}
+
+.admin-user,
+.admin-group {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.admin-user .track-main {
+  flex: 1;
+  min-width: 220px;
+}
+
+.admin-user-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-group .admin-check {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+
+.admin-role select {
+  min-width: 220px;
+}
+
+.admin-inline {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-inline .field {
+  flex: 1;
+  min-width: 220px;
+}
+
+.admin-form {
+  display: grid;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.admin-form h2 {
+  font-size: 18px;
+}
+
+.admin-form .admin-hint,
+.admin-form .admin-check {
+  margin: 0;
+}
+
+.admin-copy {
+  user-select: all;
+  word-break: break-all;
+}
+
+.admin-ok {
+  font-weight: 600;
+  margin: 0;
+}

@@ -1,5 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { registerAuth } from './api/auth.js';
 import { registerRoutes } from './api/routes.js';
+import { registerUserAdminRoutes } from './api/users.js';
+import { OidcService } from './auth/oidc.js';
+import { ensureLocalAdmin } from './auth/users.js';
 import type { Config } from './config.js';
 import { openDatabase, type DB } from './db.js';
 import { LibraryScanner } from './library/scanner.js';
@@ -22,7 +26,13 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
   const client = new NextcloudClient(config.nextcloud, options.fetch);
   const scanner = new LibraryScanner(db, client, app.log, config.scanConcurrency);
 
-  await registerRoutes(app, { db, client, scanner, adminToken: config.adminToken });
+  await ensureLocalAdmin(db, { password: config.adminPassword, reset: config.resetAdminPassword }, app.log);
+  const oidc = new OidcService(db);
+
+  // Zuerst: Der Zugriffsschutz muss vor allen API-Routen stehen.
+  await registerAuth(app, { db, oidc, publicUrl: config.publicUrl });
+  await registerRoutes(app, { db, client, scanner });
+  await registerUserAdminRoutes(app, { db, oidc, publicUrl: config.publicUrl });
   if (!(await registerWeb(app, config.webDir))) {
     app.log.info({ webDir: config.webDir }, 'Keine Weboberfläche gefunden, nur die API ist erreichbar');
   }

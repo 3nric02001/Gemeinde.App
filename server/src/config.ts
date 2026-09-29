@@ -16,7 +16,12 @@ export interface Config {
   port: number;
   logLevel: string;
   databasePath: string;
-  adminToken: string | undefined;
+  /** Startpasswort des lokalen Admins; ohne Angabe wird beim ersten Start eines erzeugt und geloggt */
+  adminPassword: string | undefined;
+  /** Setzt das Passwort des lokalen Admins beim Start zurück (vergessenes Passwort) */
+  resetAdminPassword: boolean;
+  /** Öffentliche Adresse, z. B. https://musik.gemeinde.de; sonst aus der Anfrage abgeleitet */
+  publicUrl: string | undefined;
   /** Ordner mit der gebauten Weboberfläche; fehlt er, liefert der Server nur die API aus */
   webDir: string;
   nextcloud: NextcloudConfig;
@@ -52,13 +57,28 @@ export function normalizeMusicPath(path: string): string {
   return segments.length ? `/${segments.join('/')}` : '';
 }
 
+function publicUrl(raw: string | undefined): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('PUBLIC_URL muss eine vollständige Adresse sein, z. B. https://musik.gemeinde.de');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('PUBLIC_URL muss mit https:// beginnen');
+  return url.origin;
+}
+
 export function loadConfig(env: Env = process.env): Config {
   return {
     host: env.HOST?.trim() || '0.0.0.0',
     port: integer(env, 'PORT', 3000, 1),
     logLevel: env.LOG_LEVEL?.trim() || 'info',
     databasePath: env.DATABASE_PATH?.trim() || './data/library.db',
-    adminToken: env.ADMIN_TOKEN?.trim() || undefined,
+    adminPassword: env.ADMIN_PASSWORD || undefined,
+    resetAdminPassword: ['1', 'true', 'ja', 'yes'].includes(env.RESET_ADMIN_PASSWORD?.trim().toLowerCase() ?? ''),
+    publicUrl: publicUrl(env.PUBLIC_URL),
     webDir: env.WEB_DIR?.trim() || '../web/dist',
     nextcloud: {
       url: required(env, 'NEXTCLOUD_URL').replace(/\/+$/, ''),

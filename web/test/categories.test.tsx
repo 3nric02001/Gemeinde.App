@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Admin } from '../src/admin/Admin';
-import { setToken } from '../src/admin/api';
 import { clearCache } from '../src/api';
+import { loadAuth } from '../src/auth';
 import { Sidebar } from '../src/components/Nav';
 import { Category } from '../src/pages/Category';
 
@@ -12,9 +12,15 @@ const json = (body: unknown, status = 200) =>
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  setToken(null);
   clearCache();
 });
+
+/** Verwaltung braucht mindestens die Rolle Manager. */
+async function signInAsManager() {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json({ user: { id: 2, name: 'Max', role: 'manager', kind: 'oidc' }, oidc: null }));
+  await loadAuth();
+  vi.restoreAllMocks();
+}
 
 const tagFields = {
   items: [
@@ -25,6 +31,7 @@ const tagFields = {
 
 describe('Kategorien in der Verwaltung', () => {
   it('legt eine Kategorie mit zusammengefassten Werten an', async () => {
+    await signInAsManager();
     const calls: Array<{ url: string; method: string; body: unknown }> = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
@@ -38,7 +45,6 @@ describe('Kategorien in der Verwaltung', () => {
       if (url === '/api/admin/categories') return json({ items: [] });
       return json({ error: 'unerwartet' }, 500);
     });
-    setToken('geheim');
     render(<Admin location={{ path: '/admin/kategorie/neu', params: new URLSearchParams() }} />);
 
     await waitFor(() => expect(screen.getByText('Genre')).toBeTruthy());
@@ -65,6 +71,7 @@ describe('Kategorien in der Verwaltung', () => {
   });
 
   it('ändert die Reihenfolge', async () => {
+    await signInAsManager();
     const categories = [
       { id: 1, name: 'Interpreten', slug: 'interpreten', position: 0, inNav: true, groupedOnly: false, fields: ['artist', 'albumartist'], groups: [] },
       { id: 2, name: 'Genre', slug: 'genre', position: 1, inNav: false, groupedOnly: false, fields: ['genre'], groups: [] },
@@ -74,7 +81,6 @@ describe('Kategorien in der Verwaltung', () => {
       if (String(input) === '/api/admin/categories') return json({ items: categories });
       return json({ error: 'unerwartet' }, 500);
     });
-    setToken('geheim');
     render(<Admin location={{ path: '/admin/kategorien', params: new URLSearchParams() }} />);
     await waitFor(() => expect(screen.getByText('Interpret, Album-Interpret')).toBeTruthy());
     expect(screen.getByText('Nicht im Menü')).toBeTruthy();

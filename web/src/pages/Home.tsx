@@ -1,5 +1,6 @@
 import type { Album, Facets, Page } from '../api';
 import { query } from '../api';
+import { hasRole, logout, useAuth } from '../auth';
 import { Shelf } from '../components/AlbumCard';
 import { decadeLabel, formatDuration, plural } from '../format';
 import { useApi } from '../hooks';
@@ -13,6 +14,7 @@ function greeting(): string {
 }
 
 export function Home() {
+  const { user } = useAuth();
   const recent = useApi<Page<Album>>('/api/albums?sort=recent&limit=12');
   const facets = useApi<Facets>('/api/facets');
   const topGenre = facets.data?.genres[0]?.value;
@@ -66,7 +68,17 @@ export function Home() {
       {facets.data && (
         <p class="stats">
           {plural(facets.data.totals.albums, 'Album', 'Alben')} · {plural(facets.data.totals.tracks, 'Titel', 'Titel')} ·{' '}
-          {formatDuration(facets.data.totals.duration)} · <a href="/admin">Verwaltung</a>
+          {formatDuration(facets.data.totals.duration)}
+          {hasRole(user, 'manager') && (
+            <>
+              {' · '}
+              <a href="/admin">Verwaltung</a>
+            </>
+          )}
+          {' · '}
+          <button type="button" class="link-button" onClick={() => void logout()}>
+            Abmelden
+          </button>
         </p>
       )}
     </div>

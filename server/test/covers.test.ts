@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { InjectOptions } from 'fastify';
 import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { HEAD_BYTES } from '../src/library/scanner.js';
 import { tagSpan } from '../src/library/metadata.js';
 import { flac, mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
+import { sessionCookie } from './helpers/session.js';
 
 let cloud: FakeNextcloud;
 let ctx: AppContext;
+let cookie = '';
+/** Anfrage mit angemeldeter Sitzung */
+const inject = (options: InjectOptions) => ctx.app.inject({ ...options, headers: { cookie, ...options.headers } });
 
 const jpeg = (fill: string, size = 64) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(size, fill)]);
 const RED = jpeg('r');
@@ -17,7 +22,7 @@ const GREEN = jpeg('g');
 const BIG = jpeg('x', HEAD_BYTES + 100_000);
 
 async function get<T = any>(url: string): Promise<T> {
-  const res = await ctx.app.inject({ method: 'GET', url });
+  const res = await inject({ method: 'GET', url });
   expect(res.statusCode, `${url}: ${res.body}`).toBe(200);
   return res.json() as T;
 }
@@ -31,7 +36,7 @@ async function album(title: string) {
 }
 
 async function image(url: string) {
-  const res = await ctx.app.inject({ method: 'GET', url });
+  const res = await inject({ method: 'GET', url });
   return { status: res.statusCode, body: res.rawPayload, type: res.headers['content-type'], etag: res.headers.etag };
 }
 
@@ -58,6 +63,7 @@ beforeEach(async () => {
     DATABASE_PATH: ':memory:',
   });
   ctx = await buildApp(config, { logger: false });
+  cookie = sessionCookie(ctx.db);
   expect(await ctx.scanner.scan()).toMatchObject({ state: 'idle', failed: 0 });
 });
 
@@ -107,7 +113,7 @@ describe('Eingebettete Cover', () => {
 
     const advent = await album('Advent');
     const first = await image(`/api/tracks/${advent.tracks[0]!.id}/cover`);
-    const again = await ctx.app.inject({
+    const again = await inject({
       method: 'GET',
       url: `/api/tracks/${advent.tracks[0]!.id}/cover`,
       headers: { 'if-none-match': first.etag as string },

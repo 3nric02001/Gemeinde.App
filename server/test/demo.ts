@@ -1,8 +1,11 @@
 // Startet den Server mit simulierter Nextcloud und Beispielalben: `npm run demo`, dann http://localhost:3000
 import { deflateSync } from 'node:zlib';
 import { buildApp } from '../src/app.js';
+import { OidcService } from '../src/auth/oidc.js';
+import { saveGroup } from '../src/auth/users.js';
 import { loadConfig } from '../src/config.js';
 import { mp3 } from './helpers/audio.js';
+import { CLIENT_ID, CLIENT_SECRET, FakeIdp } from './helpers/fakeIdp.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
 
 function crc32(buf: Buffer): number {
@@ -79,9 +82,18 @@ for (const [folder, titles, colors] of services) {
 
 const config = loadConfig({
   NEXTCLOUD_URL: cloud.url, NEXTCLOUD_USER: USER, NEXTCLOUD_PASSWORD: PASSWORD, NEXTCLOUD_MUSIC_PATH: '/Musik',
-  DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000', ADMIN_TOKEN: 'demo',
+  DATABASE_PATH: ':memory:', WEB_DIR: '../web/dist', PORT: '3000', ADMIN_PASSWORD: 'demo',
 });
-const { app, scanner } = await buildApp(config, { logger: false });
+const { app, db, scanner } = await buildApp(config, { logger: false });
 await scanner.scan();
+
+// Simulierter Identity Provider: "Mit Gemeinde-Konto anmelden" meldet sofort Anna (Musikteam) an.
+const idp = new FakeIdp();
+await idp.start();
+idp.user = { sub: 'anna', name: 'Anna Beispiel', email: 'anna@example.org', groups: ['Musikteam', 'Jugend'] };
+new OidcService(db).save({ enabled: true, issuer: idp.url, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET });
+saveGroup(db, 'Musikteam', { enabled: true, role: 'manager' });
+saveGroup(db, 'Gemeinde', { enabled: true, role: 'listener' });
+
 await app.listen({ port: 3000, host: '127.0.0.1' });
-console.log('Demo läuft auf http://localhost:3000 (Verwaltung unter /admin, Token: demo)');
+console.log('Demo läuft auf http://localhost:3000 (lokaler Admin: admin / demo, Gemeinde-Konto meldet Anna an)');

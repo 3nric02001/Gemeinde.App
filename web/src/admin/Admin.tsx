@@ -1,116 +1,49 @@
 import { useEffect, useState } from 'preact/hooks';
-import { ApiError, coverUrl, query, type Page } from '../api';
+import { coverUrl, query, type Page } from '../api';
+import { hasRole, useAuth } from '../auth';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { plural } from '../format';
 import { useDebounced } from '../hooks';
 import { match, navigate, type Location } from '../router';
 import { Empty, ErrorNote, Loading } from '../pages/common';
-import { adminRequest, getToken, setToken, type AdminAlbum, type AdminAlbumDetail } from './api';
+import { AdminTabs, ACCESS_SECTIONS } from './Access';
+import { adminRequest, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
 import { CategoriesAdmin, CategoryEditor } from './Categories';
 
-/** Verwaltung unter /admin: vorerst mit ADMIN_TOKEN, später über OIDC-Rollen. */
+/** Verwaltung unter /admin: Alben für Manager und Admins, Benutzer, Gruppen und Anmeldung nur für Admins. */
 export function Admin({ location }: { location: Location }) {
-  const [token, setTokenState] = useState(getToken);
-  const [notice, setNotice] = useState<string | undefined>();
+  const { user } = useAuth();
+  // 401 behandelt adminRequest selbst (zurück zur Anmeldung); hier bleibt nichts zu tun.
+  const onError = () => undefined;
 
-  const logout = (message?: string) => {
-    setToken(null);
-    setTokenState(null);
-    setNotice(message);
-  };
-  // Abgelaufenes oder falsches Token: zurück zur Anmeldung statt Fehlermeldungen auf jeder Seite.
-  const onError = (error: Error) => {
-    if (error instanceof ApiError && error.status === 401) logout('Das Admin-Token ist nicht (mehr) gültig.');
-  };
-
-  if (!token) {
+  if (!hasRole(user, 'manager')) {
     return (
-      <Login
-        notice={notice}
-        onLogin={(value) => {
-          setToken(value);
-          setTokenState(value);
-          setNotice(undefined);
-        }}
-      />
+      <div class="page">
+        <Empty title="Kein Zugriff">
+          Die Verwaltung ist nur für Manager und Admins. <a href="/">Zur Startseite</a>
+        </Empty>
+      </div>
     );
   }
 
   const album = match('/admin/album/:id', location.path);
   const category = match('/admin/kategorie/:id', location.path);
-  const onCategories = location.path === '/admin/kategorien';
+  const section = hasRole(user, 'admin') ? ACCESS_SECTIONS.find((s) => s.path === location.path) : undefined;
   let content;
   if (album && /^\d+$/.test(album.id!)) content = <AlbumEditor key={album.id} id={Number(album.id)} onError={onError} />;
   else if (category && (category.id === 'neu' || /^\d+$/.test(category.id!))) {
     const id = category.id === 'neu' ? undefined : Number(category.id);
     content = <CategoryEditor key={category.id} id={id} onError={onError} />;
-  } else if (onCategories) content = <CategoriesAdmin onError={onError} />;
-  else content = <AlbumsAdmin params={location.params} onError={onError} onLogout={() => logout()} />;
+  } else if (location.path === '/admin/kategorien') content = <CategoriesAdmin onError={onError} />;
+  else if (section) content = <section.Component />;
+  else content = <AlbumsAdmin params={location.params} onError={onError} />;
 
-  const inCategories = onCategories || Boolean(category);
   return (
     <div class="page admin">
-      {!album && !category && (
-        <nav class="chips-row admin-tabs" aria-label="Verwaltung">
-          <a class={`chip${inCategories ? '' : ' is-on'}`} href="/admin" aria-current={inCategories ? undefined : 'page'}>
-            Alben
-          </a>
-          <a class={`chip${inCategories ? ' is-on' : ''}`} href="/admin/kategorien" aria-current={inCategories ? 'page' : undefined}>
-            Kategorien
-          </a>
-        </nav>
-      )}
+      {!album && !category && <AdminTabs path={location.path} admin={hasRole(user, 'admin')} />}
       {content}
-    </div>
-  );
-}
-
-function Login({ notice, onLogin }: { notice?: string; onLogin: (token: string) => void }) {
-  const [value, setValue] = useState('');
-  const [error, setError] = useState(notice);
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (event: Event) => {
-    event.preventDefault();
-    const token = value.trim();
-    if (!token) return;
-    setBusy(true);
-    setToken(token);
-    try {
-      await adminRequest('GET', '/api/admin/session');
-      onLogin(token);
-    } catch (e) {
-      setToken(null);
-      setError(e instanceof ApiError && e.status === 401 ? 'Das Token stimmt nicht.' : (e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div class="page admin">
-      <form class="admin-login" onSubmit={submit}>
-        <h1 class="page-title">Verwaltung</h1>
-        <p class="admin-hint">
-          Bis zur Anmeldung mit Gemeinde-Konto gilt das <code>ADMIN_TOKEN</code> aus der Server-Konfiguration.
-        </p>
-        <label class="field">
-          <span>Admin-Token</span>
-          <input
-            type="password"
-            value={value}
-            autocomplete="current-password"
-            autoFocus
-            onInput={(e) => setValue((e.target as HTMLInputElement).value)}
-          />
-        </label>
-        {error && <p class="admin-error" role="alert">{error}</p>}
-        <button type="submit" class="button-primary" disabled={busy || !value.trim()}>
-          Anmelden
-        </button>
-      </form>
     </div>
   );
 }
@@ -118,7 +51,7 @@ function Login({ notice, onLogin }: { notice?: string; onLogin: (token: string) 
 type KindFilter = '' | 'manual' | 'auto';
 const PAGE = 100;
 
-function AlbumsAdmin({ params, onError, onLogout }: { params: URLSearchParams; onError: (e: Error) => void; onLogout: () => void }) {
+function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e: Error) => void }) {
   const [text, setText] = useState(params.get('q') ?? '');
   const kind = (params.get('art') === 'eigene' ? 'manual' : params.get('art') === 'automatisch' ? 'auto' : '') as KindFilter;
   const q = useDebounced(text.trim(), 200);
@@ -155,9 +88,6 @@ function AlbumsAdmin({ params, onError, onLogout }: { params: URLSearchParams; o
         <div class="actions">
           <button type="button" class="button-primary" onClick={() => setCreating(true)}>
             Neues Album
-          </button>
-          <button type="button" class="button-secondary" onClick={onLogout}>
-            Abmelden
           </button>
         </div>
       </div>

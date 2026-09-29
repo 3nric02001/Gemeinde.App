@@ -1,3 +1,5 @@
+import { sessionExpired } from './auth';
+
 export interface Track {
   id: number;
   title: string;
@@ -126,6 +128,7 @@ export async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> 
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.data as T;
   const res = await fetch(url, { signal, headers: { accept: 'application/json' } });
+  if (res.status === 401) sessionExpired();
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new ApiError(res.status, body.error ?? `Fehler ${res.status}`);

@@ -1,5 +1,6 @@
 import { categoryUrl } from '../api';
 import { useCategories } from '../hooks';
+import { hasRole, logout, ROLE_LABELS, useAuth } from '../auth';
 import { Icon, type IconName } from './Icon';
 
 const items: Array<{ href: string; label: string; icon: IconName; match: (path: string) => boolean }> = [
@@ -13,6 +14,7 @@ const items: Array<{ href: string; label: string; icon: IconName; match: (path: 
 export function Sidebar({ path }: { path: string }) {
   // Eigene Kategorien aus der Verwaltung stehen nach den festen Einträgen.
   const categories = useCategories(path).filter((c) => c.inNav);
+  const { user } = useAuth();
   return (
     <nav class="sidebar" aria-label="Hauptnavigation">
       <a class="brand" href="/">
@@ -43,10 +45,20 @@ export function Sidebar({ path }: { path: string }) {
           );
         })}
       </ul>
-      <a class={`sidebar-admin${path.startsWith('/admin') ? ' is-active' : ''}`} href="/admin">
-        <Icon name="settings" size={20} />
-        <span>Verwaltung</span>
-      </a>
+      <div class="sidebar-foot">
+        {hasRole(user, 'manager') && (
+          <a class={`sidebar-admin${path.startsWith('/admin') ? ' is-active' : ''}`} href="/admin">
+            <Icon name="settings" size={20} />
+            <span>Verwaltung</span>
+          </a>
+        )}
+        {user && (
+          <button type="button" class="sidebar-admin" onClick={() => void logout()} title={`${user.name} (${ROLE_LABELS[user.role]})`}>
+            <Icon name="logout" size={20} />
+            <span>Abmelden</span>
+          </button>
+        )}
+      </div>
     </nav>
   );
 }
