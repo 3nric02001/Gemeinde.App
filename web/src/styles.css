@@ -795,6 +795,22 @@ html[data-text='xlarge'] .now-playing {
   transition: background 0.15s;
 }
 
+button.chip {
+  gap: 6px;
+  border: 0;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button.more-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .chip:hover {
   background: var(--surface-2);
   text-decoration: none;

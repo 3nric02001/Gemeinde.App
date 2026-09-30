@@ -27,9 +27,14 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   aus dem Datum. Die Kategorie „Sprecher“ ist vorgegeben (im Menü, sobald es Sprecher gibt)
 - **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer
 - **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; findet auch eigene
-  Tag-Felder wie den Sprecher, Predigten neueste zuerst; ohne Suchbegriff Stöbern nach Genre. Treffer im
+  Tag-Felder wie den Sprecher, Predigten neueste zuerst; ohne Suchbegriff Vorschläge und Stöbern nach Genre. Treffer im
   Titel stehen vorn: bei Alben genauer Titel, dann Titelanfang, dann Interpret, dann Alben, in denen nur
   ein Titel passt; bei Titeln zuerst die, die mit dem Suchbegriff beginnen
+- **Suchvorschläge**: Die leere Suchseite zeigt „Zuletzt gesucht“ (nur auf diesem Gerät, beim Abmelden
+  gelöscht), „Häufig gesucht“ und „Oft gehört“ (Alben mit Wiedergaben laut verdecktem Scoring). Ein
+  Suchbegriff zählt erst, wenn aus seinen Treffern etwas geöffnet wird, und nur, wenn er in der Bibliothek
+  etwas findet; angezeigt wird er erst, wenn ihn mindestens 3 verschiedene Personen verwendet haben. Wer was
+  gesucht hat, zeigt weder Oberfläche noch API; Einträge verschwinden nach 90 Tagen und mit dem Benutzer.
 - **Interpreten**: Schreibweisen werden zusammengefasst („Hillsong United“ = „Hillsong UNITED“), Gäste
   aus „feat.“/„ft.“ stehen als eigene Interpreten in der Liste und finden den Titel
 - **Verdecktes Scoring**: Titel, die oft gehört werden, stehen in der Suche und im Genre-Vorschlag auf
