@@ -664,18 +664,7 @@ function applyRecordings(
     // Ersetzungen nur speichern, wenn sie etwas ändern; sonst bleibt NULL (gescannten Titel zeigen).
     const fixed = fix(raw ?? track.title);
     const title = fixed !== (raw ?? track.title) ? fixed : raw;
-    const content = file?.content ?? null;
-    // Name aus dem Dateinamen vor dem Tag, außer die Art bevorzugt Tags; ohne beides der Sprecher, sonst die Art
-    const named = file?.performer && !(recording!.kind.preferTags && artistTagged) ? file.performer : undefined;
-    const artist = recording ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name))) : null;
-    if (title !== track.display_title || raw !== track.raw_title || artist !== track.display_artist || content !== track.content) {
-      setDisplay.run(title, raw, artist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
-      track.display_title = title;
-      track.raw_title = raw;
-      track.display_artist = artist;
-      track.content = content;
-    }
-    // Player laut Policies: bei Aufnahmen schon beim Lesen des Ordners entschieden, sonst hier (ohne Art und Inhalt)
+    // Policies: bei Aufnahmen schon beim Lesen des Ordners entschieden, sonst hier (ohne Art; Inhalt nur, wenn eine Policy ihn setzt)
     const decision =
       file ??
       withManual(
@@ -689,6 +678,17 @@ function applyRecordings(
         }),
         manualDecisions.get(track.path),
       );
+    const content = file?.content ?? decision.content ?? null;
+    // Name aus dem Dateinamen vor dem Tag, außer die Art bevorzugt Tags; ohne beides der Sprecher, sonst die Art
+    const named = file?.performer && !(recording!.kind.preferTags && artistTagged) ? file.performer : undefined;
+    const artist = recording ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name))) : null;
+    if (title !== track.display_title || raw !== track.raw_title || artist !== track.display_artist || content !== track.content) {
+      setDisplay.run(title, raw, artist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
+      track.display_title = title;
+      track.raw_title = raw;
+      track.display_artist = artist;
+      track.content = content;
+    }
     const playback = decision.player ?? null;
     // Predigt zählt nur bei Aufnahmen (Sprecher und Bibelstelle des Albums)
     const sermon = file?.sermon ? 1 : 0;

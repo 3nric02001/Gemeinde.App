@@ -39,6 +39,26 @@ describe('Policies', () => {
     expect(decide({ content: 'Lied', duration: null })).toEqual({});
   });
 
+  it('setzt den Inhalt zuerst, Predigt und Player sehen dann den gesetzten Inhalt', () => {
+    const withContent = compilePolicies([
+      ...policies,
+      { name: 'Andacht', enabled: true, when: { field: 'title', op: 'contains', value: 'Andacht' }, content: 'Predigt' },
+      { name: 'Später', enabled: true, when: { field: 'title', op: 'contains', value: 'Andacht' }, content: 'Lied' },
+    ]);
+    expect(withContent({ title: 'Andacht am Abend', content: 'Lied' })).toEqual({
+      content: 'Predigt',
+      contentBy: 'Andacht',
+      sermon: true,
+      sermonBy: 'Predigt',
+      player: 'sermon',
+      playerBy: 'Predigt',
+    });
+    expect(parsePolicies([{ name: 'X', when: { field: 'title', op: 'contains', value: 'a' }, content: ' Gebet ' }])[0]).toMatchObject({
+      content: 'Gebet',
+    });
+    expect(() => parsePolicies([{ name: 'X', when: { field: 'title', op: 'contains', value: 'a' }, content: 5 }])).toThrow('Inhalt');
+  });
+
   it('vergleicht Ordner als ganze Namen und ohne Groß-/Kleinschreibung und Umlaute', () => {
     const folder = policyMatcher({ field: 'folder', op: 'equals', value: 'Bibelstunden' });
     expect(folder({ path: 'Audio/bibelstunden/2026_01_14/' })).toBe(true);
@@ -162,6 +182,29 @@ describe('Policies im Regelwerk', () => {
       ['Zeugnis', 'sermon'],
     ]);
     expect((await get('/api/categories/sprecher/values')).items.map((v: any) => v.value)).toEqual(['Anna Schulz']);
+  });
+
+  it('setzen den Inhalt: geht dem Dateinamen vor und entscheidet dann über Predigt und Player', async () => {
+    const structure: Structure = structuredClone(getStructure(ctx.db));
+    structure.policies = [
+      { name: 'Zeugnis ist Predigt', enabled: true, when: { field: 'content', op: 'equals', value: 'Zeugnis' }, content: 'Predigt' },
+      { name: 'Andachten', enabled: true, when: { field: 'path', op: 'contains', value: 'Andacht' }, content: 'Andacht', player: 'sermon' },
+      ...structure.policies,
+    ];
+    await call('PUT', '/api/admin/structure', structure);
+    const service = await byDate('2026-08-30');
+    expect((await albumTracks(service.id)).map((t) => [t.content, t.player])).toEqual([
+      ['Lied', null],
+      ['Predigt', 'sermon'],
+      ['Predigt', 'sermon'],
+    ]);
+    // Auch ohne Art: Inhalt und Player aus der Policy, sichtbar im Album-Editor
+    const youth = (await albums()).find((a) => a.title === 'Abend mit Tim');
+    const [andacht] = await albumTracks(youth.id);
+    expect([andacht.content, andacht.player]).toEqual(['Andacht', 'sermon']);
+    const detail = await get(`/api/admin/albums/${youth.id}`);
+    expect(detail.trackEdits[0].auto).toMatchObject({ content: 'Andacht', contentBy: 'Andachten', playerBy: 'Andachten' });
+    expect((await get('/api/categories/inhalt/values')).items.map((v: any) => v.value)).toContain('Andacht');
   });
 
   it('zeigen in der Vorschau, was als Predigt gilt und welcher Player läuft', async () => {

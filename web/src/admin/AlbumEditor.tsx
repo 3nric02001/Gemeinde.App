@@ -677,6 +677,11 @@ function TrackForm({
             <input value={title} maxLength={300} placeholder={edit?.fileTitle} autoFocus onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
           </label>
           {edit?.title && <p class="field-source">Automatisch: „{edit.fileTitle}“</p>}
+          {edit?.auto?.contentBy && (
+            <p class="field-source">
+              Inhalt „{edit.auto.content}“ laut Policy „{edit.auto.contentBy}“
+            </p>
+          )}
         </div>
         <div class="field-wrap">
           <label class="field">

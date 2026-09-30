@@ -79,7 +79,7 @@ describe('Zuordnung in der Verwaltung', () => {
     expect(JSON.parse(String(put[1]!.body)).kinds[1].trackTitle).toBe('{titel}');
   });
 
-  it('legt Policies an: z. B. Konzerte immer im Musik-Player', async () => {
+  it('legt Policies an: z. B. Konzerte mit Inhalt „Konzert“ immer im Musik-Player', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (init?.method === 'PUT') return json({ structure: JSON.parse(String(init.body)) });
       if (String(input).endsWith('/preview')) return json({ kinds: [] });
@@ -97,6 +97,8 @@ describe('Zuordnung in der Verwaltung', () => {
     const player = selects.filter((s) => s.closest('label')?.textContent?.startsWith('Player')).pop()!;
     fireEvent.change(sermon, { target: { value: '' } });
     fireEvent.change(player, { target: { value: 'music' } });
+    const contents = screen.getAllByLabelText('Inhalt setzen') as HTMLInputElement[];
+    fireEvent.input(contents[contents.length - 1]!, { target: { value: 'Konzert' } });
     fireEvent.click(screen.getByRole('button', { name: 'Speichern und anwenden' }));
     await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true));
     const put = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')!;
@@ -105,6 +107,7 @@ describe('Zuordnung in der Verwaltung', () => {
       enabled: true,
       when: { match: 'all', conditions: [{ field: 'genre', op: 'equals', value: 'Konzert' }] },
       player: 'music',
+      content: 'Konzert',
     });
   });
 

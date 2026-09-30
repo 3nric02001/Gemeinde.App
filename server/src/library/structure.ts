@@ -554,18 +554,28 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
     if (!values) {
       const decision = decide(file, undefined, undefined);
       entry.sermon = decision.sermon === true;
-      results.set(file.path, { matched: false, sermon: entry.sermon, player: decision.player, auto: decision.auto });
+      results.set(file.path, {
+        matched: false,
+        content: decision.content,
+        sermon: entry.sermon,
+        player: decision.player,
+        auto: decision.auto,
+      });
       continue;
     }
     const all: Values = { ...folderValues, ...values, nr: nr !== undefined ? String(nr) : undefined };
     if (all.datum) all.datum = findDate(all.datum, folderYear(dirname(file.path)))?.date ?? all.datum;
-    const title = kind.preferTags && file.titleTagged ? undefined : fillTemplate(kind.trackTitle || '{titel}', all) || undefined;
-    const decision = decide(file, values, title);
+    const template = (inhalt: string | undefined) =>
+      kind.preferTags && file.titleTagged ? undefined : fillTemplate(kind.trackTitle || '{titel}', { ...all, inhalt }) || undefined;
+    const decision = decide(file, values, template(values.inhalt));
+    // Ein Inhalt aus den Policies ersetzt den aus dem Dateinamen, auch im Titel ("{inhalt}: {titel}")
+    const content = decision.content ?? values.inhalt;
+    const title = template(content);
     entry.sermon = decision.sermon === true;
     results.set(file.path, {
       matched: true,
       title,
-      content: values.inhalt,
+      content,
       speaker: entry.sermon ? values.sprecher : undefined,
       performer: values.sprecher,
       passage: values.bibelstelle,
@@ -597,10 +607,14 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
 }
 
 /** Korrektur aus der Verwaltung über das Ergebnis der Policies legen; `auto` bleibt zum Anzeigen */
-export function withManual(auto: Decision, manual: ManualDecision | undefined): { sermon?: boolean; player?: Player; auto: Decision } {
+export function withManual(
+  auto: Decision,
+  manual: ManualDecision | undefined,
+): { sermon?: boolean; player?: Player; content?: string; auto: Decision } {
   return {
     sermon: manual?.sermon ?? auto.sermon,
     player: manual?.player ?? auto.player,
+    content: auto.content,
     auto,
   };
 }

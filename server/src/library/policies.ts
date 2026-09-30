@@ -7,6 +7,7 @@ import { foldValue } from './text.js';
  *   dann gilt als Predigt und spielt im Predigt-Player
  *
  * Die Liste gilt von oben nach unten; für jede Wirkung entscheidet die erste passende Policy, die sie setzt.
+ * Der Inhalt wird zuerst entschieden: Bedingungen auf "Inhalt" sehen bei Predigt und Player schon den gesetzten Inhalt.
  * Dieselben Bedingungen (ohne Inhalt, Art und Dauer) bestimmen in "Art bestimmen" die Art eines Albumordners.
  */
 
@@ -48,6 +49,8 @@ export interface Policy {
   sermon?: boolean;
   /** Predigt-Player (Sprünge, Tempo, Weiterhören) oder Musik-Player; fehlt: nicht entscheiden */
   player?: Player;
+  /** Inhalt setzen ("Predigt", "Lied"), statt ihn aus dem Dateinamen zu lesen; fehlt: nicht entscheiden */
+  content?: string;
 }
 
 export class PolicyError extends Error {}
@@ -102,7 +105,13 @@ export function parsePolicies(input: unknown): Policy[] {
     else if (p.sermon !== undefined && p.sermon !== null) throw new PolicyError(`${label}: „gilt als Predigt“ ist ja oder nein`);
     if (p.player === 'sermon' || p.player === 'music') policy.player = p.player;
     else if (p.player !== undefined && p.player !== null && p.player !== '') throw new PolicyError(`${label}: unbekannter Player`);
-    if (policy.sermon === undefined && policy.player === undefined) throw new PolicyError(`${label} bewirkt nichts`);
+    if (typeof p.content === 'string' && p.content.trim()) {
+      if (p.content.trim().length > 60) throw new PolicyError(`${label}: Inhalt ist zu lang`);
+      policy.content = p.content.trim();
+    } else if (p.content !== undefined && p.content !== null && p.content !== '') throw new PolicyError(`${label}: Inhalt ist Text`);
+    if (policy.sermon === undefined && policy.player === undefined && policy.content === undefined) {
+      throw new PolicyError(`${label} bewirkt nichts`);
+    }
     return policy;
   });
 }
@@ -130,6 +139,9 @@ export interface Decision {
   sermonBy?: string;
   /** Name der Policy, die den Player entschieden hat */
   playerBy?: string;
+  /** Inhalt laut Policy (geht dem Dateinamen vor) */
+  content?: string;
+  contentBy?: string;
 }
 
 /** Korrektur je Titel aus der Verwaltung; null: nach den Policies */
@@ -180,8 +192,16 @@ export function policyMatcher(condition: PolicyCondition): (subject: PolicySubje
 /** Wertet die Policies in ihrer Reihenfolge aus: Je Wirkung gilt die erste passende, die sie setzt. */
 export function compilePolicies(policies: Policy[]): (subject: PolicySubject) => Decision {
   const active = policies.filter((p) => p.enabled).map((p) => ({ policy: p, matches: policyMatcher(p.when) }));
-  return (subject) => {
+  const contentPolicies = active.filter(({ policy }) => policy.content !== undefined);
+  return (input) => {
     const decision: Decision = {};
+    // Zuerst der Inhalt; danach sehen Predigt und Player den gesetzten Inhalt
+    const setsContent = contentPolicies.find(({ matches }) => matches(input));
+    if (setsContent) {
+      decision.content = setsContent.policy.content;
+      decision.contentBy = setsContent.policy.name;
+    }
+    const subject = decision.content !== undefined ? { ...input, content: decision.content } : input;
     for (const { policy, matches } of active) {
       if (decision.sermon !== undefined && decision.player !== undefined) break;
       const wantsSermon = decision.sermon === undefined && policy.sermon !== undefined;

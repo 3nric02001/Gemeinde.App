@@ -57,7 +57,7 @@ export interface TrackEdit {
   /** Korrektur des Players; null: nach den Policies */
   player?: 'sermon' | 'music' | null;
   /** Was die Policies im Regelwerk ergeben, mit Namen der Policy */
-  auto?: { sermon?: boolean; sermonBy?: string; player?: 'sermon' | 'music'; playerBy?: string };
+  auto?: { sermon?: boolean; sermonBy?: string; player?: 'sermon' | 'music'; playerBy?: string; content?: string; contentBy?: string };
 }
 
 /** Felder, die sich je Titel korrigieren lassen; null heißt automatisch */

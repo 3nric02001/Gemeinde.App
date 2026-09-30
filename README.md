@@ -152,7 +152,7 @@ Audio Aufnahmen/2026/Bibelstunden/2026_01_14_Matthäus 9, 27-38/2026_01_14_001.m
 ```
 
 Das Regelwerk arbeitet in drei Schritten: **1. Art bestimmen**, **2. Ordner- und Dateinamen nach den Mustern der Art
-lesen**, **3. Policies** für Predigt und Player.
+lesen**, **3. Policies** für Inhalt, Predigt und Player.
 
 | Art | Bestimmt durch | Ordnername | Dateiname | Name des Albums | Titel |
 | --- | --- | --- | --- | --- | --- |
@@ -179,11 +179,13 @@ Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
   Leerzeichen. Alles nach dem ersten Platzhalter ist optional (`{datum}_{anlass}` passt auch auf `2026_09_06`),
   eine vorangestellte Tracknummer (`03 Lied - …`) wird erkannt.
 - **Vorlagen** für den Namen des Albums und den Titel einer Aufnahme; leere Platzhalter fallen samt Trennern weg.
-- **Policies** („Wenn … dann …“) legen fest, was als Predigt gilt und welcher Player läuft. Bedingungen auf Art,
+- **Policies** („Wenn … dann …“) legen fest, welchen Inhalt ein Titel hat, was als Predigt gilt und welcher Player läuft. Bedingungen auf Art,
   Inhalt, Titel, Interpret, Album, Genre, Ordner, Pfad und Dauer (Minuten) lassen sich mit UND/ODER verschachteln.
   Wirkungen: **gilt als Predigt** (liefert Sprecher `{sprecher}` und Bibelstelle `{bibelstelle}`, sonst aus ihrem
   Titel erkannt; wer predigt, steht als Interpret am Gottesdienst) und **Player** (Predigt-Player mit Sprüngen, Tempo
-  und Weiterhören oder Musik-Player). Die Liste gilt von oben nach unten, je Wirkung entscheidet die erste passende
+  und Weiterhören oder Musik-Player) sowie **Inhalt setzen** (etwa „Wenn Pfad enthält Andacht, dann Inhalt Andacht“;
+  geht dem Inhalt aus dem Dateinamen vor, gilt auch für Titel ohne Art und wird zuerst entschieden, sodass Bedingungen
+  auf den Inhalt in anderen Policies schon den gesetzten Inhalt sehen). Die Liste gilt von oben nach unten, je Wirkung entscheidet die erste passende
   Policy. Ohne passende Policy ist ein Titel keine Predigt und bekommt ab 10 Minuten Länge den Predigt-Player.
   Vorgegeben: „Art ist genau Gottesdienst und Inhalt ist genau Predigt“ und „Art ist genau Bibelstunde“, beide
   Predigt mit Predigt-Player. Regelwerke von vor den Policies werden beim Laden umgerechnet.

@@ -18,13 +18,15 @@ export interface RecordingKind {
 
 export type Player = 'sermon' | 'music';
 
-/** Wenn … dann …: was als Predigt gilt und welcher Player läuft */
+/** Wenn … dann …: welcher Inhalt, was als Predigt gilt und welcher Player läuft */
 export interface Policy {
   name: string;
   enabled: boolean;
   when: Condition;
   sermon?: boolean;
   player?: Player;
+  /** Inhalt setzen statt ihn aus dem Dateinamen zu lesen */
+  content?: string;
 }
 
 /** Art bestimmen: Wenn ein Albumordner passt, dann ist er diese Art ("" = keine, Musik) */
@@ -450,12 +452,18 @@ export function StructurePanel() {
       </div>
 
       <section class="shelf admin-panel structure-policies">
-        <h2>3. Policies: Predigt und Player</h2>
+        <h2>3. Policies: Inhalt, Predigt und Player</h2>
         <p class="admin-hint">
           Wenn … dann …: Die Liste gilt von oben nach unten, für jede Wirkung entscheidet die erste passende Policy. Eine Predigt
           liefert Sprecher und Bibelstelle des Albums. Der Predigt-Player hat Sprünge, Tempo und merkt sich die Stelle. Passt keine
-          Policy, ist ein Titel keine Predigt und bekommt ab 10 Minuten Länge den Predigt-Player.
+          Policy, ist ein Titel keine Predigt und bekommt ab 10 Minuten Länge den Predigt-Player. „Inhalt setzen“ geht dem Dateinamen
+          vor und wird zuerst entschieden: Bedingungen auf den Inhalt sehen dann schon den gesetzten Inhalt.
         </p>
+        <datalist id="policy-contents">
+          {draft.contents.filter(Boolean).map((content) => (
+            <option key={content} value={content} />
+          ))}
+        </datalist>
         {policies.map((policy, index) => (
           <RuleCard
             key={index}
@@ -471,6 +479,19 @@ export function StructurePanel() {
             onRemove={() => change({ ...draft, policies: policies.filter((_, i) => i !== index) })}
           >
             <div class="structure-grid">
+              <label class="field">
+                <span>Inhalt setzen</span>
+                <input
+                  value={policy.content ?? ''}
+                  maxLength={60}
+                  list="policy-contents"
+                  placeholder="nicht festlegen"
+                  onInput={(e) => {
+                    const value = (e.target as HTMLInputElement).value;
+                    updatePolicy(index, { content: value.trim() ? value : undefined });
+                  }}
+                />
+              </label>
               <label class="field">
                 <span>Gilt als Predigt</span>
                 <select
