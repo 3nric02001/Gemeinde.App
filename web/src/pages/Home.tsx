@@ -10,6 +10,7 @@ import { TrackList } from '../components/TrackList';
 import { decadeLabel, formatDuration, formatLongDate, formatTime, plural, withoutDate } from '../format';
 import { useApi } from '../hooks';
 import { useMe } from '../me';
+import { LiveTile } from './Live';
 import { Empty } from './common';
 import type { DatedAlbum } from './Dates';
 
@@ -61,6 +62,8 @@ export function Home() {
       <InstallHint />
 
       {service && <LatestService album={service} resume={serviceResume} />}
+
+      <LiveTile />
 
       {otherResume.length > 0 && (
         <section class="shelf">

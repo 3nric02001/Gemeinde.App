@@ -37,7 +37,7 @@ export function Collection({ eyebrow, name, filter }: { eyebrow: string; name: s
         <button type="button" class="button-primary" disabled={!all.length} onClick={() => player.playList(all, 0, { shuffle: false })}>
           <Icon name="play" size={20} /> Abspielen
         </button>
-        <button type="button" class="button-secondary" disabled={!all.length} onClick={() => player.playList(all, 0, { shuffle: true })}>
+        <button type="button" class="button-secondary" disabled={!all.length} onClick={() => player.playShuffled(all)}>
           <Icon name="shuffle" size={18} /> Zufällig
         </button>
       </div>

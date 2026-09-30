@@ -126,6 +126,7 @@ describe('Lokaler Admin', () => {
       user: null,
       oidc: null,
       branding: { name: 'Gemeinde.App', welcome: '' },
+      livestream: null,
       sermonMinutes: 10,
     });
 

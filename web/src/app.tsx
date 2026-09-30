@@ -16,6 +16,7 @@ import { Favorites } from './pages/Favorites';
 import { More } from './pages/More';
 import { loadMe, resetMe } from './me';
 import { Home } from './pages/Home';
+import { Live } from './pages/Live';
 import { Login } from './pages/Login';
 import { QueuePage } from './pages/Queue';
 import { Search } from './pages/Search';
@@ -31,6 +32,7 @@ function Page({ location, offline }: { location: Location; offline: boolean }) {
   if (offline && !OFFLINE_PAGES.has(path)) return <Downloads />;
   if (path === '/heruntergeladen') return <Downloads />;
   if (path === '/') return <Home />;
+  if (path === '/live') return <Live />;
   if (path === '/suche') return <Search params={params} />;
   if (path === '/alben') return <Albums params={params} />;
   if (path === '/titel') return <Tracks params={params} />;

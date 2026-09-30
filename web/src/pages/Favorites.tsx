@@ -46,7 +46,7 @@ export function Favorites() {
               type="button"
               class="button-secondary"
               aria-label="Zufällig abspielen"
-              onClick={() => player.playList(tracks, 0, { shuffle: true, from })}
+              onClick={() => player.playShuffled(tracks, from)}
             >
               <Icon name="shuffle" size={18} /> <span class="button-label">Zufällig</span>
             </button>
