@@ -36,9 +36,15 @@ export interface Album {
   speaker?: string | null;
   passage?: string | null;
   description?: string | null;
-  /** Art der Aufnahme aus dem Regelwerk ("Gottesdienst", "Bibelstunde"); bei Musik null */
+  /** Art der Aufnahme aus dem Regelwerk ("Gottesdienst", "Bibelstunde"); bei Musik und Sonstigem null */
   recording?: string | null;
+  /** Aufnahme einer Art, Musik oder Sonstiges (keine Zuordnung); bei Playlists null */
+  section?: 'recording' | 'music' | 'other' | null;
 }
+
+/** Art eines Albums zum Anzeigen: die Art der Aufnahme, sonst Musik oder Sonstiges */
+export const kindLabel = (album: Pick<Album, 'recording' | 'section'>): string =>
+  album.recording || (album.section === 'music' ? 'Musik' : album.section === 'other' ? 'Sonstiges' : 'Gottesdienst');
 
 export interface AlbumDetail extends Album {
   tracks: Track[];
@@ -74,6 +80,9 @@ export interface Facets {
   totals: { tracks: number; albums: number; duration: number };
   /** Arten von Aufnahmen aus dem Regelwerk, mit Anzahl */
   recordings?: Array<{ name: string; plural: string; count: number }>;
+  /** Automatische Alben, die Musik sind, und solche ohne Zuordnung (Sonstiges) */
+  music?: number;
+  other?: number;
 }
 
 export interface Page<T> {

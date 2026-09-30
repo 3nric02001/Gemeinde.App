@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Album } from '../api';
-import { coverUrl, getJson, type AlbumDetail } from '../api';
+import { coverUrl, getJson, kindLabel, type AlbumDetail } from '../api';
 import { albumContext, player } from '../player';
 import { albumSubtitle, albumTitle, formatDuration } from '../format';
 import { Cover } from './Cover';
@@ -19,7 +19,7 @@ export async function playAlbum(albumId: number, options: { shuffle?: boolean; s
  * z. B. Sprecher und Länge.
  */
 export function AlbumCard({ album, subtitle, extra }: { album: Album; subtitle?: string; extra?: string }) {
-  const title = albumTitle(album.title, album.date, album.recording);
+  const title = albumTitle(album.title, album.date, kindLabel(album));
   return (
     <div class="card">
       <a class="card-link" href={`/album/${album.id}`}>

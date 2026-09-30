@@ -1,7 +1,7 @@
 import type { DB } from '../db.js';
 import type { CategoryFilter } from './categories.js';
 import { albumTierSql, decayFactor, trackTierSql } from './popularity.js';
-import { getStructure } from './structure.js';
+import { getStructure, type Section } from './structure.js';
 import { sortKey } from './text.js';
 
 export interface Page<T> {
@@ -44,6 +44,8 @@ export interface AlbumFilter {
   noSpeaker?: boolean;
   /** Nur Aufnahmen einer Art aus dem Regelwerk ("Gottesdienst", "Bibelstunde") */
   recording?: string;
+  /** Nur Aufnahmen (irgendeiner Art), Musik oder Sonstiges (automatische Alben ohne Zuordnung) */
+  section?: Section;
   limit: number;
   offset: number;
 }
@@ -59,10 +61,12 @@ const TRACK_COLUMNS = `
     SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
   )) AS hasCover
 `;
+/** Aufnahme, Musik oder Sonstiges; Playlists sind nichts davon */
+const SECTION_SQL = `CASE WHEN a.kind = 'manual' THEN NULL WHEN a.recording IS NOT NULL THEN 'recording' WHEN a.music = 1 THEN 'music' ELSE 'other' END`;
 const ALBUM_COLUMNS = `
   a.id, a.title, a.year, a.track_count AS trackCount, a.duration,
   (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover, a.kind,
-  a.date, a.speaker, a.passage, a.description, a.recording
+  a.date, a.speaker, a.passage, a.description, a.recording, ${SECTION_SQL} AS section
 `;
 
 /**
@@ -199,6 +203,10 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
     where.clauses.push('a.recording = @recording COLLATE NOCASE');
     where.params.recording = filter.recording;
   }
+  if (filter.section) {
+    where.clauses.push(`${SECTION_SQL} = @section`);
+    where.params.section = filter.section;
+  }
   if (filter.kind) {
     where.clauses.push('a.kind = @kind');
     where.params.kind = filter.kind;
@@ -333,5 +341,11 @@ export function getFacets(db: DB) {
   const recordings = getStructure(db)
     .kinds.map((kind) => ({ name: kind.name, plural: kind.plural, count: counts.get(kind.name) ?? 0 }))
     .filter((kind) => kind.count > 0);
-  return { decades, totals, recordings };
+  // Automatische Alben, die Musik sind bzw. denen nichts eine Art gibt
+  const sections = db
+    .prepare(
+      `SELECT sum(music = 1) AS music, sum(music = 0 AND recording IS NULL) AS other FROM albums WHERE kind = 'auto' AND hidden = 0`,
+    )
+    .get() as { music: number | null; other: number | null };
+  return { decades, totals, recordings, music: sections.music ?? 0, other: sections.other ?? 0 };
 }

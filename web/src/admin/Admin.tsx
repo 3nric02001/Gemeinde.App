@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { coverUrl, query, type Page } from '../api';
+import { coverUrl, kindLabel, query, type Page } from '../api';
 import { hasRole, useAuth } from '../auth';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
@@ -70,7 +70,8 @@ export function Admin({ location }: { location: Location }) {
 const FILTERS = [
   { value: '', label: 'Alle', query: {} },
   { value: 'gottesdienste', label: 'Gottesdienste', query: { dated: 'true' } },
-  { value: 'musik', label: 'Musik', query: { dated: 'false' } },
+  { value: 'musik', label: 'Musik', query: { section: 'music' } },
+  { value: 'sonstiges', label: 'Sonstiges', query: { section: 'other' } },
   { value: 'eigene', label: 'Playlists', query: { kind: 'manual' } },
   { value: 'ausgeblendet', label: 'Ausgeblendet', query: { hidden: 'true' } },
   { value: 'ohne-sprecher', label: 'Sprecher fehlt', query: { noSpeaker: 'true' } },
@@ -78,6 +79,7 @@ const FILTERS = [
 const EMPTY: Record<string, string> = {
   gottesdienste: 'Keine Gottesdienste gefunden',
   musik: 'Keine Musik gefunden',
+  sonstiges: 'Alles hat eine Zuordnung',
   eigene: 'Noch keine Playlists',
   ausgeblendet: 'Keine ausgeblendeten Alben',
   'ohne-sprecher': 'Alle Gottesdienste haben einen Sprecher',
@@ -168,7 +170,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
                   <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-sm" />
                   <span class="track-main">
                     {/* Name wie bei den Hörern; bei Gottesdiensten der gespeicherte Name klein dahinter */}
-                    <span class="track-title">{albumTitle(album.title, album.date, album.recording)}</span>
+                    <span class="track-title">{albumTitle(album.title, album.date, kindLabel(album))}</span>
                     <span class="track-sub">
                       {[
                         album.date && formatCompactDate(album.date),

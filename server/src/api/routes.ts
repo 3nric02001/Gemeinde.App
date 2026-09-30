@@ -189,6 +189,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
             sort: { type: 'string', enum: ALBUM_SORTS, default: 'title' },
             dated: { type: 'boolean' },
             recording: { type: 'string', maxLength: 60 },
+            section: { type: 'string', enum: ['recording', 'music', 'other'] },
           },
           additionalProperties: false,
         },

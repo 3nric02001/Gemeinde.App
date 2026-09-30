@@ -12,12 +12,12 @@ export interface AlbumFields {
   speaker: string | null;
   passage: string | null;
   description: string | null;
-  /** Art der Aufnahme von Hand; "" heißt keine Art, null: nach dem Regelwerk */
+  /** Art der Aufnahme von Hand, auch „Musik“ oder „Sonstiges“; null: nach dem Regelwerk */
   recording?: string | null;
 }
 
 export interface AdminAlbumDetail extends AlbumDetail {
-  /** Art von Hand ("" = keine Art), null: nach dem Regelwerk (Verwaltung → Zuordnung) */
+  /** Art von Hand (auch „Musik“ oder „Sonstiges“), null: nach dem Regelwerk (Verwaltung → Zuordnung) */
   manualRecording?: string | null;
   /** Woher die Art kommt: von Hand, Regel in „Art bestimmen“, Vorgabe für Ordner mit Datum oder keine */
   recordingSource?: { by: 'manual' } | { by: 'rule'; rule: string } | { by: 'default' } | { by: 'none' };

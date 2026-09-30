@@ -165,7 +165,7 @@ describe('Album-Editor', () => {
     // Die Art des Albums lässt sich von Hand setzen
     const kind = (await screen.findByLabelText('Art')) as HTMLSelectElement;
     await waitFor(() => expect(kind.disabled).toBe(false));
-    expect([...kind.options].map((o) => o.textContent)).toEqual(['Automatisch (Gottesdienst)', 'Bibelstunde', 'Gottesdienst', 'Keine Art (Musik)']);
+    expect([...kind.options].map((o) => o.textContent)).toEqual(['Automatisch (Gottesdienst)', 'Bibelstunde', 'Gottesdienst', 'Musik', 'Sonstiges']);
     fireEvent.change(kind, { target: { value: 'Bibelstunde' } });
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter(([, i]) => i?.method === 'PATCH').map(([, i]) => JSON.parse(i!.body as string))).toContainEqual({

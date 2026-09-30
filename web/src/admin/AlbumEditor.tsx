@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { coverUrl, query, type Page, type Track } from '../api';
+import { coverUrl, kindLabel, query, type Page, type Track } from '../api';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { albumTitle, formatCompactDate, formatDuration, formatTime, plural, serviceLine, withoutDate } from '../format';
@@ -71,7 +71,7 @@ export function AlbumEditor({ id, onError }: Props) {
 
   const manual = album.kind === 'manual';
   const dated = Boolean(album.date);
-  const name = albumTitle(album.title, album.date, album.recording);
+  const name = albumTitle(album.title, album.date, kindLabel(album));
   const base = `/api/admin/albums/${id}`;
   const ids = album.tracks.map((t) => t.id);
   const viaRule = new Set(album.ruleTrackIds);
@@ -136,7 +136,7 @@ export function AlbumEditor({ id, onError }: Props) {
           </div>
         </div>
         <div class="hero-text">
-          <span class="eyebrow">{dated ? album.recording || 'Gottesdienst' : manual ? 'Playlist' : 'Automatisches Album'}</span>
+          <span class="eyebrow">{dated ? kindLabel(album) : manual ? 'Playlist' : 'Automatisches Album'}</span>
           <h1>{name}</h1>
           <p class="hero-sub">{dated ? serviceLine(album.date!) : album.year}</p>
           <p class="hero-meta">
@@ -409,7 +409,7 @@ export function AlbumEditor({ id, onError }: Props) {
 const TEXT_FIELDS = ['title', 'passage', 'description'] as const;
 type FieldName = (typeof TEXT_FIELDS)[number] | 'year';
 /** Ohne Anlass heißt eine Aufnahme wie ihre Art, etwa „Gottesdienst“ (siehe albumTitle) */
-const noOccasion = (album: AdminAlbumDetail) => album.recording || 'Gottesdienst';
+const noOccasion = (album: AdminAlbumDetail) => kindLabel(album);
 
 function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: boolean; onSave: (fields: Partial<AlbumFields>) => void }) {
   const dated = Boolean(album.date);
@@ -552,13 +552,13 @@ function kindSource(album: AdminAlbumDetail): string {
   const source = album.recordingSource;
   if (album.manualRecording != null || source?.by === 'manual') return 'Von Hand festgelegt, geht dem Regelwerk vor';
   if (source?.by === 'rule') return `Aus der Regel „${source.rule}“ in Verwaltung → Zuordnung → Art bestimmen`;
-  if (source?.by === 'default') return 'Keine Regel passt: Vorgabe für Ordner mit Datum (Verwaltung → Zuordnung)';
-  return 'Keine Regel in Verwaltung → Zuordnung → Art bestimmen passt';
+  if (source?.by === 'default') return 'Keine Regel passt: Vorgabe für Aufnahmen mit Datum (Verwaltung → Zuordnung)';
+  return 'Keine Regel in Verwaltung → Zuordnung → Art bestimmen passt, darum Sonstiges';
 }
 
 /**
- * Art des Albums (Gottesdienst, Bibelstunde, eigene Arten aus Verwaltung → Zuordnung) von Hand festlegen.
- * Das geht den Bedingungen der Arten vor; „Keine Art“ macht aus einer Aufnahme wieder Musik.
+ * Art des Albums (Gottesdienst, Bibelstunde, eigene Arten aus Verwaltung → Zuordnung, Musik oder Sonstiges) von Hand
+ * festlegen. Das geht den Bedingungen der Arten vor.
  */
 function KindForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: boolean; onSave: (recording: string | null) => void }) {
   const [kinds, setKinds] = useState<string[]>();
@@ -567,10 +567,12 @@ function KindForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: bool
       .then((body) => setKinds(body.structure.kinds.map((kind) => kind.name)))
       .catch(() => setKinds([]));
   }, []);
-  const manual = album.manualRecording ?? null;
+  // "" hieß früher keine Art, also Musik
+  const manual = album.manualRecording === '' ? 'Musik' : (album.manualRecording ?? null);
   const value = manual === null ? AUTOMATIC : manual;
   // Eine Art, die es im Regelwerk nicht mehr gibt, bleibt sichtbar, bis sie geändert wird
-  const names = [...(kinds ?? []), ...(manual && kinds && !kinds.includes(manual) ? [manual] : [])];
+  const fixed = ['Musik', 'Sonstiges'];
+  const names = [...(kinds ?? []), ...(manual && kinds && !kinds.includes(manual) && !fixed.includes(manual) ? [manual] : [])];
   return (
     <div class="admin-panel admin-form admin-kind">
       <div class="field-wrap">
@@ -584,13 +586,12 @@ function KindForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: bool
               onSave(next === AUTOMATIC ? null : next);
             }}
           >
-            <option value={AUTOMATIC}>Automatisch{manual === null && album.recording ? ` (${album.recording})` : manual === null ? ' (Musik)' : ''}</option>
-            {names.map((name) => (
+            <option value={AUTOMATIC}>Automatisch{manual === null ? ` (${kindLabel(album)})` : ''}</option>
+            {[...names, ...fixed].map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>
             ))}
-            <option value="">Keine Art (Musik)</option>
           </select>
         </label>
         <p class="field-source">{kindSource(album)}</p>
