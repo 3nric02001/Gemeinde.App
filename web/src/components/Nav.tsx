@@ -1,7 +1,8 @@
 import { categoryUrl } from '../api';
 import { useCategories } from '../hooks';
 import { hasRole, logout, ROLE_LABELS, useAuth } from '../auth';
-import { sectionPath } from '../router';
+import { AdminNav } from '../admin/Access';
+import { appReturnPath, sectionPath } from '../router';
 import { Icon, type IconName } from './Icon';
 
 type NavItem = { href: string; label: string; icon: IconName; match: (path: string) => boolean };
@@ -38,37 +39,52 @@ export function Sidebar({ path }: { path: string }) {
   // Eigene Kategorien aus der Verwaltung stehen nach den festen Einträgen.
   const categories = useCategories(path).filter((c) => c.inNav);
   const { user, branding } = useAuth();
+  // In der Verwaltung ersetzt am Rechner deren Navigation die der App (Umschalten per CSS, damit Tablets die App-Leiste behalten)
+  const manage = path.startsWith('/admin') && hasRole(user, 'manager');
   return (
-    <nav class="sidebar" aria-label="Hauptnavigation">
-      <a class="brand" href="/">
-        <span class="brand-mark">
-          <Icon name="cross" size={18} />
-        </span>
-        <span>{branding.name}</span>
-      </a>
-      <ul>
-        {items.map((item) => (
-          <li key={item.href}>
-            <a href={item.href} class={active(item, path) ? 'is-active' : ''} aria-current={active(item, path) ? 'page' : undefined}>
-              <Icon name={item.icon} size={22} />
-              <span>{item.label}</span>
-            </a>
-          </li>
-        ))}
-        {categories.map((category) => {
-          const href = categoryUrl(category.slug);
-          const section = sectionPath(path);
-          const active = section === href || section.startsWith(`${href}/`);
-          return (
-            <li key={category.id}>
-              <a href={href} class={active ? 'is-active' : ''} aria-current={active ? 'page' : undefined}>
-                <Icon name="tag" size={22} />
-                <span>{category.name}</span>
+    <nav class={`sidebar${manage ? ' is-manage' : ''}`} aria-label="Hauptnavigation">
+      {manage && (
+        <div class="sidebar-manage">
+          <a class="brand sidebar-return" href={appReturnPath()}>
+            <span class="brand-mark">
+              <Icon name="back" size={18} />
+            </span>
+            <span>Zurück zur App</span>
+          </a>
+          <AdminNav path={path} admin={hasRole(user, 'admin')} />
+        </div>
+      )}
+      <div class="sidebar-app">
+        <a class="brand" href="/">
+          <span class="brand-mark">
+            <Icon name="cross" size={18} />
+          </span>
+          <span>{branding.name}</span>
+        </a>
+        <ul>
+          {items.map((item) => (
+            <li key={item.href}>
+              <a href={item.href} class={active(item, path) ? 'is-active' : ''} aria-current={active(item, path) ? 'page' : undefined}>
+                <Icon name={item.icon} size={22} />
+                <span>{item.label}</span>
               </a>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+          {categories.map((category) => {
+            const href = categoryUrl(category.slug);
+            const section = sectionPath(path);
+            const active = section === href || section.startsWith(`${href}/`);
+            return (
+              <li key={category.id}>
+                <a href={href} class={active ? 'is-active' : ''} aria-current={active ? 'page' : undefined}>
+                  <Icon name="tag" size={22} />
+                  <span>{category.name}</span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
       <div class="sidebar-foot">
         {hasRole(user, 'manager') && (
           <a class={`sidebar-admin${path.startsWith('/admin') ? ' is-active' : ''}`} href="/admin">

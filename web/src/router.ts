@@ -17,10 +17,16 @@ if (typeof (window.history.state as { idx?: number } | null)?.idx !== 'number') 
  * eigenen Menüpunkt; markiert wird dann der Bereich, aus dem man sie geöffnet hat.
  */
 let lastSection: string | undefined;
+/** Letzte Seite außerhalb der Verwaltung, für „Zurück zur App“ */
+let lastAppPath = '/';
 const DETAIL = /^\/album\//;
 function remember(path: string): void {
   if (!DETAIL.test(path)) lastSection = path;
+  if (!path.startsWith('/admin')) lastAppPath = path + window.location.search;
 }
+
+/** Wohin „Zurück zur App“ in der Verwaltung führt: die Seite, von der man kam */
+export const appReturnPath = (): string => lastAppPath;
 remember(window.location.pathname);
 
 /** Pfad für die Markierung in Seitenleiste und Tab-Leiste */
@@ -42,8 +48,15 @@ window.addEventListener('popstate', () => {
   listeners.forEach((listener) => listener());
 });
 
+/** Seite mit ungespeicherten Änderungen: fragt vor dem Weggehen innerhalb der App (false bleibt auf der Seite). */
+let leaveGuard: (() => boolean) | undefined;
+export function setLeaveGuard(guard: (() => boolean) | undefined): void {
+  leaveGuard = guard;
+}
+
 export function navigate(to: string, options: { replace?: boolean } = {}): void {
   if (to === window.location.pathname + window.location.search) return;
+  if (leaveGuard && !leaveGuard()) return;
   if (options.replace) window.history.replaceState({ idx: historyIndex() }, '', to);
   else {
     window.history.pushState({ idx: historyIndex() + 1 }, '', to);

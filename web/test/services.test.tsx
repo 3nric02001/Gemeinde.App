@@ -85,3 +85,34 @@ describe('Tab-Leiste', () => {
     expect(fireEvent.click(screen.getByText('Datum').closest('a')!)).toBe(true);
   });
 });
+
+describe('Zurück und Menü auf Albumseiten', () => {
+  it('markiert den Bereich, aus dem man kam, und führt ohne Verlauf zur passenden Liste', () => {
+    window.history.replaceState({ idx: 0 }, '', '/');
+    router.navigate('/datum');
+    router.navigate('/album/9');
+    expect(router.sectionPath('/album/9')).toBe('/datum');
+    render(<TabBar path="/album/9" />);
+    expect(screen.getByRole('link', { name: 'Datum' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'Alben' }).getAttribute('aria-current')).toBeNull();
+
+    // Direkt auf einem geteilten Link gelandet: kein Verlauf der App, also zur Liste statt aus der App heraus
+    window.history.replaceState({ idx: 0 }, '', '/album/9');
+    const back = vi.spyOn(window.history, 'back');
+    router.goBack('/datum');
+    expect(back).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/datum');
+  });
+
+  it('fragt vor dem Verlassen einer Seite mit ungespeicherten Änderungen', () => {
+    router.navigate('/admin/zuordnung');
+    const confirm = vi.fn().mockReturnValue(false);
+    router.setLeaveGuard(confirm);
+    router.navigate('/admin');
+    expect(confirm).toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/admin/zuordnung');
+    router.setLeaveGuard(undefined);
+    router.navigate('/admin');
+    expect(window.location.pathname).toBe('/admin');
+  });
+});

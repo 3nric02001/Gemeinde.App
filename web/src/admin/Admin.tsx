@@ -7,7 +7,7 @@ import { albumTitle, formatCompactDate, plural } from '../format';
 import { useDebounced } from '../hooks';
 import { match, navigate, type Location } from '../router';
 import { Empty, ErrorNote, Loading } from '../pages/common';
-import { AdminNav, ACCESS_SECTIONS } from './Access';
+import { AdminSectionSelect, ACCESS_SECTIONS } from './Access';
 import { adminRequest, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
 import { CategoriesAdmin, CategoryEditor } from './Categories';
@@ -59,7 +59,7 @@ export function Admin({ location }: { location: Location }) {
   return (
     <div class={`page admin${album || category ? ' admin-editing' : ''}`}>
       <div class="admin-layout">
-        <AdminNav path={location.path} admin={admin} />
+        <AdminSectionSelect path={location.path} admin={admin} />
         <div class="admin-content">{content}</div>
       </div>
     </div>

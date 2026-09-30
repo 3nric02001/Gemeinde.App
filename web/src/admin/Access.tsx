@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { query } from '../api';
 import { ROLE_LABELS, setBranding, useAuth, type Branding, type Role } from '../auth';
 import { Icon } from '../components/Icon';
+import { navigate } from '../router';
 import { plural } from '../format';
 import { Empty, ErrorNote, Loading } from '../pages/common';
 import { adminRequest, type Change } from './api';
@@ -112,8 +113,8 @@ function activeSection(path: string): string {
 }
 
 /**
- * Navigation der Verwaltung: auf breiten Bildschirmen eine Spalte mit Gruppen, auf schmalen eine Zeile
- * zum Wischen. Benutzer, Gruppen, Anmeldung und Änderungen nur für Admins.
+ * Navigation der Verwaltung mit Gruppen; am Rechner ersetzt sie die Seitenleiste der App.
+ * Benutzer, Gruppen, Anmeldung und Änderungen nur für Admins.
  */
 export function AdminNav({ path, admin }: { path: string; admin: boolean }) {
   const active = activeSection(path);
@@ -889,5 +890,27 @@ function ChangesAdmin(_props: SectionProps) {
         </>
       )}
     </>
+  );
+}
+
+/** Auf Handy und Tablet: Auswahl des Bereichs statt einer Knopfreihe, in der hintere Bereiche verschwinden */
+export function AdminSectionSelect({ path, admin }: { path: string; admin: boolean }) {
+  const active = activeSection(path);
+  const groups = ADMIN_GROUPS.filter((group) => admin || !group.adminOnly);
+  return (
+    <label class="admin-section-select">
+      <span>Verwaltung</span>
+      <select value={active} onChange={(event) => navigate((event.target as HTMLSelectElement).value)}>
+        {groups.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.items.map((item) => (
+              <option key={item.path} value={item.path}>
+                {item.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
   );
 }

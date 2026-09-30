@@ -73,7 +73,9 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - Steuerung über Sperrbildschirm und Medientasten (Media Session), Leertaste spielt/pausiert, `/`
   öffnet die Suche. Warteschlange und Position überstehen ein Neuladen.
 
-Die Farben stehen als CSS-Variablen oben in `web/src/styles.css` und lassen sich dort zentral anpassen.
+Die Farben und Schriftstufen stehen als CSS-Variablen oben in `web/src/styles.css` und lassen sich dort zentral anpassen.
+Die Schrift Inter (SIL Open Font License) wird mit ausgeliefert, damit jedes Gerät dieselbe Schrift zeigt und keine
+Anfrage an einen fremden Dienst geht.
 Die Oberfläche ist mit Vite und Preact gebaut (ca. 17 KB JavaScript, gzip) und wird vom selben Server
 unter `/` ausgeliefert; es ist kein zweiter Container nötig.
 

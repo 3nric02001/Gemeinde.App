@@ -139,6 +139,22 @@ describe('Zuordnung in der Verwaltung', () => {
     });
   });
 
+  it('klappt Regeln als Satz ein und zeigt ungespeicherte Änderungen in der Leiste', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({ structure, defaults: structure }));
+    render(<StructurePanel />);
+    expect(await screen.findByText('Wenn Ordner im Pfad ist genau „Bibelstunden“ → Bibelstunde')).toBeTruthy();
+    expect(screen.getByText('Wenn Art ist genau „Gottesdienst“ und Inhalt ist genau „Predigt“ → Predigt, Predigt-Player')).toBeTruthy();
+    expect(document.querySelector('details.structure-rule')!.hasAttribute('open')).toBe(false);
+    expect(screen.getByText('Alles gespeichert')).toBeTruthy();
+
+    const names = screen.getAllByLabelText('Name') as HTMLInputElement[];
+    fireEvent.input(names[0]!, { target: { value: 'Bibelabend' } });
+    expect(screen.getByText('Ungespeicherte Änderungen')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Verwerfen' }));
+    expect(((screen.getAllByLabelText('Name') as HTMLInputElement[])[0]!).value).toBe('Bibelstunde');
+    expect(screen.getByText('Alles gespeichert')).toBeTruthy();
+  });
+
   it('zeigt Fehler des Servers verständlich an', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) =>
       init?.method === 'PUT'
