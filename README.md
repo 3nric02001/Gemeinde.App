@@ -205,7 +205,9 @@ Fehlt der Name am Ende, bleibt es beim Titel.
   setzen; „Automatisch“ zeigt, was die Policies ergeben. Korrekturen überstehen neue Scans und gehen den Policies vor.
 - **Trennzeichen aus der Datei**: Enthält ein Dateiname „ - “, wird nur dort getrennt; `Text_Richter 7,1-4` oder
   `Matthäus 7,7-14` bleiben ein Teil. „Text_“ vor einer Bibelstelle wird lesbar („Einleitung: Richter 7,1-4“,
-  „Predigt: Bergpredigt (Matthäus 7,7-14)“), übrige Unterstriche werden Leerzeichen.
+  „Predigt: Bergpredigt (Matthäus 7,7-14)“), übrige Unterstriche werden Leerzeichen. Hat ein Dateiname mehr Teile als
+  das Muster, gehören die mittleren zum Titel und nur der letzte ist der Name: `1. Predigt - Kollosser 1 - Apg. 3,7 -
+  Niko Krahn` wird „Predigt: Kollosser 1 - Apg. 3,7“ mit Niko Krahn, Bibelstellen Kollosser 1 und Apg 3,7.
 - **Inhalte ohne Titel** (Begrüßung, Gebet, Abkündigungen, Segen …): Folgt nur ein Teil, ist das der Name.
   `Begrüßung - Jakob Rauschenberger` wird „Begrüßung“ mit Jakob Rauschenberger; bei `Lied - Großer Gott` bleibt
   „Großer Gott“ der Titel.

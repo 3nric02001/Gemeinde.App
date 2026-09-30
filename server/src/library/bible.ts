@@ -14,7 +14,7 @@ const BOOKS = [
   'Jona', 'Micha', 'Nahum', 'Nah', 'Habakuk', 'Hab', 'Zefanja', 'Zef', 'Haggai', 'Hag', 'Sacharja', 'Sach',
   'Maleachi', 'Mal', 'Matthäus', 'Matthaeus', 'Mt', 'Markus', 'Mk', 'Lukas', 'Lk', 'Johannes', 'Joh',
   'Apostelgeschichte', 'Apg', 'Römer', 'Roemer', 'Röm', 'Korinther', 'Kor', 'Galater', 'Gal', 'Epheser', 'Eph',
-  'Philipper', 'Phil', 'Kolosser', 'Kol', 'Thessalonicher', 'Thess', 'Timotheus', 'Tim', 'Titus', 'Tit',
+  'Philipper', 'Phil', 'Kolosser', 'Kollosser', 'Kol', 'Thessalonicher', 'Thess', 'Timotheus', 'Tim', 'Titus', 'Tit',
   'Philemon', 'Phlm', 'Hebräer', 'Hebr', 'Heb', 'Jakobus', 'Jak', 'Petrus', 'Petr', 'Judas', 'Jud', 'Offenbarung', 'Offb',
 ];
 

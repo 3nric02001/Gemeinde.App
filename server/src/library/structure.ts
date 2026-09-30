@@ -399,7 +399,11 @@ export function compilePattern(
           ? String.raw`\d{1,4}`
           : name === 'inhalt'
             ? `(?:${known ? `${known}|` : ''}[^${SEP_CHARS}\\d][^${SEP_CHARS}]*)`
-            : '.+?';
+            : // Trennt der Name mit " - ", ist nur der Titel mehrteilig ("Kolosser 1 - Apg 3,7"); Name, Anlass usw.
+              // sind ein Teil, damit ein Name am Ende nicht die übrigen Teile mitnimmt.
+              options.dashOnly && name !== 'titel'
+              ? String.raw`(?:(?!\s[-–]\s).)+?`
+              : '.+?';
     const group = `(?<${name}>${body})`;
     const previous = placeholders[placeholders.length - 1];
     const strict = previous !== undefined && !BOUNDED.has(previous) && !BOUNDED.has(name);
