@@ -33,7 +33,8 @@ describe('Seite eines Gottesdienstes', () => {
     );
     render(<Album id={9} />);
     expect(await screen.findByRole('heading', { level: 1, name: 'Gottesdienst' })).toBeTruthy();
-    expect(document.querySelector('.hero-sub')!.textContent).toBe('Sonntag, 20. September 2026 · Pastor Meier');
+    // Nach dem Datum kein Name; der Sprecher steht bei der Predigt
+    expect(document.querySelector('.hero-sub')!.textContent).toBe('Sonntag, 20. September 2026');
     // Kein "Datum" über dem Titel: das Datum steht schon darunter
     expect(document.querySelector('.hero .eyebrow')).toBeNull();
     // Nur der Sprecher aus dem Dateinamen, kein "So., 20.09.2026" in jeder Zeile

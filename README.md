@@ -23,7 +23,7 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   Sprecher und Bibelstelle kommen aus den Dateinamen (`Predigt - Der gute Hirte - Pastor Meier.mp3`,
   `2026-09-27 Meier - Psalm 23.mp3`, Bibelstellen wie „Psalm 23“, „Joh 3,16“, „1. Kor 13,1-13“ in Titel oder
   Ordnername) oder werden in der Verwaltung am Album bzw. Titel gesetzt, dort auch eine Beschreibung für Hörer.
-  Der Sprecher steht unter dem Albumtitel und bei jedem Titel, das Jahr kommt aus dem Datum. Die Kategorie
+  Der Sprecher steht in der Titelliste bei seinem Titel (unter dem Albumtitel nur das Datum), das Jahr kommt aus dem Datum. Die Kategorie
   „Sprecher“ ist vorgegeben
 - **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer
 - **Suche**: Treffer beim Tippen, gruppiert nach Titeln und Alben; findet Titel, Albumnamen, Inhalt und Sprecher

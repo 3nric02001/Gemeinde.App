@@ -42,7 +42,8 @@ export function Album({ id }: { id: number }) {
           {eyebrow && <span class="eyebrow">{eyebrow}</span>}
           <h1>{albumTitle(album.title, album.date, album.recording)}</h1>
           <p class="hero-sub">
-            {[album.date ? formatLongDate(album.date) : album.year, album.speaker].filter(Boolean).join(' · ')}
+            {/* Nur Datum bzw. Jahr: wer predigt, steht bei der Predigt in der Titelliste */}
+            {album.date ? formatLongDate(album.date) : album.year}
           </p>
           <p class="hero-meta">
             {plural(album.trackCount, 'Titel', 'Titel')}, {formatDuration(album.duration)}
