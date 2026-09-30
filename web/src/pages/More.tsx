@@ -21,7 +21,7 @@ function Row({ href, icon, label }: { href: string; icon: IconName; label: strin
 
 /** "Mehr": alles, was nicht in die Tab-Leiste passt, dazu Profil und Einstellungen */
 export function More() {
-  const { user } = useAuth();
+  const { user, livestream } = useAuth();
   const categories = useCategories().filter((c) => c.inNav);
   const textSize = useTextSize();
   const offline = useOffline();
@@ -42,6 +42,7 @@ export function More() {
       )}
 
       <ul class="more-list">
+        {livestream && <Row href="/live" icon="live" label={livestream.title} />}
         <Row href="/favoriten" icon="heart" label="Favoriten" />
         {(offline.enabled || offline.items.length > 0) && <Row href="/heruntergeladen" icon="download" label="Heruntergeladen" />}
         <Row href="/titel" icon="tracks" label="Alle Titel" />
