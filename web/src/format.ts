@@ -106,10 +106,10 @@ export function albumTitle(title: string, date: string | null | undefined, recor
   return withoutDate(title) || recording || 'Gottesdienst';
 }
 
-/** Überschrift über einer Aufnahme (ihre Art); heißt sie selbst schon so, führt sie als "Datum" zurück zur Übersicht */
+/** Überschrift über einer Aufnahme (ihre Art); heißt sie selbst schon so, keine (das Datum steht unter dem Titel) */
 export const serviceEyebrow = (title: string, recording?: string | null) => {
   const kind = recording || 'Gottesdienst';
-  return title === kind ? 'Datum' : kind;
+  return title === kind ? undefined : kind;
 };
 
 /** Zeile unter einem Gottesdienst: das Datum, ohne Sprecher (ein Gottesdienst hat oft mehrere) */

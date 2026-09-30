@@ -22,22 +22,21 @@ export function Album({ id }: { id: number }) {
   const others = (more.data?.items ?? []).filter((a) => a.id !== album.id).slice(0, 12);
   const artistHref = `/interpret/${encodeURIComponent(album.artist)}`;
   const from = albumContext(album);
+  const eyebrowText = album.date ? serviceEyebrow(albumTitle(album.title, album.date, album.recording), album.recording) : undefined;
+  // Ohne Anlass heißt der Gottesdienst wie seine Art; eine Zeile "Datum" darüber wäre doppelt.
+  const eyebrow = from ? (
+    'Playlist'
+  ) : album.date ? (
+    eyebrowText && <a href={`/datum${query({ art: album.recording ?? undefined })}`}>{eyebrowText}</a>
+  ) : (
+    'Album'
+  );
   return (
     <div class="page">
       <header class="hero">
         <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-hero" eager />
         <div class="hero-text">
-          <span class="eyebrow">
-            {from ? (
-              'Playlist'
-            ) : album.date ? (
-              <a href={`/datum${query({ art: album.recording ?? undefined })}`}>
-                {serviceEyebrow(albumTitle(album.title, album.date, album.recording), album.recording)}
-              </a>
-            ) : (
-              'Album'
-            )}
-          </span>
+          {eyebrow && <span class="eyebrow">{eyebrow}</span>}
           <h1>{albumTitle(album.title, album.date, album.recording)}</h1>
           <p class="hero-sub">
             {album.date && `${formatLongDate(album.date)} · `}

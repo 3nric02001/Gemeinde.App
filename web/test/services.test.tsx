@@ -35,7 +35,8 @@ describe('Seite eines Gottesdienstes', () => {
     render(<Album id={9} />);
     expect(await screen.findByRole('heading', { level: 1, name: 'Gottesdienst' })).toBeTruthy();
     expect(screen.getByText('Pastor Meier', { selector: '.hero-sub a' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Datum' }).getAttribute('href')).toBe('/datum');
+    // Kein "Datum" über dem Titel: das Datum steht schon darunter
+    expect(document.querySelector('.hero .eyebrow')).toBeNull();
     // Nur der abweichende Interpret, kein "So., 20.09.2026" in jeder Zeile
     expect([...document.querySelectorAll('.track-sub')].map((el) => el.textContent)).toEqual(['MBG Brake', '']);
     expect(screen.getByLabelText('Zu den Favoriten')).toBeTruthy();
