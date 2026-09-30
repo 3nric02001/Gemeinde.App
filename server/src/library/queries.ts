@@ -57,6 +57,7 @@ const TRACK_COLUMNS = `
   t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.duration, t.mime AS mimeType,
   (SELECT date FROM albums WHERE id = t.album_id) AS albumDate,
   coalesce((SELECT speaker FROM track_overrides WHERE path = t.path), t.speaker) AS speaker,
+  (SELECT group_concat(value, '; ') FROM track_tags WHERE track_id = t.id AND tag = 'bibelstelle') AS passage,
   (t.cover_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
   )) AS hasCover
@@ -333,15 +334,19 @@ export function getFacets(db: DB) {
               (SELECT coalesce(sum(duration), 0) FROM tracks) AS duration`,
     )
     .get();
-  // Arten von Aufnahmen aus dem Regelwerk, in dessen Reihenfolge, mit Anzahl sichtbarer Alben
+  // Arten von Aufnahmen aus dem Regelwerk, in dessen Reihenfolge, mit Anzahl sichtbarer Alben und dem jüngsten Datum
   const counts = new Map(
-    (db.prepare('SELECT recording, count(*) AS n FROM albums WHERE recording IS NOT NULL AND hidden = 0 GROUP BY recording').all() as Array<{
-      recording: string;
-      n: number;
-    }>).map((row) => [row.recording, row.n]),
+    (db
+      .prepare('SELECT recording, count(*) AS n, max(date) AS latest FROM albums WHERE recording IS NOT NULL AND hidden = 0 GROUP BY recording')
+      .all() as Array<{ recording: string; n: number; latest: string | null }>).map((row) => [row.recording, row]),
   );
   const recordings = getStructure(db)
-    .kinds.map((kind) => ({ name: kind.name, plural: kind.plural, count: counts.get(kind.name) ?? 0 }))
+    .kinds.map((kind) => ({
+      name: kind.name,
+      plural: kind.plural,
+      count: counts.get(kind.name)?.n ?? 0,
+      latest: counts.get(kind.name)?.latest ?? null,
+    }))
     .filter((kind) => kind.count > 0);
   // Alben, die Musik sind bzw. denen nichts eine Art gibt, und Playlists
   const sections = db

@@ -62,6 +62,7 @@ export interface Library {
   sermonMinutes: number;
   passagePrefixes: string[];
   bookSpellings: string[];
+  bibleTranslation: string;
 }
 
 const LIBRARY_PLACEHOLDER_HELP: Array<[string, string]> = [
@@ -668,6 +669,18 @@ export function StructurePanel() {
   );
 }
 
+/** Übersetzungen bei bibleserver.com, wie im Server (settings.ts) */
+const BIBLE_TRANSLATIONS: Record<string, string> = {
+  LUT: 'Luther 2017',
+  ELB: 'Elberfelder',
+  SLT: 'Schlachter 2000',
+  HFA: 'Hoffnung für alle',
+  NGU: 'Neue Genfer Übersetzung',
+  EU: 'Einheitsübersetzung',
+  GNB: 'Gute Nachricht',
+  NLB: 'Neues Leben',
+};
+
 /** Eine Zeile je Eintrag; leere Zeilen verwirft der Server */
 const lines = (value: string) => value.split('\n').map((line) => line.trimStart());
 
@@ -757,6 +770,21 @@ function LibrarySection({ library, onChange }: { library: Library; onChange: (li
         )}
         {list('bookSpellings', 'Weitere Schreibweisen von Bibelbüchern', 'Zusätzlich zu den üblichen Namen und Abkürzungen, z. B. „Kollosser“.')}
       </div>
+      <label class="field structure-minutes">
+        <span>Bibeltext öffnen in</span>
+        <select
+          id="library-bibleTranslation"
+          value={library.bibleTranslation}
+          onChange={(e) => set({ bibleTranslation: (e.target as HTMLSelectElement).value })}
+        >
+          {Object.entries(BIBLE_TRANSLATIONS).map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <small class="field-hint">Ein Tipp auf eine Bibelstelle öffnet den Text bei bibleserver.com in dieser Übersetzung.</small>
+      </label>
     </section>
   );
 }

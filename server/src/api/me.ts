@@ -4,7 +4,17 @@ import { markOnboarded } from '../auth/users.js';
 import { recordPlay } from '../library/popularity.js';
 import { recordSearch } from '../library/searches.js';
 import { getOfflineSettings, offlineKey } from '../offline.js';
-import { listenerHome, listFavorites, listProgress, saveProgress, setFavorite, type FavoriteKind } from '../library/listener.js';
+import {
+  datedStates,
+  listenerHome,
+  listFavorites,
+  listProgress,
+  markAlbumHeard,
+  markDatesSeen,
+  saveProgress,
+  setFavorite,
+  type FavoriteKind,
+} from '../library/listener.js';
 
 const favoriteParams = {
   type: 'object',
@@ -96,4 +106,29 @@ export async function registerMeRoutes(app: FastifyInstance, { db }: { db: DB })
   });
 
   app.get('/api/me/home', async (request) => listenerHome(db, userId(request)));
+
+  // Neu, angefangen, gehört je Gottesdienst (Liste unter "Datum", Punkt am Tab)
+  app.get('/api/me/dates', async (request, reply) => {
+    reply.header('cache-control', 'no-store');
+    return datedStates(db, userId(request));
+  });
+  app.post('/api/me/dates/seen', async (request, reply) => {
+    markDatesSeen(db, userId(request));
+    return reply.code(204).send();
+  });
+  app.put(
+    '/api/me/albums/:id/heard',
+    {
+      schema: {
+        params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
+        body: { type: 'object', required: ['heard'], properties: { heard: { type: 'boolean' } }, additionalProperties: false },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: number }; Body: { heard: boolean } }>, reply) => {
+      if (!markAlbumHeard(db, userId(request), request.params.id, request.body.heard)) {
+        return reply.code(404).send({ error: 'Album nicht gefunden' });
+      }
+      return reply.code(204).send();
+    },
+  );
 }

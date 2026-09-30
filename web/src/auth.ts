@@ -27,6 +27,8 @@ export interface AuthState {
   offline?: boolean;
   /** Eingebetteter Livestream auf /live, null wenn in der Verwaltung ausgeschaltet */
   livestream?: Livestream | null;
+  /** Kürzel bei bibleserver.com, in dem Bibelstellen geöffnet werden (Verwaltung → Zuordnung) */
+  bibleTranslation?: string;
 }
 
 export interface Livestream {
@@ -64,6 +66,7 @@ export async function loadAuth(): Promise<void> {
     branding?: Branding;
     sermonMinutes?: number;
     livestream?: Livestream | null;
+    bibleTranslation?: string;
   };
   try {
     const res = await fetch('/api/auth/status', { headers: { accept: 'application/json' } });
@@ -83,6 +86,7 @@ export async function loadAuth(): Promise<void> {
     oidc: data.oidc,
     offline: false,
     livestream: data.livestream ?? null,
+    bibleTranslation: data.bibleTranslation,
     ...(data.branding ? { branding: data.branding } : {}),
   });
   document.title = state.branding.name;

@@ -7,6 +7,8 @@ import type { LibraryScanner } from '../library/scanner.js';
 import type { CoverThumbnails } from '../library/thumbnails.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
 import { registerAdminRoutes } from './admin.js';
+import { listBooks, listSpeakers, tracksOfBook, tracksOfSpeaker } from '../library/browse.js';
+import { LiveStatus } from '../livestream.js';
 import { registerMeRoutes } from './me.js';
 import { popularAlbums, popularSearches } from '../library/searches.js';
 import {
@@ -28,6 +30,8 @@ export interface RouteDeps {
   client: NextcloudClient;
   scanner: LibraryScanner;
   thumbnails: CoverThumbnails;
+  /** Sendet der Livestream gerade? (Tests geben einen eigenen mit) */
+  liveStatus?: LiveStatus;
   /** Abweichende Wartezeit bis zur ersten Antwort der Nextcloud (Tests) */
   streamTimeoutMs?: number;
 }
@@ -225,6 +229,31 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   });
 
   app.get('/api/facets', async () => getFacets(db));
+
+  // Ob der Livestream gerade sendet; null: ausgeschaltet oder nicht feststellbar
+  const liveStatus = deps.liveStatus ?? new LiveStatus(db);
+  app.get('/api/live', async (_request, reply) => {
+    reply.header('cache-control', 'no-store');
+    return { live: await liveStatus.get() };
+  });
+
+  // Stöbern: Predigten nach Bibelbuch und nach Sprecher
+  const nameParam = {
+    type: 'object',
+    required: ['name'],
+    properties: { name: { type: 'string', minLength: 1, maxLength: 200 } },
+  } as const;
+  type NameRequest = FastifyRequest<{ Params: { name: string } }>;
+  app.get('/api/browse/books', async () => ({ items: listBooks(db) }));
+  app.get('/api/browse/books/:name', { schema: { params: nameParam } }, async (request: NameRequest, reply) => {
+    const result = tracksOfBook(db, request.params.name);
+    return result ?? reply.code(404).send({ error: 'Zu diesem Buch gibt es keine Aufnahmen' });
+  });
+  app.get('/api/browse/speakers', async () => ({ items: listSpeakers(db) }));
+  app.get('/api/browse/speakers/:name', { schema: { params: nameParam } }, async (request: NameRequest) => ({
+    name: request.params.name,
+    items: tracksOfSpeaker(db, request.params.name),
+  }));
 
   // Für die leere Suchseite: Begriffe, die mehrere gesucht haben, und oft gehörte Alben.
   app.get('/api/search/suggestions', async () => ({ searches: popularSearches(db), albums: popularAlbums(db) }));

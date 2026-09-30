@@ -5,6 +5,8 @@ import { AlbumGrid } from '../components/AlbumCard';
 import { formatMonth, serviceLine } from '../format';
 import { useApi, usePaged } from '../hooks';
 import { Empty, ErrorNote, Loading } from './common';
+import { useEffect } from 'preact/hooks';
+import { enterDates, useMe } from '../me';
 
 /** Gottesdienst bzw. Aufnahme mit Datum; ein Album wie jedes andere */
 export type DatedAlbum = Album & { date: string };
@@ -20,6 +22,9 @@ export function Dates({ params }: { params: URLSearchParams }) {
   const facets = useApi<Facets>('/api/facets');
   const kinds = facets.data?.recordings ?? [];
   const { items, total, loading, error, sentinel } = usePaged<DatedAlbum>(`/api/dates${query({ recording: art })}`, 200);
+  // Hörstand frisch holen; "neu" bleibt für diesen Besuch stehen, der Punkt am Tab verschwindet
+  const { dated } = useMe();
+  useEffect(enterDates, []);
   const months: Array<{ label: string; albums: DatedAlbum[] }> = [];
   for (const album of items) {
     const label = formatMonth(album.date);
@@ -61,7 +66,7 @@ export function Dates({ params }: { params: URLSearchParams }) {
             <div class="section-head">
               <h2>{month.label}</h2>
             </div>
-            <AlbumGrid albums={month.albums} list />
+            <AlbumGrid albums={month.albums} list states={dated} />
           </section>
         </Fragment>
       ))}

@@ -70,3 +70,54 @@ export function livestreamOrigin(db: DB): string | undefined {
   const live = getLivestream(db);
   return live.enabled ? parseStreamUrl(live.url)?.origin : undefined;
 }
+
+/** So lange gilt eine Antwort des Stream-Servers, bevor die App wieder fragt */
+export const LIVE_STATUS_MAX_AGE_MS = 60_000;
+const LIVE_STATUS_TIMEOUT_MS = 4_000;
+
+/**
+ * Sendet der Stream gerade? Owncast beantwortet das unter /api/status ({"online": true}). Die App fragt höchstens
+ * einmal pro Minute nach, egal wie viele Hörer die Startseite offen haben. Andere Stream-Server oder ein Fehler
+ * ergeben null (unbekannt); dann zeigt die App die Kachel wie ohne Status.
+ */
+export class LiveStatus {
+  private last: { url: string; live: boolean | null; at: number } | undefined;
+  private pending: Promise<boolean | null> | undefined;
+
+  constructor(
+    private readonly db: DB,
+    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly maxAgeMs = LIVE_STATUS_MAX_AGE_MS,
+  ) {}
+
+  /** null: ausgeschaltet oder unbekannt */
+  async get(): Promise<boolean | null> {
+    const stream = getLivestream(this.db);
+    const origin = stream.enabled ? parseStreamUrl(stream.url)?.origin : undefined;
+    if (!origin) return null;
+    const last = this.last?.url === origin ? this.last : undefined;
+    if (last && Date.now() - last.at < this.maxAgeMs) return last.live;
+    this.pending ??= this.check(origin).finally(() => (this.pending = undefined));
+    // Mit altem Stand nicht warten; der neue gilt ab der nächsten Anfrage.
+    return last ? last.live : this.pending;
+  }
+
+  private async check(origin: string): Promise<boolean | null> {
+    let live: boolean | null = null;
+    try {
+      const res = await this.fetchImpl(`${origin}/api/status`, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(LIVE_STATUS_TIMEOUT_MS),
+        redirect: 'error',
+      });
+      if (res.ok) {
+        const body = (await res.json()) as { online?: unknown };
+        if (typeof body.online === 'boolean') live = body.online;
+      }
+    } catch {
+      live = null;
+    }
+    this.last = { url: origin, live, at: Date.now() };
+    return live;
+  }
+}

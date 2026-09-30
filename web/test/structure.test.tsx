@@ -29,7 +29,7 @@ const structure: Structure = {
     },
   ],  library: {
     discFolders: ['CD', 'Disc'], mergeDatedSubfolders: true, splitByFileDate: true, albumTitle: '{ordner}', trackTitle: '{titel}',
-    looseTitle: 'Einzeltitel', sermonMinutes: 10, passagePrefixes: ['Text'], bookSpellings: [],
+    looseTitle: 'Einzeltitel', sermonMinutes: 10, passagePrefixes: ['Text'], bookSpellings: [], bibleTranslation: 'LUT',
   },
 };
 
