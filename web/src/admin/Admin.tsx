@@ -12,6 +12,7 @@ import { adminRequest, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
 import { CategoriesAdmin, CategoryEditor } from './Categories';
 import { QualityPanel } from './Quality';
+import { ReplacementsPanel } from './Replacements';
 import { ScanPanel } from './Scan';
 import { StructurePanel } from './Structure';
 
@@ -51,6 +52,7 @@ export function Admin({ location }: { location: Location }) {
   } else if (location.path === '/admin/kategorien') content = <CategoriesAdmin onError={onError} />;
   else if (location.path === '/admin/pruefen') content = <QualityPanel />;
   else if (location.path === '/admin/zuordnung') content = <StructurePanel />;
+  else if (location.path === '/admin/schreibweisen') content = <ReplacementsPanel />;
   else if (section) content = <section.Component params={location.params} />;
   else content = <AlbumsAdmin params={location.params} onError={onError} />;
 

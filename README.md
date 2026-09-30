@@ -184,6 +184,18 @@ Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
 - **Vorschau** zeigt vor dem Speichern je Art die Anzahl, die neuesten Beispiele und Dateien, die nicht zum
   Muster passen. **Speichern und anwenden** bildet die Alben sofort neu, ohne neuen Scan.
 
+## Verwaltung: Schreibweisen
+
+Unter **Verwaltung → Schreibweisen** (Manager und Admins) lassen sich Tippfehler, die in vielen Titeln stehen, einmal
+für alle korrigieren, etwa „Tema“ → „Thema“. Die Ersetzungen gelten für Titel und Albumnamen in der App, in der Suche
+und in der Sortierung; die Dateien in der Nextcloud bleiben unverändert. Von Hand korrigierte Titel und Alben
+behalten ihren Namen.
+
+- Groß- und Kleinschreibung spielt beim Suchen keine Rolle; ein großgeschriebener Fund bleibt groß („TEMA“ → „THEMA“).
+- Standardmäßig nur ganze Wörter („Tematik“ bleibt); wahlweise auch innerhalb von Wörtern. Leerer Ersatz entfernt das Wort.
+- Die Vorschau zeigt vor dem Speichern, welche Titel und Alben sich ändern. Die Suche findet weiterhin auch die
+  alte Schreibweise aus der Datei.
+
 ## Verwaltung: Kategorien
 
 Unter **Verwaltung → Kategorien** legt man eigene Kategorien an, benennt sie um, ordnet sie oder löscht sie.
@@ -431,6 +443,10 @@ Verwaltung (Manager und Admins):
 | `GET /api/admin/structure` | Regelwerk für Aufnahmen, Vorgabe und Platzhalter |
 | `PUT /api/admin/structure` | Regelwerk speichern `{ kinds, contents }` und Alben neu bilden |
 | `POST /api/admin/structure/preview` | Was ein Regelwerk aus der Bibliothek machen würde, je Art mit Beispielen |
+| `GET /api/admin/replacements` | Ersetzungen für Tippfehler (Schreibweisen) |
+| `POST /api/admin/replacements` | Ersetzung anlegen `{ search, replacement, wholeWord }` und Alben neu bilden |
+| `PUT /api/admin/replacements/:id` / `DELETE …` | Ersetzung ändern bzw. löschen |
+| `POST /api/admin/replacements/preview` | Welche Titel und Alben sich ändern würden, `{ search, replacement, wholeWord, id? }` |
 
 `PATCH /api/admin/albums/:id` nimmt außerdem `speaker`, `passage` und `description` (Predigt-Infos).
 

@@ -50,6 +50,14 @@ import {
   StructureError,
 } from '../library/structure.js';
 import { searchAlbums, type AlbumFilter } from '../library/queries.js';
+import {
+  addReplacement,
+  deleteReplacement,
+  listReplacements,
+  parseReplacement,
+  previewReplacement,
+  updateReplacement,
+} from '../library/replacements.js';
 import { RULE_FIELDS, RULE_OPS } from '../library/rules.js';
 
 const idParam = {
@@ -413,6 +421,29 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
       saveStructure(db, structure);
       rebuildAlbums(db);
       return { structure };
+    });
+
+    // Schreibweisen: Ersetzungen für Tippfehler in Titeln und Albumnamen (Verwaltung → Schreibweisen)
+    admin.get('/api/admin/replacements', async () => ({ items: listReplacements(db) }));
+    admin.post('/api/admin/replacements/preview', async (request) => {
+      const body = request.body as { id?: unknown } | undefined;
+      const id = typeof body?.id === 'number' ? body.id : undefined;
+      return previewReplacement(db, parseReplacement(request.body), id);
+    });
+    admin.post('/api/admin/replacements', async (request, reply) => {
+      const replacement = addReplacement(db, parseReplacement(request.body));
+      rebuildAlbums(db);
+      return reply.code(201).send(replacement);
+    });
+    admin.put('/api/admin/replacements/:id', { schema: { params: idParam } }, async (request) => {
+      const replacement = updateReplacement(db, (request.params as { id: number }).id, parseReplacement(request.body));
+      rebuildAlbums(db);
+      return replacement;
+    });
+    admin.delete('/api/admin/replacements/:id', { schema: { params: idParam } }, async (request, reply) => {
+      deleteReplacement(db, (request.params as { id: number }).id);
+      rebuildAlbums(db);
+      return reply.code(204).send();
     });
 
     // Aktueller Inhalt eines Tag-Felds, damit man beim Zuordnen sieht, was in den Dateien steht

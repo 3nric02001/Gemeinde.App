@@ -568,6 +568,19 @@ export const migrations: string[] = [
   CREATE INDEX search_log_at ON search_log(at);
   CREATE INDEX search_log_user ON search_log(user_id);
   `,
+  `
+  -- Ersetzungen für Tippfehler in Titeln und Albumnamen (library/replacements.ts), z. B. "Tema" → "Thema".
+  CREATE TABLE title_replacements (
+    id          INTEGER PRIMARY KEY,
+    search      TEXT NOT NULL,
+    replacement TEXT NOT NULL,
+    whole_word  INTEGER NOT NULL DEFAULT 1,
+    created_at  INTEGER NOT NULL
+  );
+  -- Titel aus Datei und Regelwerk vor den Ersetzungen (für deren Vorschau); NULL: wie title. Füllt rebuildAlbums.
+  ALTER TABLE tracks ADD COLUMN raw_title TEXT;
+  UPDATE tracks SET raw_title = display_title;
+  `,
 ];
 
 export function openDatabase(path: string): DB {
