@@ -8,8 +8,8 @@ export { parseFolderDate } from './dateText.js';
  * albums.ts), damit Datumsansicht, Startseite und Albenliste dieselben Einträge zeigen: Ein Ordner,
  * dessen Titel verschiedene Album-Tags tragen, erscheint so nicht einmal als Ordner und zweimal als Album.
  */
-export function listDatedAlbums(db: DB, limit: number, offset: number): Page<Record<string, unknown>> {
-  const page = searchAlbums(db, { dated: true, sort: 'date', limit, offset });
+export function listDatedAlbums(db: DB, limit: number, offset: number, recording?: string): Page<Record<string, unknown>> {
+  const page = searchAlbums(db, { dated: true, sort: 'date', limit, offset, recording });
   // Frühere Felder der Datumsansicht, damit ältere Oberflächen (noch zwischengespeichert) weiter funktionieren
   return { ...page, items: page.items.map((album) => ({ ...album, name: album.title, albumId: album.id })) };
 }

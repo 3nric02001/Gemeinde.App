@@ -40,7 +40,7 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   nirgends angezeigt; „Letzter Gottesdienst“, „Neu hinzugefügt“ und bewusst gewählte Sortierungen
   (Titel, Jahr, Neu hinzugefügt) bleiben unberührt
 - **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach. Alben
-  zeigt zuerst nur Musik; Umschalter „Musik / Gottesdienste / Alle“ (über Suche, Genre oder Jahrzehnt
+  zeigt zuerst nur Musik; Umschalter „Musik / je Art (Gottesdienste, Bibelstunden …) / Alle“ (über Suche, Genre oder Jahrzehnt
   kommend: Alle). Sortiert wird wie im Telefonbuch: Umlaute bei ihrem Grundbuchstaben („Ärger“ bei A),
   Zahlen nach Wert („2 Lieder“ vor „10 Gebote“), ein englisches „The“ am Anfang zählt nicht; Sortier-Tags
   der Dateien (`ALBUMSORT`, `TSOA` …) haben Vorrang. „Neu hinzugefügt“ richtet sich danach, wann die
@@ -53,7 +53,10 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   sind ein Gottesdienst) oder aus den Dateinamen: Tragen in einem Ordner ohne Datum die meisten Dateien
   eines im Namen (`Predigten 2026/2026-09-27 Meier - Psalm 23.mp3`), wird jedes Datum ein eigener
   Gottesdienst. Disc-Unterordner (`CD 1`, `CD 2`) zählen zum Elternordner. Interpreten sind weiter über
-  Suche und Links erreichbar.
+  Suche und Links erreichbar. Gibt es mehrere Arten von Aufnahmen (Gottesdienste, Bibelstunden), filtern
+  Chips nach Art; die Startseite zeigt je Art eine Reihe, die Albenseite hat je Art ein eigenes Feld im
+  Umschalter (Musik / Gottesdienste / Bibelstunden / Alle). Wie Aufnahmen erkannt und benannt werden, steht in
+  der Verwaltung unter „Zuordnung“ (siehe unten).
 - **Album- und Interpretenseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), „Mehr von …“
 - **Player**: Leiste unten mit Zufall, Wiederholen (alle/einen), Spulen und Lautstärke; Warteschlange
   mit „Als Nächstes spielen“ und „Zur Warteschlange hinzufügen“. Auf dem Handy Mini-Player über der
@@ -131,6 +134,45 @@ die wegen unterschiedlicher Album-Tags in mehrere Alben zerfallen, Gottesdienste
 Interpreten, die wie ein Datum oder Jahr aussehen oder fehlen, Interpreten in mehreren Schreibweisen
 und Musikalben ohne Bild.
 
+## Verwaltung: Zuordnung von Aufnahmen
+
+Unter **Verwaltung → Zuordnung** (Manager und Admins) steht das Regelwerk, nach dem die App Gottesdienste,
+Bibelstunden und andere Aufnahmen erkennt und benennt. Es gilt für Ordner mit Datum; Musik bleibt unberührt.
+Vorgegeben ist diese Ablage:
+
+```
+Audio Aufnahmen/2026/2026_08_30_Einschulung/Predigt - Der gute Hirte.mp3
+Audio Aufnahmen/2026/Bibelstunden/2026_01_14_Matthäus 9, 27-38/2026_01_14_001.mp3
+```
+
+| Art | Erkennen am Ordner | Ordnername | Dateiname | Name des Albums | Titel |
+| --- | --- | --- | --- | --- | --- |
+| Bibelstunde | `Bibelstunden` | `{datum}_{bibelstelle}` | `{datum}_{nr}` | `{bibelstelle}` | `Teil {nr}` |
+| Gottesdienst | (alle übrigen mit Datum) | `{datum}_{anlass}` | `{inhalt} - {titel} - {sprecher}` | `{anlass}` | `{inhalt}: {titel}` |
+
+Daraus werden „Einschulung“ mit „Predigt: Der gute Hirte“ und die Bibelstunde „Matthäus 9, 27-38“ mit
+„Teil 1“. Aus `Predigt - Der gute Hirte - Pastor Meier.mp3` wird Pastor Meier Sprecher und Interpret des
+Gottesdienstes; bei `Lied - Nun danket alle Gott - Chor.mp3` ist der Chor Interpret des Liedes, aber nicht
+Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
+
+- **Arten**: Es gilt die erste Art, deren Ordner irgendwo im Pfad vorkommt; eine Art ohne Ordner nimmt alle übrigen
+  Ordner mit Datum. Reihenfolge, Namen und Mehrzahl (für Filter und Überschriften) sind frei, bis zu zehn Arten.
+- **Muster** für Ordner- und Dateinamen mit den Platzhaltern `{datum}`, `{anlass}`, `{bibelstelle}`,
+  `{sprecher}`, `{inhalt}`, `{titel}` und `{nr}`. Trennzeichen sind austauschbar („ - “, „_“, „.“, „:“); zwischen
+  zwei freien Textfeldern (etwa `{sprecher} - {titel}`) muss aber ein echtes Trennzeichen stehen, kein
+  Leerzeichen. Alles nach dem ersten Platzhalter ist optional (`{datum}_{anlass}` passt auch auf `2026_09_06`),
+  eine vorangestellte Tracknummer (`03 Lied - …`) wird erkannt.
+- **Vorlagen** für den Namen des Albums und den Titel einer Aufnahme; leere Platzhalter fallen samt Trennern weg.
+- **Inhalt der Predigt** (z. B. „Predigt“): Diese Aufnahme liefert Sprecher (`{sprecher}`) und Bibelstelle
+  (`{bibelstelle}`, sonst aus ihrem Titel erkannt). Wer predigt, steht als Interpret am Gottesdienst.
+- **Inhalte**: Liste, was am Anfang eines Dateinamens stehen kann; nötig für Inhalte aus mehreren Wörtern.
+  Der Inhalt jeder Aufnahme steht in der Kategorie „Inhalt“ (vorgegeben, zunächst nicht im Menü) und in der Suche.
+- **Tags**: Standardmäßig gilt der Dateiname, auch wenn die Datei Tags hat. Je Art lässt sich einstellen, dass
+  vorhandene Tags (Titel, Album, Interpret) Vorrang haben. Ohne Namen im Dateinamen und ohne Interpret-Tag steht
+  bei einer Aufnahme der Sprecher, sonst die Art („Gottesdienst“); die Art erscheint nicht in der Interpretenliste.
+- **Vorschau** zeigt vor dem Speichern je Art die Anzahl, die neuesten Beispiele und Dateien, die nicht zum
+  Muster passen. **Speichern und anwenden** bildet die Alben sofort neu, ohne neuen Scan.
+
 ## Verwaltung: Kategorien
 
 Unter **Verwaltung → Kategorien** legt man eigene Kategorien an, benennt sie um, ordnet sie oder löscht sie.
@@ -148,8 +190,8 @@ Jede Kategorie mit „Im Menü anzeigen“ steht in der Seitenleiste und unter S
   zusammengefassten Werte.
 - **Vorschau**: Beim Einrichten zeigt die Verwaltung sofort, welche Werte mit wie vielen Titeln entstehen.
 
-Vorgegeben sind „Interpreten“ (im Menü), „Genre“ (nicht im Menü) und „Sprecher“ aus den Predigt-Feldern
-(im Menü, wenn es beim Update schon Sprecher gab). Die Filter nach Genre und Jahrzehnt
+Vorgegeben sind „Interpreten“ (im Menü), „Genre“ (nicht im Menü), „Sprecher“ aus den Predigt-Feldern
+(im Menü, wenn es beim Update schon Sprecher gab) und „Inhalt“ aus der Zuordnung von Aufnahmen (nicht im Menü). Die Filter nach Genre und Jahrzehnt
 sowie der Reiter „Datum“ bleiben davon unberührt. Beim ersten Start mit dieser Version liest der Scan alle
 Dateien einmal neu, um auch die übrigen Tag-Felder zu erfassen.
 
@@ -326,7 +368,7 @@ sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 
 | Methode und Pfad | Zweck |
 | --- | --- |
-| `GET /api/albums?q=&artist=&genre=&year=&decade=&dated=&sort=artist\|title\|year\|recent\|date\|popular&limit=&offset=` | Alben suchen und filtern; `dated=true` nur Gottesdienste (Datum im Ordnernamen), `dated=false` nur Musik |
+| `GET /api/albums?q=&artist=&genre=&year=&decade=&dated=&sort=artist\|title\|year\|recent\|date\|popular&limit=&offset=` | Alben suchen und filtern; `dated=true` nur Gottesdienste (Datum im Ordnernamen), `dated=false` nur Musik; `recording=Bibelstunde` nur eine Art aus der Zuordnung |
 | `GET /api/albums/:id` | Album mit Titelliste |
 | `GET /api/albums/:id/cover` | Albumcover (Bild im Ordner, sonst eingebettet) |
 | `GET /api/tracks/:id/cover` | Bild des Titels, sonst Albumcover |
@@ -335,7 +377,7 @@ sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 | `GET /api/categories/:slug/values?q=` | Werte einer Kategorie mit Anzahl Titel |
 | `GET /api/tracks/:id/stream` | Audio streamen (unterstützt `Range`) |
 | `GET /api/artists?q=` | Interpreten mit Anzahl Alben und Titel |
-| `GET /api/dates?limit=&offset=` | Alben mit Datum (Gottesdienste), neueste zuerst; wie `/api/albums?dated=true&sort=date` |
+| `GET /api/dates?limit=&offset=&recording=` | Alben mit Datum (Gottesdienste), neueste zuerst; wie `/api/albums?dated=true&sort=date`; `recording` filtert nach Art |
 | `GET /api/dates/folder?path=` | Album zu einem Ordnerpfad (für ältere Links auf `/datum/ordner`) samt Titeln |
 | `GET /api/facets` | Genres, Jahrzehnte und Gesamtzahlen für die Filterleiste |
 | `GET /api/scan` | Status des letzten Scans |
@@ -372,6 +414,9 @@ Verwaltung (Manager und Admins):
 | `GET /api/admin/tag-fields` | Alle Tag-Felder der Bibliothek mit Anzahl Titel und Beispielwerten |
 | `GET /api/admin/tag-fields/:tag/values?q=&limit=` | Aktueller Inhalt eines Tag-Felds, häufigste Werte zuerst |
 | `GET /api/admin/quality` | Hinweise zur Datenqualität (aufgeteilte Ordner, fehlende Sprecher und Cover, auffällige Interpreten) |
+| `GET /api/admin/structure` | Regelwerk für Aufnahmen, Vorgabe und Platzhalter |
+| `PUT /api/admin/structure` | Regelwerk speichern `{ kinds, contents }` und Alben neu bilden |
+| `POST /api/admin/structure/preview` | Was ein Regelwerk aus der Bibliothek machen würde, je Art mit Beispielen |
 
 `PATCH /api/admin/albums/:id` nimmt außerdem `speaker`, `passage` und `description` (Predigt-Infos).
 

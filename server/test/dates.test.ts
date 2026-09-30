@@ -83,9 +83,10 @@ describe('Datum-Ansicht', () => {
     const page = await get('/api/dates');
     expect(page.total).toBe(3);
     expect(page.items.map((f: any) => [f.date, f.title, f.trackCount])).toEqual([
-      ['2026-09-27', '2026-09-27 Erntedank', 2],
+      // Name nach dem Regelwerk: der Anlass aus "{datum}_{anlass}"
+      ['2026-09-27', 'Erntedank', 2],
       ['2026-09-20', '20.09.2026', 1],
-      ['2025-12-14', '2025-12-14 Advent', 2],
+      ['2025-12-14', 'Advent', 2],
     ]);
     expect(page.items[0].hasCover).toBe(true);
     expect(page.items[1].hasCover).toBe(false);
@@ -167,6 +168,7 @@ describe('Gottesdienste erkennen', () => {
     expect(album).toMatchObject({ title: '30.11.', year: 2025 });
     expect(album.artist).not.toBe('2025');
     const track = (await get('/api/tracks?q=Advent')).items.find((t: any) => t.albumDate === '2025-11-30');
-    expect(track.artist).toBe('Unbekannter Interpret');
+    // Ohne Interpret und Sprecher steht die Art der Aufnahme
+    expect(track.artist).toBe('Gottesdienst');
   });
 });

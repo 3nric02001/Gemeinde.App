@@ -34,7 +34,6 @@ export function Home() {
   const latest = useApi<Page<DatedAlbum>>('/api/dates?limit=1');
   const personal = useApi<{ resume: Array<Track & { position: number }>; recent: Album[] }>('/api/me/home');
   // Gottesdienste und Musik getrennt, damit dieselben Karten nicht zweimal untereinander stehen
-  const services = useApi<Page<Album>>('/api/albums?dated=true&sort=date&limit=13');
   const recent = useApi<Page<Album>>('/api/albums?dated=false&sort=recent&limit=12');
   const facets = useApi<Facets>('/api/facets');
   const topGenre = facets.data?.genres.find((genre) => !SERVICE_GENRE.test(genre.value))?.value;
@@ -79,11 +78,15 @@ export function Home() {
 
       <Shelf title="Zuletzt gehört" albums={personal.data?.recent ?? []} />
 
-      <Shelf
-        title="Weitere Gottesdienste"
-        href="/datum"
-        albums={(services.data?.items ?? []).filter((album) => album.id !== service?.id).slice(0, 12)}
-      />
+      {/* Je Art aus dem Regelwerk eine Reihe (Gottesdienste, Bibelstunden …), ohne die große Karte oben */}
+      {(facets.data?.recordings ?? []).map((kind, index) => (
+        <RecordingShelf
+          key={kind.name}
+          name={kind.name}
+          title={index === 0 && facets.data!.recordings!.length === 1 ? `Weitere ${kind.plural}` : kind.plural}
+          skip={service?.id}
+        />
+      ))}
       <Shelf title="Neue Musik" href="/alben?sort=recent" albums={recent.data?.items ?? []} />
       {topGenre && (
         <Shelf title={topGenre} href={`/alben${query({ genre: topGenre, sort: 'year' })}`} albums={genreAlbums.data?.items ?? []} />
@@ -132,7 +135,7 @@ export function Home() {
 
 /** Große Karte ganz oben: der neueste Gottesdienst zum direkten Abspielen */
 function LatestService({ album }: { album: DatedAlbum }) {
-  const occasion = withoutDate(album.title);
+  const occasion = withoutDate(album.title) || (album.recording && album.recording !== 'Gottesdienst' ? album.recording : '');
   return (
     <section class="latest">
       <a class="latest-link" href={`/album/${album.id}`}>
@@ -144,7 +147,7 @@ function LatestService({ album }: { album: DatedAlbum }) {
           eager
         />
         <span class="latest-text">
-          <span class="eyebrow">Letzter Gottesdienst</span>
+          <span class="eyebrow">Aktuell · {album.recording ?? 'Gottesdienst'}</span>
           <span class="latest-title">{occasion || formatLongDate(album.date)}</span>
           <span class="latest-sub">
             {[occasion ? formatLongDate(album.date) : undefined, album.speaker, album.passage].filter(Boolean).join(' · ')}
@@ -160,5 +163,17 @@ function LatestService({ album }: { album: DatedAlbum }) {
         <Icon name="play" size={20} /> Abspielen
       </button>
     </section>
+  );
+}
+
+/** Reihe mit den neuesten Aufnahmen einer Art */
+function RecordingShelf({ name, title, skip }: { name: string; title: string; skip: number | undefined }) {
+  const albums = useApi<Page<Album>>(`/api/albums${query({ dated: 'true', recording: name, sort: 'date', limit: 13 })}`);
+  return (
+    <Shelf
+      title={title}
+      href={`/datum${query({ art: name })}`}
+      albums={(albums.data?.items ?? []).filter((album) => album.id !== skip).slice(0, 12)}
+    />
   );
 }

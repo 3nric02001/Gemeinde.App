@@ -8,6 +8,7 @@ import { loadConfig } from '../src/config.js';
 import { migrations, openDatabase } from '../src/db.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
+import { preferTags } from './helpers/structure.js';
 import { sessionCookie } from './helpers/session.js';
 
 let cookie = '';
@@ -82,6 +83,7 @@ beforeEach(async () => {
     }),
     { logger: false },
   );
+  preferTags(ctx.db);
   cookie = sessionCookie(ctx.db);
   await ctx.scanner.scan();
 });

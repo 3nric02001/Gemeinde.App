@@ -36,7 +36,7 @@ function Page({ location, offline }: { location: Location; offline: boolean }) {
   if (path === '/alben') return <Albums params={params} />;
   if (path === '/titel') return <Tracks params={params} />;
   if (path === '/interpreten') return <Artists />;
-  if (path === '/datum') return <Dates />;
+  if (path === '/datum') return <Dates params={params} />;
   if (path === '/datum/ordner' && params.get('pfad')) return <DateFolder path={params.get('pfad')!} />;
   if (path === '/warteschlange') return <QueuePage />;
   if (path === '/mehr') return <More />;

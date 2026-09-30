@@ -190,6 +190,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
             ...paging,
             sort: { type: 'string', enum: ALBUM_SORTS, default: 'artist' },
             dated: { type: 'boolean' },
+            recording: { type: 'string', maxLength: 60 },
           },
           additionalProperties: false,
         },
@@ -269,14 +270,14 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
       schema: {
         querystring: {
           type: 'object',
-          properties: { ...paging, limit: { ...paging.limit, maximum: 1000 } },
+          properties: { ...paging, limit: { ...paging.limit, maximum: 1000 }, recording: { type: 'string', maxLength: 60 } },
           additionalProperties: false,
         },
       },
     },
     async (request) => {
-      const { limit, offset } = request.query as { limit: number; offset: number };
-      return listDatedAlbums(db, limit, offset);
+      const { limit, offset, recording } = request.query as { limit: number; offset: number; recording?: string };
+      return listDatedAlbums(db, limit, offset, recording);
     },
   );
 

@@ -210,9 +210,9 @@ export class LibraryScanner {
 
     const upsert = this.db.prepare(`
       INSERT INTO tracks (path, etag, size, mime, title, artist, album_artist, album, track_no, disc_no, year, genre, duration, compilation, cover_id,
-                          scanned_at, file_id, added_at, sort_title, sort_artist, album_sort, album_artist_sort, album_tagged)
+                          scanned_at, file_id, added_at, sort_title, sort_artist, album_sort, album_artist_sort, album_tagged, title_tagged)
       VALUES (@path, @etag, @size, @mime, @title, @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @coverId,
-              @now, @fileId, coalesce(@addedAt, @now), @sortTitle, @sortArtist, @albumSort, @albumArtistSort, @albumTagged)
+              @now, @fileId, coalesce(@addedAt, @now), @sortTitle, @sortArtist, @albumSort, @albumArtistSort, @albumTagged, @titleTagged)
       ON CONFLICT(path) DO UPDATE SET
         etag = excluded.etag, size = excluded.size, mime = excluded.mime, title = excluded.title,
         artist = excluded.artist, album_artist = excluded.album_artist, album = excluded.album,
@@ -220,8 +220,10 @@ export class LibraryScanner {
         duration = excluded.duration, compilation = excluded.compilation, cover_id = excluded.cover_id,
         scanned_at = excluded.scanned_at, file_id = coalesce(excluded.file_id, tracks.file_id),
         added_at = coalesce(@addedAt, tracks.added_at, excluded.added_at),
-        sort_title = excluded.sort_title, sort_artist = excluded.sort_artist,
-        album_sort = excluded.album_sort, album_artist_sort = excluded.album_artist_sort, album_tagged = excluded.album_tagged
+        -- Anzeige-Titel und -Interpret aus dem Regelwerk bestimmen die Sortierung selbst (albums.ts applyRecordings).
+        sort_title = CASE WHEN tracks.display_title IS NULL THEN excluded.sort_title ELSE tracks.sort_title END,
+        sort_artist = CASE WHEN tracks.display_artist IS NULL THEN excluded.sort_artist ELSE tracks.sort_artist END,
+        album_sort = excluded.album_sort, album_artist_sort = excluded.album_artist_sort, album_tagged = excluded.album_tagged, title_tagged = excluded.title_tagged
       RETURNING id
     `);
     const clearTags = this.db.prepare('DELETE FROM track_tags WHERE track_id = ?');
@@ -264,6 +266,7 @@ export class LibraryScanner {
           albumSort: meta.sort.album ?? null,
           albumArtistSort: meta.sort.albumArtist ?? null,
           albumTagged: meta.albumTagged ? 1 : 0,
+          titleTagged: meta.titleTagged ? 1 : 0,
         }) as { id: number };
         clearTags.run(id);
         for (const [tag, value] of meta.tags) addTag.run(id, tag, value, foldValue(value));

@@ -4,6 +4,7 @@ import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
+import { preferTags } from './helpers/structure.js';
 import { sessionCookie } from './helpers/session.js';
 import { HALF_LIFE_MS, PLAY_COOLDOWN_MS, recordPlay } from '../src/library/popularity.js';
 
@@ -49,6 +50,7 @@ beforeEach(async () => {
     DATABASE_PATH: ':memory:',
   });
   ctx = await buildApp(config, { logger: false });
+  preferTags(ctx.db);
   cookie = sessionCookie(ctx.db);
   await ctx.scanner.scan();
 });

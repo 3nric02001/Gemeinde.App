@@ -1,6 +1,7 @@
 import type { DB } from '../db.js';
 import { findDate, isYearOnly } from './dateText.js';
 import { UNKNOWN_ARTIST } from './metadata.js';
+import { getStructure } from './structure.js';
 import { artistKey, artistNames } from './text.js';
 
 /**
@@ -35,6 +36,7 @@ export interface QualityReport {
 const ALBUM_REF = 'a.id, a.title, a.artist, a.date, a.track_count AS trackCount';
 
 export function libraryQuality(db: DB): QualityReport {
+  const sermonKinds = new Set(getStructure(db).kinds.filter((kind) => kind.sermon).map((kind) => kind.name));
   // Aufteilungen nach Datum im Dateinamen sind gewollt (Schlüssel mit "@").
   const split = db
     .prepare(
@@ -57,7 +59,7 @@ export function libraryQuality(db: DB): QualityReport {
   const artists = db
     .prepare(
       `SELECT name, count(*) AS n FROM (
-         SELECT artist AS name FROM tracks
+         SELECT coalesce(display_artist, artist) AS name FROM tracks
          UNION ALL SELECT album_artist FROM tracks WHERE album_artist IS NOT NULL AND album_artist <> artist)
        GROUP BY name`,
     )
@@ -82,7 +84,11 @@ export function libraryQuality(db: DB): QualityReport {
   return {
     splitFolders: [...byFolder].slice(0, LIMIT).map(([folder, albums]) => ({ folder, albums })),
     withoutCover: page('a.hidden = 0 AND a.date IS NULL AND a.cover_path IS NULL AND a.cover_id IS NULL'),
-    servicesWithoutSpeaker: page("a.hidden = 0 AND a.date IS NOT NULL AND a.speaker IS NULL AND a.kind = 'auto'"),
+    // Nur Arten mit Predigt (im Regelwerk ist ein Inhalt für die Predigt eingestellt)
+    servicesWithoutSpeaker: page(
+      `a.hidden = 0 AND a.date IS NOT NULL AND a.speaker IS NULL AND a.kind = 'auto'
+       AND coalesce(a.recording, '') IN (${[...sermonKinds].map((name) => `'${name.replace(/'/g, "''")}'`).join(', ') || "''"})`,
+    ),
     suspiciousArtists: suspicious,
     artistVariants: [...variants.values()]
       .filter((entry) => entry.names.size > 1)
