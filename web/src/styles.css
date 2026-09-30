@@ -312,6 +312,9 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .segmented-kinds {
+  /* Musik, je Art von Aufnahmen ein Feld, Alle: Anzahl hängt von der Zuordnung ab */
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  max-width: 640px;
   margin-bottom: 12px;
 }
 

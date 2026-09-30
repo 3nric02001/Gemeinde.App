@@ -61,18 +61,18 @@ export const DEFAULT_STRUCTURE: Structure = {
       albumTitle: '{bibelstelle}',
       trackTitle: 'Teil {nr}',
       sermon: '',
-      preferTags: true,
+      preferTags: false,
     },
     {
       name: 'Gottesdienst',
       plural: 'Gottesdienste',
       folder: '',
       folderPattern: '{datum}_{anlass}',
-      filePattern: '{inhalt} - {titel}',
+      filePattern: '{inhalt} - {titel} - {sprecher}',
       albumTitle: '{anlass}',
       trackTitle: '{inhalt}: {titel}',
       sermon: 'Predigt',
-      preferTags: true,
+      preferTags: false,
     },
   ],
   contents: [
@@ -302,7 +302,10 @@ export interface FileResult {
   /** Titel nach der Vorlage, undefined: gescannten Titel behalten */
   title?: string;
   content?: string;
+  /** Sprecher, nur bei der Predigt (für Album und Kategorie "Sprecher") */
   speaker?: string;
+  /** Name aus {sprecher} bei jeder Aufnahme: bei der Predigt der Prediger, bei einem Lied z. B. der Chor */
+  performer?: string;
   nr?: number;
   matched: boolean;
 }
@@ -340,7 +343,14 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
     const all: Values = { ...folderValues, ...values, nr: nr !== undefined ? String(nr) : undefined };
     if (all.datum) all.datum = findDate(all.datum, folderYear(dirname(file.path)))?.date ?? all.datum;
     const title = kind.preferTags && file.titleTagged ? undefined : fillTemplate(kind.trackTitle || '{titel}', all) || undefined;
-    results.set(file.path, { matched: true, title, content: values.inhalt, speaker: isSermon(values) ? values.sprecher : undefined, nr });
+    results.set(file.path, {
+      matched: true,
+      title,
+      content: values.inhalt,
+      speaker: isSermon(values) ? values.sprecher : undefined,
+      performer: values.sprecher,
+      nr,
+    });
   }
 
   // Predigt: der Titel mit dem eingestellten Inhalt, sonst der längste

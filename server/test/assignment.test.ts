@@ -4,6 +4,7 @@ import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
+import { preferTags } from './helpers/structure.js';
 import { sessionCookie } from './helpers/session.js';
 
 let cloud: FakeNextcloud;
@@ -33,6 +34,7 @@ beforeEach(async () => {
     DATABASE_PATH: ':memory:',
   });
   ctx = await buildApp(config, { logger: false });
+  preferTags(ctx.db);
   cookie = sessionCookie(ctx.db);
 });
 

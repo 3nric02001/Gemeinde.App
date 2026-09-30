@@ -40,7 +40,7 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   nirgends angezeigt; „Letzter Gottesdienst“, „Neu hinzugefügt“ und bewusst gewählte Sortierungen
   (Titel, Jahr, Neu hinzugefügt) bleiben unberührt
 - **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach. Alben
-  zeigt zuerst nur Musik; Umschalter „Musik / Gottesdienste / Alle“ (über Suche, Genre oder Jahrzehnt
+  zeigt zuerst nur Musik; Umschalter „Musik / je Art (Gottesdienste, Bibelstunden …) / Alle“ (über Suche, Genre oder Jahrzehnt
   kommend: Alle). Sortiert wird wie im Telefonbuch: Umlaute bei ihrem Grundbuchstaben („Ärger“ bei A),
   Zahlen nach Wert („2 Lieder“ vor „10 Gebote“), ein englisches „The“ am Anfang zählt nicht; Sortier-Tags
   der Dateien (`ALBUMSORT`, `TSOA` …) haben Vorrang. „Neu hinzugefügt“ richtet sich danach, wann die
@@ -54,7 +54,8 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   eines im Namen (`Predigten 2026/2026-09-27 Meier - Psalm 23.mp3`), wird jedes Datum ein eigener
   Gottesdienst. Disc-Unterordner (`CD 1`, `CD 2`) zählen zum Elternordner. Interpreten sind weiter über
   Suche und Links erreichbar. Gibt es mehrere Arten von Aufnahmen (Gottesdienste, Bibelstunden), filtern
-  Chips nach Art; die Startseite zeigt je Art eine Reihe. Wie Aufnahmen erkannt und benannt werden, steht in
+  Chips nach Art; die Startseite zeigt je Art eine Reihe, die Albenseite hat je Art ein eigenes Feld im
+  Umschalter (Musik / Gottesdienste / Bibelstunden / Alle). Wie Aufnahmen erkannt und benannt werden, steht in
   der Verwaltung unter „Zuordnung“ (siehe unten).
 - **Album- und Interpretenseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), „Mehr von …“
 - **Player**: Leiste unten mit Zufall, Wiederholen (alle/einen), Spulen und Lautstärke; Warteschlange
@@ -147,10 +148,12 @@ Audio Aufnahmen/2026/Bibelstunden/2026_01_14_Matthäus 9, 27-38/2026_01_14_001.m
 | Art | Erkennen am Ordner | Ordnername | Dateiname | Name des Albums | Titel |
 | --- | --- | --- | --- | --- | --- |
 | Bibelstunde | `Bibelstunden` | `{datum}_{bibelstelle}` | `{datum}_{nr}` | `{bibelstelle}` | `Teil {nr}` |
-| Gottesdienst | (alle übrigen mit Datum) | `{datum}_{anlass}` | `{inhalt} - {titel}` | `{anlass}` | `{inhalt}: {titel}` |
+| Gottesdienst | (alle übrigen mit Datum) | `{datum}_{anlass}` | `{inhalt} - {titel} - {sprecher}` | `{anlass}` | `{inhalt}: {titel}` |
 
 Daraus werden „Einschulung“ mit „Predigt: Der gute Hirte“ und die Bibelstunde „Matthäus 9, 27-38“ mit
-„Teil 1“.
+„Teil 1“. Aus `Predigt - Der gute Hirte - Pastor Meier.mp3` wird Pastor Meier Sprecher und Interpret des
+Gottesdienstes; bei `Lied - Nun danket alle Gott - Chor.mp3` ist der Chor Interpret des Liedes, aber nicht
+Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
 
 - **Arten**: Es gilt die erste Art, deren Ordner irgendwo im Pfad vorkommt; eine Art ohne Ordner nimmt alle übrigen
   Ordner mit Datum. Reihenfolge, Namen und Mehrzahl (für Filter und Überschriften) sind frei, bis zu zehn Arten.
@@ -164,9 +167,9 @@ Daraus werden „Einschulung“ mit „Predigt: Der gute Hirte“ und die Bibels
   (`{bibelstelle}`, sonst aus ihrem Titel erkannt). Wer predigt, steht als Interpret am Gottesdienst.
 - **Inhalte**: Liste, was am Anfang eines Dateinamens stehen kann; nötig für Inhalte aus mehreren Wörtern.
   Der Inhalt jeder Aufnahme steht in der Kategorie „Inhalt“ (vorgegeben, zunächst nicht im Menü) und in der Suche.
-- **Tags**: Standardmäßig behalten Dateien mit eigenem Titel- oder Album-Tag diese Namen; abschaltbar je Art.
-  Ohne Interpret-Tag steht bei einer Aufnahme der Sprecher, sonst die Art („Gottesdienst“); sie erscheint nicht
-  in der Interpretenliste.
+- **Tags**: Standardmäßig gilt der Dateiname, auch wenn die Datei Tags hat. Je Art lässt sich einstellen, dass
+  vorhandene Tags (Titel, Album, Interpret) Vorrang haben. Ohne Namen im Dateinamen und ohne Interpret-Tag steht
+  bei einer Aufnahme der Sprecher, sonst die Art („Gottesdienst“); die Art erscheint nicht in der Interpretenliste.
 - **Vorschau** zeigt vor dem Speichern je Art die Anzahl, die neuesten Beispiele und Dateien, die nicht zum
   Muster passen. **Speichern und anwenden** bildet die Alben sofort neu, ohne neuen Scan.
 

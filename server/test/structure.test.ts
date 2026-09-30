@@ -181,6 +181,24 @@ describe('Regelwerk in der Verwaltung', () => {
     expect((await get('/api/categories/sprecher/values')).items.map((v: any) => v.value)).toEqual(['Meier']);
   });
 
+  it('liest standardmäßig Inhalt - Titel - Sprecher, auch wenn die Datei Tags hat', async () => {
+    const folder = 'Audio Aufnahmen/2026/2026_09_20_Erntedank';
+    cloud.put(`${folder}/Predigt - Dankbarkeit - Pastor Meier.mp3`, mp3({ title: 'Aufnahme 3', artist: 'Mischpult' }, 80));
+    cloud.put(`${folder}/Lied - Nun danket alle Gott - Chor.mp3`, mp3({ title: 'Aufnahme 1', artist: 'Mischpult' }, 20));
+    cloud.put(`${folder}/Begrüßung.mp3`, mp3({ title: 'Aufnahme 0', artist: 'Mischpult' }, 10));
+    await ctx.scanner.scan();
+    const service = (await dated()).find((a) => a.date === '2026-09-20');
+    expect(service).toMatchObject({ title: 'Erntedank', speaker: 'Pastor Meier', artist: 'Pastor Meier' });
+    // Der Chor ist Interpret seines Liedes, aber nicht Sprecher des Gottesdienstes; ohne Namen im
+    // Dateinamen bleibt der Interpret aus dem Tag.
+    expect((await albumTracks(service.id)).map((t) => [t.title, t.artist])).toEqual([
+      ['Begrüßung', 'Mischpult'],
+      ['Lied: Nun danket alle Gott', 'Chor'],
+      ['Predigt: Dankbarkeit', 'Pastor Meier'],
+    ]);
+    expect((await get('/api/categories/sprecher/values')).items.map((v: any) => v.value)).toEqual(['Pastor Meier']);
+  });
+
   it('weist ungültige Muster verständlich ab', async () => {
     const structure = structuredClone(DEFAULT_STRUCTURE);
     structure.kinds[0]!.filePattern = '{datum}_{teil}';

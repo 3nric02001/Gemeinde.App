@@ -52,11 +52,11 @@ const EMPTY_KIND: RecordingKind = {
   plural: '',
   folder: '',
   folderPattern: '{datum}_{anlass}',
-  filePattern: '{inhalt} - {titel}',
+  filePattern: '{inhalt} - {titel} - {sprecher}',
   albumTitle: '{anlass}',
   trackTitle: '{inhalt}: {titel}',
   sermon: '',
-  preferTags: true,
+  preferTags: false,
 };
 
 type TextField = Exclude<keyof RecordingKind, 'preferTags'>;
@@ -191,7 +191,7 @@ export function StructurePanel() {
             {text(index, 'folder', 'Erkennen am Ordner', 'Ordnername irgendwo im Pfad; leer: alle übrigen Ordner mit Datum', 'z. B. Bibelstunden')}
             {text(index, 'sermon', 'Inhalt der Predigt', 'Liefert Sprecher und Bibelstelle; leer: alle Aufnahmen', 'z. B. Predigt')}
             {text(index, 'folderPattern', 'Ordnername', 'z. B. 2026_08_30_Einschulung', '{datum}_{anlass}')}
-            {text(index, 'filePattern', 'Dateiname (ohne Endung)', 'z. B. Predigt - Der gute Hirte', '{inhalt} - {titel}')}
+            {text(index, 'filePattern', 'Dateiname (ohne Endung)', 'z. B. Predigt - Der gute Hirte - Pastor Meier', '{inhalt} - {titel} - {sprecher}')}
             {text(index, 'albumTitle', 'Name des Albums', 'Leer oder ohne Wert: der Name der Art', '{anlass}')}
             {text(index, 'trackTitle', 'Titel einer Aufnahme', 'Leere Platzhalter fallen samt Trennern weg', '{inhalt}: {titel}')}
           </div>
@@ -201,7 +201,7 @@ export function StructurePanel() {
               checked={kind.preferTags}
               onChange={(e) => updateKind(index, { preferTags: (e.target as HTMLInputElement).checked })}
             />
-            Titel und Albumname aus den Tags der Datei behalten, wenn es welche gibt
+            Tags der Datei (Titel, Album, Interpret) statt des Dateinamens verwenden, wenn es welche gibt
           </label>
         </section>
       ))}

@@ -581,7 +581,9 @@ function applyRecordings(
     const artistTagged = track.artist !== UNKNOWN_ARTIST && track.artist !== parsed(track.path).artist;
     const title = file?.title ?? null;
     const content = file?.content ?? null;
-    const artist = recording && !artistTagged ? (file?.speaker ?? recording.speaker ?? recording.kind.name) : null;
+    // Name aus dem Dateinamen vor dem Tag, außer die Art bevorzugt Tags; ohne beides der Sprecher, sonst die Art
+    const named = file?.performer && !(recording!.kind.preferTags && artistTagged) ? file.performer : undefined;
+    const artist = recording ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name))) : null;
     if (title !== track.display_title || artist !== track.display_artist || content !== track.content) {
       setDisplay.run(title, artist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
       track.display_title = title;
