@@ -21,6 +21,8 @@ export interface Track {
   speaker?: string | null;
   /** Inhalt einer Aufnahme ("Lied", "Predigt") aus dem Regelwerk */
   content?: string | null;
+  /** Player laut Policies im Regelwerk: Predigt-Player oder Musik-Player; null: nach Länge */
+  player?: 'sermon' | 'music' | null;
 }
 
 export interface Album {

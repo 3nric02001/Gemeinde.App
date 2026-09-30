@@ -5,6 +5,9 @@ import { MANUAL_KEY_PREFIX, rebuildAlbums } from './albums.js';
 import { lastChange } from './changes.js';
 import { searchExtra, SPEAKER_TAGS, withOverride } from './metadata.js';
 import { getAlbum } from './queries.js';
+import type { Decision, Player } from './policies.js';
+import { compileStructure, getStructure, kindOfFolder, type KindSource } from './structure.js';
+import { foldValue } from './text.js';
 import { evaluateRules, listRules, parseCondition, ruleMatcher, type RuleCondition, type RuleTrack } from './rules.js';
 
 /**
@@ -50,6 +53,8 @@ export interface AlbumFields {
   passage?: string | null;
   description?: string | null;
   hidden?: boolean;
+  /** Art der Aufnahme von Hand ("Bibelstunde"); "" heißt keine Art (Musik), null: nach dem Regelwerk */
+  recording?: string | null;
 }
 
 interface AlbumRow {
@@ -91,31 +96,55 @@ function cleanText(value: string | null | undefined): string | null | undefined 
 
 const TEXT_FIELDS = ['title', 'artist', 'genre', 'speaker', 'passage', 'description'] as const;
 
+/** Art von Hand: muss es im Regelwerk geben; "" (keine Art) und null (automatisch) gehen immer */
+function checkRecording(db: DB, value: string | null | undefined): string | null | undefined {
+  if (value === undefined || value === null) return value;
+  const name = value.trim();
+  if (!name) return '';
+  const kind = getStructure(db).kinds.find((k) => foldValue(k.name) === foldValue(name));
+  if (!kind) throw new CurationError(400, `Die Art „${name}“ gibt es nicht (Verwaltung → Zuordnung)`);
+  return kind.name;
+}
+
 function writeOverride(db: DB, key: string, fields: AlbumFields): void {
   const current = (db
-    .prepare('SELECT title, artist, year, genre, speaker, passage, description, hidden, cover_id FROM album_overrides WHERE key = ?')
+    .prepare('SELECT title, artist, year, genre, speaker, passage, description, hidden, cover_id, recording FROM album_overrides WHERE key = ?')
     .get(key) as
-    | (Record<(typeof TEXT_FIELDS)[number], string | null> & { year: number | null; hidden: number; cover_id: number | null })
+    | (Record<(typeof TEXT_FIELDS)[number], string | null> & {
+        year: number | null;
+        hidden: number;
+        cover_id: number | null;
+        recording: string | null;
+      })
     | undefined) ?? {
     title: null, artist: null, year: null, genre: null, speaker: null, passage: null, description: null, hidden: 0, cover_id: null,
+    recording: null,
   };
+  const recording = checkRecording(db, fields.recording);
   const next: Record<string, unknown> = {
     key,
     year: fields.year !== undefined ? fields.year : current.year,
     hidden: fields.hidden !== undefined ? (fields.hidden ? 1 : 0) : current.hidden,
+    recording: recording !== undefined ? recording : current.recording,
   };
   for (const field of TEXT_FIELDS) next[field] = fields[field] !== undefined ? cleanText(fields[field]) ?? null : current[field];
   // Das Titelbild ändert nur setAlbumCover; die Zeile bleibt, solange eines gesetzt ist.
-  if (TEXT_FIELDS.every((field) => !next[field]) && next.year === null && !next.hidden && !current.cover_id) {
+  if (
+    TEXT_FIELDS.every((field) => !next[field]) &&
+    next.year === null &&
+    !next.hidden &&
+    next.recording === null &&
+    !current.cover_id
+  ) {
     db.prepare('DELETE FROM album_overrides WHERE key = ?').run(key);
     return;
   }
   db.prepare(
-    `INSERT INTO album_overrides (key, title, artist, year, genre, speaker, passage, description, hidden)
-     VALUES (@key, @title, @artist, @year, @genre, @speaker, @passage, @description, @hidden)
+    `INSERT INTO album_overrides (key, title, artist, year, genre, speaker, passage, description, hidden, recording)
+     VALUES (@key, @title, @artist, @year, @genre, @speaker, @passage, @description, @hidden, @recording)
      ON CONFLICT(key) DO UPDATE SET title = excluded.title, artist = excluded.artist, year = excluded.year,
        genre = excluded.genre, speaker = excluded.speaker, passage = excluded.passage, description = excluded.description,
-       hidden = excluded.hidden`,
+       hidden = excluded.hidden, recording = excluded.recording`,
   ).run(next);
 }
 
@@ -130,9 +159,10 @@ export function albumDetail(db: DB, id: number) {
   if (!album) throw new CurationError(404, 'Album nicht gefunden');
   const row = findAlbum(db, id);
   const override = db
-    .prepare('SELECT title, artist, year, genre, speaker, passage, description FROM album_overrides WHERE key = ?')
+    .prepare('SELECT title, artist, year, genre, speaker, passage, description, recording FROM album_overrides WHERE key = ?')
     .get(row.key) as
     | {
+        recording: string | null;
         title: string | null;
         artist: string | null;
         year: number | null;
@@ -178,19 +208,41 @@ export function albumDetail(db: DB, id: number) {
   // Je Titel: was Datei und Regelwerk ergeben und was in der Verwaltung korrigiert wurde
   const trackEdits = db
     .prepare(
-      `SELECT t.id, coalesce(t.display_title, t.title) AS fileTitle, o.title, o.speaker,
+      `SELECT t.id, coalesce(t.display_title, t.title) AS fileTitle, o.title, o.speaker, o.sermon, o.player, t.policy AS auto,
               (SELECT value FROM track_tags WHERE track_id = t.id AND tag IN (SELECT value FROM json_each(?)) LIMIT 1) AS fileSpeaker
        FROM album_tracks at JOIN tracks t ON t.id = at.track_id LEFT JOIN track_overrides o ON o.path = t.path
        WHERE at.album_id = ? ORDER BY at.position`,
     )
-    .all(JSON.stringify(SPEAKER_TAGS), id) as TrackEdit[];
+    .all(JSON.stringify(SPEAKER_TAGS), id) as Array<TrackEdit & { sermon: number | null; auto: string | null }>;
   const customCover = db.prepare('SELECT 1 FROM album_overrides WHERE key = ? AND cover_id IS NOT NULL').get(row.key) !== undefined;
   const { folder } = db.prepare('SELECT folder FROM albums WHERE id = ?').get(id) as { folder: string };
+  // Woher die Art kommt (von Hand, Regel in "Art bestimmen", Vorgabe für Ordner mit Datum), wie in rebuildAlbums
+  let recordingSource: KindSource = { by: 'none' };
+  if (row.kind === 'auto') {
+    const files = db.prepare('SELECT path, title, artist, album, genre FROM tracks WHERE album_key = ?').all(row.key) as Array<{
+      path: string;
+      title: string;
+      artist: string;
+      album: string | null;
+      genre: string | null;
+    }>;
+    recordingSource = override?.recording != null
+      ? { by: 'manual' }
+      : folder
+        ? kindOfFolder(compileStructure(getStructure(db)), folder, files).source
+        : album.recording
+          ? { by: 'default' }
+          : { by: 'none' };
+  }
   return {
     ...album,
     /** Albumordner in der Nextcloud; bei Gottesdiensten kommt das Datum aus seinem Namen */
     folder,
-    trackEdits,
+    trackEdits: trackEdits.map((edit) => ({
+      ...edit,
+      sermon: edit.sermon === null ? null : edit.sermon === 1,
+      auto: edit.auto ? (JSON.parse(edit.auto) as Decision) : {},
+    })),
     customCover,
     lastChange: lastChange(db, id) ?? null,
     rules: listRules(db, id),
@@ -205,6 +257,10 @@ export function albumDetail(db: DB, id: number) {
       passage: override?.passage ?? null,
       description: override?.description ?? null,
     },
+    /** Art von Hand ("" = keine Art), null: nach dem Regelwerk */
+    manualRecording: override?.recording ?? null,
+    /** Woher die Art kommt */
+    recordingSource,
     excluded,
     missing,
   };
@@ -223,7 +279,7 @@ export function createManualAlbum(
         `INSERT INTO albums (key, kind, title, artist, folder, created_at) VALUES (?, 'manual', ?, '', '', ?) RETURNING id`,
       )
       .get(key, title, Date.now()) as { id: number };
-    writeOverride(db, key, { ...fields, title });
+    writeOverride(db, key, { ...fields, title, recording: undefined });
     if (fields.trackIds?.length) addTracks(db, id, fields.trackIds, { move: fields.move, rebuild: false });
     for (const rule of fields.rules ?? []) insertRule(db, id, rule);
     return id;
@@ -237,6 +293,7 @@ export function updateAlbum(db: DB, id: number, fields: AlbumFields): void {
   if (album.kind === 'manual' && fields.title !== undefined && !cleanText(fields.title)) {
     throw new CurationError(400, 'Das Album braucht einen Titel');
   }
+  if (album.kind === 'manual' && fields.recording) throw new CurationError(400, 'Playlists haben keine Art');
   writeOverride(db, album.key, fields);
   rebuildAlbums(db);
 }
@@ -423,11 +480,17 @@ interface TrackEdit {
   speaker: string | null;
   /** Sprecher aus den Tags der Datei */
   fileSpeaker: string | null;
+  /** Korrektur des Players, null: nach den Policies */
+  player: Player | null;
 }
 
 export interface TrackFields {
   title?: string | null;
   speaker?: string | null;
+  /** Gilt als Predigt; null: nach den Policies */
+  sermon?: boolean | null;
+  /** Predigt- oder Musik-Player; null: nach den Policies */
+  player?: Player | null;
 }
 
 /**
@@ -444,21 +507,25 @@ export function updateTrack(db: DB, albumId: number, trackId: number, fields: Tr
       path: string;
       fileTitle: string;
     };
-    const current = (db.prepare('SELECT title, speaker FROM track_overrides WHERE path = ?').get(track.path) as
-      | { title: string | null; speaker: string | null }
-      | undefined) ?? { title: null, speaker: null };
+    const current = (db.prepare('SELECT title, speaker, sermon, player FROM track_overrides WHERE path = ?').get(track.path) as
+      | { title: string | null; speaker: string | null; sermon: number | null; player: Player | null }
+      | undefined) ?? { title: null, speaker: null, sermon: null, player: null };
     const next = {
       title: fields.title !== undefined ? (cleanText(fields.title) ?? null) : current.title,
       speaker: fields.speaker !== undefined ? (cleanText(fields.speaker) ?? null) : current.speaker,
+      sermon: fields.sermon !== undefined ? (fields.sermon === null ? null : fields.sermon ? 1 : 0) : current.sermon,
+      player: fields.player !== undefined ? fields.player : current.player,
     };
     // Derselbe Name wie aus Datei und Regelwerk ist keine Korrektur.
     if (next.title === track.fileTitle) next.title = null;
-    if (!next.title && !next.speaker) db.prepare('DELETE FROM track_overrides WHERE path = ?').run(track.path);
-    else {
+    if (!next.title && !next.speaker && next.sermon === null && next.player === null) {
+      db.prepare('DELETE FROM track_overrides WHERE path = ?').run(track.path);
+    } else {
       db.prepare(
-        `INSERT INTO track_overrides (path, title, speaker) VALUES (?, ?, ?)
-         ON CONFLICT(path) DO UPDATE SET title = excluded.title, speaker = excluded.speaker`,
-      ).run(track.path, next.title, next.speaker);
+        `INSERT INTO track_overrides (path, title, speaker, sermon, player) VALUES (@path, @title, @speaker, @sermon, @player)
+         ON CONFLICT(path) DO UPDATE SET title = excluded.title, speaker = excluded.speaker, sermon = excluded.sermon,
+           player = excluded.player`,
+      ).run({ path: track.path, ...next });
     }
     const tags = (
       db

@@ -1,5 +1,6 @@
 import type { DB } from '../db.js';
 import { getTracksByIds, searchAlbums } from './queries.js';
+import { LONG_TRACK_SECONDS } from './structure.js';
 
 /**
  * Persönliches je Hörer: Favoriten, zuletzt gehörte Alben und die Stelle zum Weiterhören.
@@ -8,8 +9,13 @@ import { getTracksByIds, searchAlbums } from './queries.js';
 
 export type FavoriteKind = 'track' | 'album';
 
-/** Ab dieser Länge merkt sich die App die Stelle (Predigten, Gottesdienste), kürzere Titel beginnen vorne. */
-export const RESUME_MIN_DURATION = 10 * 60;
+/**
+ * Ab dieser Länge merkt sich die App die Stelle (Predigten, Gottesdienste), kürzere Titel beginnen vorne.
+ * Das gilt nur, wenn keine Policy den Player festlegt: Predigt-Player heißt immer weiterhören, Musik-Player nie.
+ */
+export const RESUME_MIN_DURATION = LONG_TRACK_SECONDS;
+/** Titel mit Weiterhören (Parameter: Mindestlänge) */
+const RESUMABLE = `(t.playback = 'sermon' OR (t.playback IS NULL AND coalesce(l.duration, t.duration) >= ?))`;
 /** So nah am Ende gilt ein Titel als fertig gehört. */
 const FINISHED_MARGIN = 30;
 
@@ -73,7 +79,7 @@ export function listProgress(db: DB, userId: number): Array<{ trackId: number; p
   return db
     .prepare(
       `SELECT l.track_id AS trackId, l.position, ${LENGTH} AS duration FROM listening l JOIN tracks t ON t.id = l.track_id
-       WHERE l.user_id = ? AND ${LENGTH} >= ? AND l.position > 0 AND l.position < ${LENGTH} - ?
+       WHERE l.user_id = ? AND ${RESUMABLE} AND l.position > 0 AND l.position < ${LENGTH} - ?
        ORDER BY l.updated_at DESC LIMIT 500`,
     )
     .all(userId, RESUME_MIN_DURATION, FINISHED_MARGIN) as Array<{ trackId: number; position: number; duration: number }>;
@@ -84,7 +90,7 @@ export function listenerHome(db: DB, userId: number) {
   const unfinished = db
     .prepare(
       `SELECT l.track_id AS id, l.position, ${LENGTH} AS duration FROM listening l JOIN tracks t ON t.id = l.track_id
-       WHERE l.user_id = ? AND ${LENGTH} >= ? AND l.position >= 15 AND l.position < ${LENGTH} - ?
+       WHERE l.user_id = ? AND ${RESUMABLE} AND l.position >= 15 AND l.position < ${LENGTH} - ?
        ORDER BY l.updated_at DESC LIMIT 6`,
     )
     .all(userId, RESUME_MIN_DURATION, FINISHED_MARGIN) as Array<{ id: number; position: number; duration: number }>;

@@ -1,9 +1,9 @@
-import { isLong } from '../me';
+import { usesSermonPlayer } from '../me';
 import { player, usePlayerSelect } from '../player';
 import { Icon, SkipIcon } from './Icon';
 
-/** Lange Titel (Predigten) zeigen statt Zufall und Wiederholen die Sprungknöpfe */
-export const useLongTrack = () => usePlayerSelect((s) => isLong(s.duration || s.current?.duration));
+/** Predigten (laut Policies, sonst lange Titel) zeigen statt Zufall und Wiederholen die Sprungknöpfe */
+export const useLongTrack = () => usePlayerSelect((s) => usesSermonPlayer(s.current, s.duration));
 
 export function Controls({ large = false }: { large?: boolean }) {
   const playing = usePlayerSelect((s) => s.playing);

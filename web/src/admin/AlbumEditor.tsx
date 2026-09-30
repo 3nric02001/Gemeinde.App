@@ -14,6 +14,7 @@ import {
   type AlbumFields,
   type Change,
   type TrackEdit,
+  type TrackFields,
 } from './api';
 import { Rules } from './Rules';
 import { Switch } from './Switch';
@@ -163,6 +164,9 @@ export function AlbumEditor({ id, onError }: Props) {
       {error && <p class="admin-error" role="alert">{error}</p>}
 
       <DetailsForm key={revision} album={album} busy={busy} onSave={(fields) => run(() => adminRequest('PATCH', base, fields))} />
+      {album.kind === 'auto' && (
+        <KindForm album={album} busy={busy} onSave={(recording) => run(() => adminRequest('PATCH', base, { recording }))} />
+      )}
 
       <section class="shelf">
         <div class="section-head">
@@ -184,7 +188,7 @@ export function AlbumEditor({ id, onError }: Props) {
         ) : (
           <>
             <p class="admin-hint admin-tracks-hint">
-              Mit dem Stift korrigierst du Name und Sprecher eines Titels. Mit den Häkchen wählst du Titel aus, um sie in eine
+              Mit dem Stift korrigierst du Name, Sprecher, Predigt und Player eines Titels. Mit den Häkchen wählst du Titel aus, um sie in eine
               Playlist zu übernehmen.
             </p>
             <ol class="admin-tracks">
@@ -212,6 +216,11 @@ export function AlbumEditor({ id, onError }: Props) {
                     </span>
                     <span class="track-time">
                       {viaRule.has(track.id) && <span class="badge badge-muted" title="Über eine Regel im Album">Regel</span>}{' '}
+                      {track.player && (
+                        <span class="badge badge-muted" title={policySource(edit, 'player')}>
+                          {track.player === 'sermon' ? 'Predigt-Player' : 'Musik-Player'}
+                        </span>
+                      )}{' '}
                       {formatTime(track.duration)}
                     </span>
                     <span class="admin-track-actions">
@@ -220,7 +229,7 @@ export function AlbumEditor({ id, onError }: Props) {
                         class="icon-button"
                         aria-label={`${track.title} bearbeiten`}
                         aria-expanded={editing === track.id}
-                        title="Name und Sprecher bearbeiten"
+                        title="Name, Sprecher und Player bearbeiten"
                         disabled={busy}
                         onClick={() => setEditing(editing === track.id ? undefined : track.id)}
                       >
@@ -259,6 +268,7 @@ export function AlbumEditor({ id, onError }: Props) {
                       <TrackForm
                         track={track}
                         edit={edit}
+                        recording={Boolean(album.recording)}
                         busy={busy}
                         onCancel={() => setEditing(undefined)}
                         onSave={async (fields) => {
@@ -549,27 +559,108 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
   );
 }
 
-/** Name und Sprecher eines einzelnen Titels korrigieren; leer heißt: wie in der Datei. */
+const AUTOMATIC = '\u0000auto';
+
+/** Woher die Art eines Albums kommt, in Worten */
+function kindSource(album: AdminAlbumDetail): string {
+  const source = album.recordingSource;
+  if (album.manualRecording != null || source?.by === 'manual') return 'Von Hand festgelegt, geht dem Regelwerk vor';
+  if (source?.by === 'rule') return `Aus der Regel „${source.rule}“ in Verwaltung → Zuordnung → Art bestimmen`;
+  if (source?.by === 'default') return 'Keine Regel passt: Vorgabe für Ordner mit Datum (Verwaltung → Zuordnung)';
+  return 'Keine Regel in Verwaltung → Zuordnung → Art bestimmen passt';
+}
+
+/**
+ * Art des Albums (Gottesdienst, Bibelstunde, eigene Arten aus Verwaltung → Zuordnung) von Hand festlegen.
+ * Das geht den Bedingungen der Arten vor; „Keine Art“ macht aus einer Aufnahme wieder Musik.
+ */
+function KindForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: boolean; onSave: (recording: string | null) => void }) {
+  const [kinds, setKinds] = useState<string[]>();
+  useEffect(() => {
+    adminRequest<{ structure: { kinds: Array<{ name: string }> } }>('GET', '/api/admin/structure')
+      .then((body) => setKinds(body.structure.kinds.map((kind) => kind.name)))
+      .catch(() => setKinds([]));
+  }, []);
+  const manual = album.manualRecording ?? null;
+  const value = manual === null ? AUTOMATIC : manual;
+  // Eine Art, die es im Regelwerk nicht mehr gibt, bleibt sichtbar, bis sie geändert wird
+  const names = [...(kinds ?? []), ...(manual && kinds && !kinds.includes(manual) ? [manual] : [])];
+  return (
+    <div class="admin-panel admin-form admin-kind">
+      <div class="field-wrap">
+        <label class="field">
+          <span>Art</span>
+          <select
+            value={value}
+            disabled={busy || !kinds}
+            onChange={(e) => {
+              const next = (e.target as HTMLSelectElement).value;
+              onSave(next === AUTOMATIC ? null : next);
+            }}
+          >
+            <option value={AUTOMATIC}>Automatisch{manual === null && album.recording ? ` (${album.recording})` : manual === null ? ' (Musik)' : ''}</option>
+            {names.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+            <option value="">Keine Art (Musik)</option>
+          </select>
+        </label>
+        <p class="field-source">{kindSource(album)}</p>
+      </div>
+    </div>
+  );
+}
+
+const PLAYER_NAMES = { sermon: 'Predigt-Player', music: 'Musik-Player' } as const;
+
+/** Woher Predigt oder Player eines Titels kommen: Korrektur, Policy oder Länge */
+function policySource(edit: TrackEdit | undefined, effect: 'sermon' | 'player'): string {
+  if (edit?.[effect] !== null && edit?.[effect] !== undefined) return 'Von Hand festgelegt';
+  const by = effect === 'sermon' ? edit?.auto?.sermonBy : edit?.auto?.playerBy;
+  if (by) return `Policy „${by}“`;
+  return effect === 'player' ? 'Keine Policy: nach Länge (ab 10 Minuten Predigt-Player)' : 'Keine Policy';
+}
+
+/** Was die Policies ergeben, als Text für „Automatisch (…)“ */
+function autoLabel(edit: TrackEdit | undefined, effect: 'sermon' | 'player'): string {
+  if (effect === 'sermon') {
+    const value = edit?.auto?.sermon ? 'ja' : 'nein';
+    return edit?.auto?.sermonBy ? `${value}, Policy „${edit.auto.sermonBy}“` : `${value}, keine Policy`;
+  }
+  const player = edit?.auto?.player;
+  return player ? `${PLAYER_NAMES[player]}, Policy „${edit!.auto!.playerBy}“` : 'nach Länge, keine Policy';
+}
+
+/** Name, Sprecher, Predigt und Player eines einzelnen Titels korrigieren; leer heißt: wie in der Datei bzw. nach den Policies. */
 function TrackForm({
   track,
   edit,
+  recording,
   busy,
   onSave,
   onCancel,
 }: {
   track: Track;
   edit: TrackEdit | undefined;
+  /** Album ist eine Aufnahme (Gottesdienst …): dann zählt „gilt als Predigt“ */
+  recording: boolean;
   busy: boolean;
-  onSave: (fields: { title?: string | null; speaker?: string | null }) => void;
+  onSave: (fields: TrackFields) => void;
   onCancel: () => void;
 }) {
   const currentSpeaker = edit?.speaker ?? edit?.fileSpeaker ?? '';
   const [title, setTitle] = useState(track.title);
   const [speaker, setSpeaker] = useState(currentSpeaker);
-  const changes: { title?: string | null; speaker?: string | null } = {};
+  const [sermon, setSermon] = useState<boolean | null>(edit?.sermon ?? null);
+  const [playerChoice, setPlayerChoice] = useState<'sermon' | 'music' | null>(edit?.player ?? null);
+  const changes: TrackFields = {};
   if (title.trim() !== track.title) changes.title = title.trim() || null;
   if (speaker.trim() !== currentSpeaker) changes.speaker = speaker.trim() || null;
-  const corrected = Boolean(edit?.title || edit?.speaker);
+  if (sermon !== (edit?.sermon ?? null)) changes.sermon = sermon;
+  if (playerChoice !== (edit?.player ?? null)) changes.player = playerChoice;
+  const corrected = Boolean(edit?.title || edit?.speaker || (edit?.sermon ?? null) !== null || (edit?.player ?? null) !== null);
 
   return (
     <form
@@ -586,6 +677,11 @@ function TrackForm({
             <input value={title} maxLength={300} placeholder={edit?.fileTitle} autoFocus onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
           </label>
           {edit?.title && <p class="field-source">Automatisch: „{edit.fileTitle}“</p>}
+          {edit?.auto?.contentBy && (
+            <p class="field-source">
+              Inhalt „{edit.auto.content}“ laut Policy „{edit.auto.contentBy}“
+            </p>
+          )}
         </div>
         <div class="field-wrap">
           <label class="field">
@@ -599,6 +695,37 @@ function TrackForm({
           </label>
           {edit?.speaker && <p class="field-source">Automatisch: {edit.fileSpeaker ? `„${edit.fileSpeaker}“` : 'kein Sprecher'}</p>}
         </div>
+        {recording && (
+          <div class="field-wrap">
+            <label class="field">
+              <span>Gilt als Predigt</span>
+              <select
+                value={sermon === null ? '' : sermon ? 'yes' : 'no'}
+                onChange={(e) => {
+                  const value = (e.target as HTMLSelectElement).value;
+                  setSermon(value === '' ? null : value === 'yes');
+                }}
+              >
+                <option value="">Automatisch ({autoLabel(edit, 'sermon')})</option>
+                <option value="yes">Ja, liefert Sprecher und Bibelstelle</option>
+                <option value="no">Nein</option>
+              </select>
+            </label>
+          </div>
+        )}
+        <div class="field-wrap">
+          <label class="field">
+            <span>Player</span>
+            <select
+              value={playerChoice ?? ''}
+              onChange={(e) => setPlayerChoice(((e.target as HTMLSelectElement).value || null) as 'sermon' | 'music' | null)}
+            >
+              <option value="">Automatisch ({autoLabel(edit, 'player')})</option>
+              <option value="sermon">Predigt-Player</option>
+              <option value="music">Musik-Player</option>
+            </select>
+          </label>
+        </div>
       </div>
       <p class="admin-hint">Die Korrektur bleibt auch nach neuen Scans erhalten; die Datei in der Nextcloud ändert sich nicht.</p>
       <div class="actions">
@@ -609,8 +736,13 @@ function TrackForm({
           Abbrechen
         </button>
         {corrected && (
-          <button type="button" class="more-link" disabled={busy} onClick={() => onSave({ title: null, speaker: null })}>
-            Wie in der Datei
+          <button
+            type="button"
+            class="more-link"
+            disabled={busy}
+            onClick={() => onSave({ title: null, speaker: null, sermon: null, player: null })}
+          >
+            Alles automatisch
           </button>
         )}
       </div>

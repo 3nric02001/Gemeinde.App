@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { streamUrl, trackCoverUrl, type Album, type Track } from './api';
-import { countPlay, isLong, resumePosition, saveProgress } from './me';
+import { countPlay, resumePosition, saveProgress, usesSermonPlayer } from './me';
 import { isDownloaded, readDownload, ready as offlineReady } from './offline';
 import { PRELOAD_LEAD_SECONDS, Preloader } from './preload';
 import { Queue, type QueueState, type RepeatMode } from './queue';
@@ -269,10 +269,10 @@ export class Player {
     this.emit();
   }
 
-  /** Lange Titel (Predigten) bekommen Sprünge, Tempo und Weiterhören */
+  /** Predigten (laut Policies, sonst lange Titel) bekommen Sprünge, Tempo und Weiterhören */
   private long(): boolean {
     const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : this.queue.current?.track.duration;
-    return isLong(duration);
+    return usesSermonPlayer(this.queue.current?.track, duration);
   }
 
   private applyRate(): void {
@@ -309,7 +309,7 @@ export class Player {
     const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : loaded.track.duration;
     loaded.savedAt = Date.now();
     loaded.recorded = true;
-    saveProgress({ id: loaded.track.id, duration }, this.audio.ended ? (duration ?? position) : position);
+    saveProgress({ id: loaded.track.id, duration, player: loaded.track.player }, this.audio.ended ? (duration ?? position) : position);
   }
 
   setVolume(volume: number): void {

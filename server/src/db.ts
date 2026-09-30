@@ -581,6 +581,20 @@ export const migrations: string[] = [
   ALTER TABLE tracks ADD COLUMN raw_title TEXT;
   UPDATE tracks SET raw_title = display_title;
   `,
+  `
+  -- Policies im Regelwerk (library/policies.ts): Player je Titel ('sermon' Predigt-Player, 'music' Musik-Player,
+  -- NULL: keine Policy entscheidet, dann nach Länge). Füllt rebuildAlbums.
+  ALTER TABLE tracks ADD COLUMN playback TEXT;
+  -- 1: gilt laut Policies als Predigt (liefert Sprecher und Bibelstelle des Albums)
+  ALTER TABLE tracks ADD COLUMN sermon INTEGER NOT NULL DEFAULT 0;
+  -- Was die Policies ohne Korrektur ergeben, mit Namen der Policy (JSON, für die Verwaltung)
+  ALTER TABLE tracks ADD COLUMN policy TEXT;
+  -- Korrekturen je Titel: gilt als Predigt (1/0) und Player; NULL: nach den Policies
+  ALTER TABLE track_overrides ADD COLUMN sermon INTEGER;
+  ALTER TABLE track_overrides ADD COLUMN player TEXT;
+  -- Art eines Albums von Hand ("Bibelstunde"); '' heißt keine Art, NULL: nach dem Regelwerk
+  ALTER TABLE album_overrides ADD COLUMN recording TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

@@ -14,9 +14,15 @@ export interface AlbumFields {
   speaker: string | null;
   passage: string | null;
   description: string | null;
+  /** Art der Aufnahme von Hand; "" heißt keine Art, null: nach dem Regelwerk */
+  recording?: string | null;
 }
 
 export interface AdminAlbumDetail extends AlbumDetail {
+  /** Art von Hand ("" = keine Art), null: nach dem Regelwerk (Verwaltung → Zuordnung) */
+  manualRecording?: string | null;
+  /** Woher die Art kommt: von Hand, Regel in „Art bestimmen“, Vorgabe für Ordner mit Datum oder keine */
+  recordingSource?: { by: 'manual' } | { by: 'rule'; rule: string } | { by: 'default' } | { by: 'none' };
   kind: 'auto' | 'manual';
   hidden: boolean;
   /** Vom Admin festgelegte Werte; null heißt automatisch */
@@ -46,6 +52,20 @@ export interface TrackEdit {
   title: string | null;
   speaker: string | null;
   fileSpeaker: string | null;
+  /** Korrektur: gilt als Predigt; null: nach den Policies */
+  sermon?: boolean | null;
+  /** Korrektur des Players; null: nach den Policies */
+  player?: 'sermon' | 'music' | null;
+  /** Was die Policies im Regelwerk ergeben, mit Namen der Policy */
+  auto?: { sermon?: boolean; sermonBy?: string; player?: 'sermon' | 'music'; playerBy?: string; content?: string; contentBy?: string };
+}
+
+/** Felder, die sich je Titel korrigieren lassen; null heißt automatisch */
+export interface TrackFields {
+  title?: string | null;
+  speaker?: string | null;
+  sermon?: boolean | null;
+  player?: 'sermon' | 'music' | null;
 }
 
 export interface Change {
