@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Admin } from './admin/Admin';
 import { loadAuth, useAuth } from './auth';
 import { NowPlaying } from './components/NowPlaying';
+import { Onboarding } from './components/Onboarding';
 import { Sidebar, TabBar } from './components/Nav';
 import { PlayerBar } from './components/PlayerBar';
 import { Album } from './pages/Album';
@@ -81,7 +82,7 @@ export function App() {
 
 function Shell() {
   const location = useLocation();
-  const { offline } = useAuth();
+  const { offline, user } = useAuth();
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -111,6 +112,7 @@ function Shell() {
       <PlayerBar onExpand={() => setExpanded(true)} />
       <TabBar path={location.path} />
       {expanded && <NowPlaying onClose={() => setExpanded(false)} />}
+      {user?.onboarded === false && !offline && <Onboarding />}
     </div>
   );
 }

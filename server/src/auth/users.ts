@@ -379,3 +379,13 @@ export function deleteUser(db: DB, id: number): void {
   if (user.kind === 'local') throw new AuthError(400, 'Der lokale Admin kann nicht gelöscht werden');
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
 }
+
+/** Hat der Benutzer die Einführung schon gesehen? Liegt am Benutzer, damit sie auf keinem Gerät wiederkommt. */
+export function isOnboarded(db: DB, userId: number): boolean {
+  const row = db.prepare('SELECT onboarded_at FROM users WHERE id = ?').get(userId) as { onboarded_at: number | null } | undefined;
+  return Boolean(row?.onboarded_at);
+}
+
+export function markOnboarded(db: DB, userId: number): void {
+  db.prepare('UPDATE users SET onboarded_at = coalesce(onboarded_at, ?) WHERE id = ?').run(Date.now(), userId);
+}

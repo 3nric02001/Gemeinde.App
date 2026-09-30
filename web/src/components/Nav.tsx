@@ -15,13 +15,12 @@ const albums: NavItem = { href: '/alben', label: 'Alben', icon: 'albums', match:
 const active = (item: NavItem, path: string) => item.match(sectionPath(path));
 const dates: NavItem = { href: '/datum', label: 'Datum', icon: 'calendar', match: (p) => p.startsWith('/datum') };
 
-/** Seitenleiste am Rechner: Platz für alles */
+/** Seitenleiste am Rechner; alle Titel gibt es über Suche und Alben, die Seite /titel bleibt unter „Mehr“ */
 const items: NavItem[] = [
   start,
   search,
   albums,
   dates,
-  { href: '/titel', label: 'Titel', icon: 'tracks', match: (p) => p.startsWith('/titel') },
   { href: '/favoriten', label: 'Favoriten', icon: 'heart', match: (p) => p.startsWith('/favoriten') },
 ];
 

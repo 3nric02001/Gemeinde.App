@@ -137,8 +137,13 @@ describe('Lokaler Admin', () => {
     const cookie = sessionOf(res)!;
 
     expect((await as(cookie, { method: 'GET', url: '/api/auth/status' })).json()).toMatchObject({
-      user: { name: 'Administrator', role: 'admin', kind: 'local' },
+      user: { name: 'Administrator', role: 'admin', kind: 'local', onboarded: false },
     });
+    // Einführung einmal gesehen: gilt für alle Sitzungen dieses Benutzers
+    expect((await as(cookie, { method: 'POST', url: '/api/me/onboarding' })).statusCode).toBe(204);
+    expect((await ctx.app.inject({ method: 'POST', url: '/api/me/onboarding' })).statusCode).toBe(401);
+    const second = sessionOf(await localLogin())!;
+    expect((await as(second, { method: 'GET', url: '/api/auth/status' })).json()).toMatchObject({ user: { onboarded: true } });
     expect((await as(cookie, { method: 'GET', url: '/api/albums' })).statusCode).toBe(200);
     expect((await as(cookie, { method: 'GET', url: '/api/admin/users' })).statusCode).toBe(200);
 

@@ -10,6 +10,8 @@ export interface CurrentUser {
   name: string;
   role: Role;
   kind: 'local' | 'oidc';
+  /** Einführung schon gesehen; false zeigt sie (fehlt offline, dann nicht zeigen) */
+  onboarded?: boolean;
 }
 
 export interface AuthState {
@@ -110,6 +112,18 @@ export async function logout(): Promise<void> {
 export function loginOidc(): void {
   const returnTo = window.location.pathname + window.location.search;
   window.location.assign(`/api/auth/oidc/start?returnTo=${encodeURIComponent(returnTo)}`);
+}
+
+/** Einführung (erneut) zeigen, etwa aus "Mehr" */
+export function showOnboarding(): void {
+  if (state.user) set({ user: { ...state.user, onboarded: false } });
+}
+
+/** Einführung fertig oder übersprungen: gleich schließen und am Benutzer merken, damit sie auf keinem Gerät wiederkommt. */
+export function finishOnboarding(): void {
+  if (!state.user) return;
+  set({ user: { ...state.user, onboarded: true } });
+  void fetch('/api/me/onboarding', { method: 'POST' }).catch(() => undefined);
 }
 
 /** Nach einer Änderung in der Verwaltung sofort überall den neuen Namen zeigen */
