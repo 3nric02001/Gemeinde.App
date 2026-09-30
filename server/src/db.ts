@@ -555,6 +555,19 @@ export const migrations: string[] = [
     WHERE mime IN ('audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/opus', 'application/ogg')
        OR lower(path) LIKE '%.mp3' OR lower(path) LIKE '%.ogg' OR lower(path) LIKE '%.oga' OR lower(path) LIKE '%.opus';
   `,
+  `
+  -- Ersetzungen für Tippfehler in Titeln und Albumnamen (library/replacements.ts), z. B. "Tema" → "Thema".
+  CREATE TABLE title_replacements (
+    id          INTEGER PRIMARY KEY,
+    search      TEXT NOT NULL,
+    replacement TEXT NOT NULL,
+    whole_word  INTEGER NOT NULL DEFAULT 1,
+    created_at  INTEGER NOT NULL
+  );
+  -- Titel aus Datei und Regelwerk vor den Ersetzungen (für deren Vorschau); NULL: wie title. Füllt rebuildAlbums.
+  ALTER TABLE tracks ADD COLUMN raw_title TEXT;
+  UPDATE tracks SET raw_title = display_title;
+  `,
 ];
 
 export function openDatabase(path: string): DB {
