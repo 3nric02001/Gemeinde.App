@@ -1,9 +1,12 @@
 import type { Track } from '../api';
-import { download, removeDownloads, useOffline } from '../offline';
+import { download, keepFavorites, removeDownloads, useOffline } from '../offline';
 import { Icon } from './Icon';
 
-/** Album oder Gottesdienst offline verfügbar machen; zeigt den Fortschritt als Ring. */
-export function DownloadButton({ tracks }: { tracks: Track[] }) {
+/**
+ * Album oder Gottesdienst offline verfügbar machen; zeigt den Fortschritt als Ring.
+ * `favorites`: die Favoriten-Playlist, die offline bleibt und neue Favoriten von selbst mitnimmt.
+ */
+export function DownloadButton({ tracks, favorites = false }: { tracks: Track[]; favorites?: boolean }) {
   const offline = useOffline();
   if (!offline.enabled || !tracks.length) return null;
   const saved = tracks.filter((track) => offline.ids.has(track.id)).length;
@@ -26,17 +29,20 @@ export function DownloadButton({ tracks }: { tracks: Track[] }) {
     );
   }
 
-  const all = saved === tracks.length;
+  const all = favorites ? Boolean(offline.favorites) : saved === tracks.length;
   return (
     <button
       type="button"
       class={`icon-button download-button${all ? ' is-on' : ''}`}
       aria-label={all ? 'Offline verfügbar, tippen zum Löschen' : 'Herunterladen für offline'}
-      title={all ? 'Offline verfügbar' : 'Herunterladen für offline'}
+      title={all ? (favorites ? 'Offline verfügbar, neue Favoriten kommen dazu' : 'Offline verfügbar') : 'Herunterladen für offline'}
       aria-pressed={all}
       onClick={(event) => {
         event.stopPropagation();
-        if (!all) download(tracks);
+        if (favorites) {
+          if (!all) void keepFavorites(true);
+          else if (window.confirm('Offline-Kopie der Favoriten von diesem Gerät löschen?')) void keepFavorites(false);
+        } else if (!all) download(tracks);
         else if (window.confirm('Offline-Kopie von diesem Gerät löschen?')) void removeDownloads(tracks.map((track) => track.id));
       }}
     >

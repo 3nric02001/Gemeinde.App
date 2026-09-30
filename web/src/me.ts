@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { clearCache, getJson, type Album, type Track } from './api';
 import { sessionExpired } from './auth';
+import { syncFavorites } from './offline';
 import { sermonMinSeconds } from './playerSettings';
 
 /**
@@ -34,6 +35,8 @@ function set(next: Partial<State>): void {
   if (next.favorites) {
     state.trackIds = new Set(next.favorites.tracks.map((t) => t.id));
     state.albumIds = new Set(next.favorites.albums.map((a) => a.id));
+    // Sind die Favoriten offline gewünscht, kommen neue Titel gleich mit aufs Gerät.
+    void syncFavorites(next.favorites.tracks).catch(() => undefined);
   }
   listeners.forEach((listener) => listener());
 }
@@ -90,6 +93,9 @@ async function send(method: 'PUT' | 'POST' | 'DELETE', url: string, body?: unkno
   if (res.status === 401) sessionExpired();
   if (!res.ok) throw new Error(`Fehler ${res.status}`);
 }
+
+/** Die Favoriten-Titel als Playlist: "Jetzt läuft" führt zu ihr zurück. */
+export const FAVORITES_CONTEXT = { title: 'Favoriten', href: '/favoriten' };
 
 export const isFavorite = (kind: 'track' | 'album', id: number) =>
   (kind === 'track' ? state.trackIds : state.albumIds).has(id);

@@ -4,7 +4,7 @@ import { trackCoverUrl, type Track } from '../src/api';
 import { getAuth, loadAuth, logout } from '../src/auth';
 import { importKey, seal, unseal } from '../src/offline/crypto';
 import { idbGetAll } from '../src/offline/idb';
-import { connectOffline, download, getOffline, offlineProfile, readDownload, wipeOffline } from '../src/offline';
+import { connectOffline, download, getOffline, keepFavorites, offlineProfile, readDownload, syncFavorites, wipeOffline } from '../src/offline';
 
 const KEY_A = Buffer.alloc(32, 1).toString('base64url');
 const KEY_B = Buffer.alloc(32, 2).toString('base64url');
@@ -47,6 +47,7 @@ beforeEach(() => {
     if (url === '/api/tracks/41/stream') {
       return new Response(audio, { headers: { 'content-type': 'audio/mpeg', 'content-length': String(audio.length) } });
     }
+    if (url === '/api/tracks/43/stream') return new Response(new Uint8Array([5, 6, 7]), { headers: { 'content-type': 'audio/mpeg' } });
     if (url === '/api/tracks/41/cover') return new Response(cover, { headers: { 'content-type': 'image/webp' } });
     if (url === '/api/auth/logout') return new Response(null, { status: 204 });
     return json({}, 404);
@@ -128,6 +129,44 @@ describe('Offline-Kopien', () => {
     expect(await readDownload(track.id)).toBeUndefined();
     expect(await offlineProfile()).toBeUndefined();
     expect(await idbGetAll('tracks')).toHaveLength(0);
+  });
+});
+
+describe('Favoriten offline', () => {
+  const song: Track = { ...track, id: 43, title: 'Lobpreis', hasCover: false };
+
+  it('lädt die Favoriten und künftig jeden neuen Favoriten', async () => {
+    await connectOffline(user);
+    await syncFavorites([track]);
+    await keepFavorites(true);
+    await vi.waitFor(() => expect(getOffline().ids.has(41)).toBe(true));
+    expect(getOffline().favorites).toEqual([41]);
+
+    await syncFavorites([song, track]);
+    await vi.waitFor(() => expect(getOffline().ids.has(43)).toBe(true));
+    expect(getOffline().favorites).toEqual([43, 41]);
+  });
+
+  it('lädt nichts, solange es nicht gewünscht ist', async () => {
+    await connectOffline(user);
+    await syncFavorites([track]);
+    expect(getOffline().progress.size).toBe(0);
+    expect(getOffline().favorites).toBeUndefined();
+  });
+
+  it('löscht die Kopien beim Abwählen und vergisst die Wahl beim Abmelden', async () => {
+    await connectOffline(user);
+    await syncFavorites([track]);
+    await keepFavorites(true);
+    await vi.waitFor(() => expect(getOffline().ids.has(41)).toBe(true));
+    await keepFavorites(false);
+    expect(getOffline()).toMatchObject({ favorites: undefined });
+    expect(getOffline().ids.size).toBe(0);
+
+    await keepFavorites(true);
+    await wipeOffline();
+    await connectOffline(user);
+    expect(getOffline().favorites).toBeUndefined();
   });
 });
 

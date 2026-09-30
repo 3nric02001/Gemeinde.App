@@ -3,6 +3,7 @@ import { coverUrl, kindLabel, query } from '../api';
 import { useAuth } from '../auth';
 import { playAlbum, Shelf } from '../components/AlbumCard';
 import { Cover } from '../components/Cover';
+import { FavoritesCard } from '../components/FavoritesCard';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
 import { TrackList } from '../components/TrackList';
@@ -31,8 +32,6 @@ export function Home() {
   const me = useMe();
   const latest = useApi<Page<DatedAlbum>>('/api/dates?limit=1');
   const personal = useApi<{ resume: Array<Track & { position: number }>; recent: Album[] }>('/api/me/home');
-  // Gottesdienste und Musik getrennt, damit dieselben Karten nicht zweimal untereinander stehen
-  const recent = useApi<Page<Album>>('/api/albums?dated=false&sort=recent&limit=12');
   const facets = useApi<Facets>('/api/facets');
   const name = firstName(user?.name, user?.kind);
   const title = name ? `${greeting()}, ${name}` : greeting();
@@ -86,8 +85,13 @@ export function Home() {
           skip={service?.id}
         />
       ))}
-      <Shelf title="Neue Musik" href="/alben?sort=recent" albums={recent.data?.items ?? []} />
-      <Shelf title="Deine Favoriten" href="/favoriten" albums={me.favorites?.albums.slice(0, 12) ?? []} />
+      {/* Die Titel mit Herz als Playlist vorne, dahinter die Alben mit Herz */}
+      <Shelf
+        title="Deine Favoriten"
+        href="/favoriten"
+        albums={me.favorites?.albums.slice(0, 12) ?? []}
+        lead={me.favorites?.tracks.length ? <FavoritesCard tracks={me.favorites.tracks} /> : undefined}
+      />
 
       {facets.data && facets.data.decades.length > 1 && (
         <section class="shelf">

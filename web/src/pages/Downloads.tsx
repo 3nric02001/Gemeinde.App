@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon';
 import { TrackList } from '../components/TrackList';
 import { formatBytes, plural } from '../format';
 import { removeDownloads, storageEstimate, useOffline } from '../offline';
+import { FAVORITES_CONTEXT } from '../me';
 import { player } from '../player';
 import { Empty } from './common';
 
@@ -15,6 +16,9 @@ export function Downloads() {
   useEffect(() => void storageEstimate().then(setEstimate), [offline.items.length]);
 
   const tracks = offline.items.map((item) => item.track);
+  // Offline gehaltene Favoriten als eigene Playlist, in ihrer Reihenfolge; auch ohne Server abspielbar
+  const byId = new Map(tracks.map((track) => [track.id, track]));
+  const favorites = (offline.favorites ?? []).map((id) => byId.get(id)).filter((track) => track !== undefined);
   const size = offline.items.reduce((sum, item) => sum + item.size, 0);
   const pending = offline.progress.size;
 
@@ -49,8 +53,38 @@ export function Downloads() {
               {offline.error}
             </p>
           )}
+          {favorites.length > 0 && (
+            <section class="shelf">
+              <div class="section-head">
+                <h2>Favoriten</h2>
+              </div>
+              <div class="actions">
+                <button
+                  type="button"
+                  class="button-primary"
+                  onClick={() => player.playList(favorites, 0, { shuffle: false, from: FAVORITES_CONTEXT })}
+                >
+                  <Icon name="play" size={20} /> Abspielen
+                </button>
+                <button
+                  type="button"
+                  class="button-secondary"
+                  onClick={() => player.playShuffled(favorites, FAVORITES_CONTEXT)}
+                >
+                  <Icon name="shuffle" size={18} /> Zufällig
+                </button>
+                <span class="count">{plural(favorites.length, 'Titel', 'Titel')}</span>
+              </div>
+              <TrackList tracks={favorites} from={FAVORITES_CONTEXT} />
+            </section>
+          )}
           {tracks.length > 0 && (
             <>
+              {favorites.length > 0 && (
+                <div class="section-head shelf">
+                  <h2>Alle Titel</h2>
+                </div>
+              )}
               <div class="actions">
                 <button type="button" class="button-primary" onClick={() => player.playList(tracks, 0, { shuffle: false })}>
                   <Icon name="play" size={20} /> Abspielen
