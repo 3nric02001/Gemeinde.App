@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
-import { categoryFilter, categoryValues, getCategory, listCategories } from '../library/categories.js';
+import { categoryFilter, categoryValues, getListenerCategory, listCategories } from '../library/categories.js';
 import { datedAlbumForFolder, listDatedAlbums } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
 import type { CoverThumbnails } from '../library/thumbnails.js';
@@ -67,7 +67,7 @@ type CategoryQuery = { category?: string; value?: string };
 function withCategory<T extends CategoryQuery>(db: DB, query: T) {
   const { category, value, ...rest } = query;
   if (category === undefined && value === undefined) return rest;
-  const definition = category !== undefined ? getCategory(db, category) : undefined;
+  const definition = category !== undefined ? getListenerCategory(db, category) : undefined;
   const filter = definition && value !== undefined ? categoryFilter(definition, value) : undefined;
   return filter ? { ...rest, category: filter } : null;
 }
@@ -260,7 +260,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
       },
     },
     async (request: SlugRequest, reply) => {
-      const category = getCategory(db, request.params.slug);
+      const category = getListenerCategory(db, request.params.slug);
       if (!category) return reply.code(404).send({ error: 'Kategorie nicht gefunden' });
       const { id, name, slug, inNav } = category;
       return { category: { id, name, slug, inNav }, items: categoryValues(db, category, request.query.q) };

@@ -80,28 +80,61 @@ export const ACCESS_SECTIONS: Array<{ path: string; label: string; Component: Fu
   { path: '/admin/aenderungen', label: 'Änderungen', Component: ChangesAdmin },
 ];
 
-/** Reiter der Verwaltung; Benutzer, Gruppen und Anmeldung nur für Admins. */
-export function AdminTabs({ path, admin }: { path: string; admin: boolean }) {
-  const tabs = [
-    { path: '/admin', label: 'Alben' },
-    { path: '/admin/kategorien', label: 'Kategorien' },
-    { path: '/admin/zuordnung', label: 'Zuordnung' },
-    { path: '/admin/schreibweisen', label: 'Schreibweisen' },
-    { path: '/admin/pruefen', label: 'Prüfen' },
-    ...(admin ? ACCESS_SECTIONS : []),
-  ];
-  const active = tabs.find((t) => t.path === path)?.path ?? '/admin';
+/**
+ * Bereiche der Verwaltung, nach Aufgabe gruppiert: was man pflegt (Inhalte), was die App automatisch
+ * macht und wie es eingestellt ist (Automatik), wer hineindarf (Zugang, nur Admins) und was geändert wurde.
+ */
+export const ADMIN_GROUPS: Array<{ label: string; adminOnly?: boolean; items: Array<{ path: string; label: string }> }> = [
+  {
+    label: 'Inhalte',
+    items: [
+      { path: '/admin', label: 'Alben' },
+      { path: '/admin/interpreten', label: 'Interpreten' },
+      { path: '/admin/kategorien', label: 'Kategorien' },
+    ],
+  },
+  {
+    label: 'Automatik',
+    items: [
+      { path: '/admin/zuordnung', label: 'Zuordnung' },
+      { path: '/admin/schreibweisen', label: 'Schreibweisen' },
+      { path: '/admin/pruefen', label: 'Prüfen' },
+    ],
+  },
+  { label: 'Zugang', adminOnly: true, items: ACCESS_SECTIONS.filter((s) => s.path !== '/admin/aenderungen') },
+  { label: 'Verlauf', adminOnly: true, items: ACCESS_SECTIONS.filter((s) => s.path === '/admin/aenderungen') },
+];
+
+/** Welcher Bereich zu einer Seite gehört; Album- und Kategorie-Editor zählen zu ihrer Liste. */
+function activeSection(path: string): string {
+  if (path.startsWith('/admin/album/')) return '/admin';
+  if (path.startsWith('/admin/kategorie/')) return '/admin/kategorien';
+  return path;
+}
+
+/**
+ * Navigation der Verwaltung: auf breiten Bildschirmen eine Spalte mit Gruppen, auf schmalen eine Zeile
+ * zum Wischen. Benutzer, Gruppen, Anmeldung und Änderungen nur für Admins.
+ */
+export function AdminNav({ path, admin }: { path: string; admin: boolean }) {
+  const active = activeSection(path);
+  const groups = ADMIN_GROUPS.filter((group) => admin || !group.adminOnly);
   return (
-    <nav class="chips-row admin-tabs" aria-label="Bereiche der Verwaltung">
-      {tabs.map((tab) => (
-        <a
-          key={tab.path}
-          href={tab.path}
-          class={`chip${tab.path === active ? ' is-on' : ''}`}
-          aria-current={tab.path === active ? 'page' : undefined}
-        >
-          {tab.label}
-        </a>
+    <nav class="admin-nav" aria-label="Bereiche der Verwaltung">
+      {groups.map((group) => (
+        <div key={group.label} class="admin-nav-group" role="group" aria-label={group.label}>
+          <span class="admin-nav-label">{group.label}</span>
+          {group.items.map((item) => (
+            <a
+              key={item.path}
+              href={item.path}
+              class={`admin-nav-item${item.path === active ? ' is-on' : ''}`}
+              aria-current={item.path === active ? 'page' : undefined}
+            >
+              {item.label}
+            </a>
+          ))}
+        </div>
       ))}
     </nav>
   );

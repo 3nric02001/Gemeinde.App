@@ -1807,10 +1807,6 @@ button.more-link {
   color: var(--muted);
 }
 
-.admin-tabs {
-  margin-top: 0;
-}
-
 .admin-category {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2618,10 +2614,6 @@ button.more-link {
   font-weight: 600;
 }
 
-.admin-tabs {
-  margin-bottom: 24px;
-}
-
 .admin-user,
 .admin-group {
   display: flex;
@@ -3258,4 +3250,207 @@ button.more-link {
 
 .structure-default-kind .field {
   max-width: 420px;
+}
+
+/* ---------- Verwaltung: Navigation nach Gruppen ---------- */
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+
+.admin-content {
+  min-width: 0;
+}
+
+.admin-nav {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 22px;
+}
+
+.admin-nav-group {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-nav-label {
+  padding: 0 12px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-nav-item {
+  display: block;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-nav-item:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.admin-nav-item.is-on {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Schmal: eine Zeile zum Wischen, Gruppen durch einen Strich getrennt; im Album- und Kategorie-Editor ausgeblendet */
+@media (max-width: 1100px) {
+  .admin-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .admin-nav {
+    position: static;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 calc(-1 * var(--gutter));
+    padding: 0 var(--gutter) 4px;
+  }
+
+  .admin-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-nav-group {
+    display: flex;
+    flex: none;
+    gap: 6px;
+  }
+
+  .admin-nav-group + .admin-nav-group {
+    padding-left: 6px;
+    border-left: 1px solid var(--line);
+  }
+
+  .admin-nav-label {
+    display: none;
+  }
+
+  .admin-nav-item {
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .admin-nav-item.is-on {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .admin-editing .admin-nav {
+    display: none;
+  }
+}
+
+/* ---------- Verwaltung: Interpreten ---------- */
+
+.artist-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.artist-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 16px;
+}
+
+.artist-names,
+.artist-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.artist-name {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.artist-name small {
+  color: var(--muted);
+}
+
+.artist-name.is-target {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.artist-name.is-target small {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.artist-sources {
+  margin-top: 6px;
+}
+
+.artist-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.artist-sources .icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+.artist-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.artist-row.is-merged {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.artist-action {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
 }

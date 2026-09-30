@@ -71,6 +71,8 @@ for (const [folder, files] of [
   ['Audio Aufnahmen/2026/2026_08_30_Einschulung', ['Lied - Vergiss nicht zu danken - Kinderchor', 'Predigt - Gott geht mit - Anna Schulz', 'Gebet']],
   ['Audio Aufnahmen/2026/Bibelstunden/2026_01_14_Matthäus 9, 27-38', ['2026_01_14_001', '2026_01_14_002']],
   ['Audio Aufnahmen/2026/Bibelstunden/2026_01_21_Matthäus 10, 1-15', ['2026_01_21_001']],
+  // Derselbe Sprecher anders geschrieben, für Verwaltung → Interpreten
+  ['Audio Aufnahmen/2026/2026_08_23', ['Predigt - Psalm 139 - A. Schulz', 'Lied - Befiehl du deine Wege - Kinder Chor']],
 ] as Array<[string, string[]]>) {
   files.forEach((file, i) => cloud.put(`${folder}/${file}.mp3`, mp3({}, file.startsWith('Predigt') || file.startsWith('2026') ? 9000 : 2500 + i * 300)));
 }

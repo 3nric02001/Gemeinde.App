@@ -1,4 +1,5 @@
 import type { DB } from '../db.js';
+import { withArtistGroups } from './artists.js';
 import { CurationError } from './curation.js';
 import { foldValue } from './text.js';
 
@@ -120,6 +121,12 @@ export function listCategories(db: DB): Category[] {
 
 export function getCategory(db: DB, idOrSlug: number | string): Category | undefined {
   return listCategories(db).find((c) => (typeof idOrSlug === 'number' ? c.id === idOrSlug : c.slug === idOrSlug));
+}
+
+/** Kategorie für Hörer: mit zusammengeführten Interpreten als Gruppen (Verwaltung → Interpreten) */
+export function getListenerCategory(db: DB, idOrSlug: number | string): Category | undefined {
+  const category = getCategory(db, idOrSlug);
+  return category && withArtistGroups(db, category);
 }
 
 function requireCategory(db: DB, id: number): Category {

@@ -114,6 +114,12 @@ function describe(db: DB, method: string, route: string, params: Params, body: B
       return { action: 'Regel geändert', ...album() };
     case 'DELETE /api/admin/albums/:id/rules/:ruleId':
       return { action: 'Regel gelöscht', ...album() };
+    case 'POST /api/admin/artists/merge': {
+      const sources = Array.isArray(body?.sources) ? (body.sources as unknown[]).filter((s) => typeof s === 'string') : [];
+      return { action: `Interpreten zusammengeführt: ${sources.join(', ')}`, target: typeof body?.target === 'string' ? body.target : null };
+    }
+    case 'POST /api/admin/artists/unmerge':
+      return { action: 'Interpret wieder getrennt', target: typeof body?.source === 'string' ? body.source : null };
     case 'POST /api/admin/categories':
       return { action: 'Kategorie angelegt', target: typeof body?.name === 'string' ? body.name : null };
     case 'PATCH /api/admin/categories/:id':

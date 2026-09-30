@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileStem } from './library/pathMeta.js';
+import { aliasOf, loadArtistAliases } from './library/artists.js';
 import { artistKey, artistNames, foldValue, sortKey } from './library/text.js';
 
 export type DB = Database.Database;
@@ -595,6 +596,18 @@ export const migrations: string[] = [
   -- Art eines Albums von Hand ("Bibelstunde"); '' heißt keine Art, NULL: nach dem Regelwerk
   ALTER TABLE album_overrides ADD COLUMN recording TEXT;
   `,
+  // Interpreten zusammenführen (library/artists.ts): ein Name wird überall als ein anderer geführt.
+  `
+  CREATE TABLE artist_aliases (
+    -- artistKey(source): Groß-/Kleinschreibung, Akzente und Satzzeichen spielen keine Rolle
+    source_key TEXT PRIMARY KEY,
+    source     TEXT NOT NULL,
+    target     TEXT NOT NULL
+  ) WITHOUT ROWID;
+  -- Interpret aus Dateiname bzw. Regelwerk vor der Zusammenführung (NULL: der gescannte); display_artist ist danach
+  ALTER TABLE tracks ADD COLUMN raw_artist TEXT;
+  UPDATE tracks SET raw_artist = display_artist;
+  `,
 ];
 
 export function openDatabase(path: string): DB {
@@ -613,6 +626,9 @@ export function openDatabase(path: string): DB {
     typeof value === 'string' && artistNames(value).some((name) => artistKey(name) === key) ? 1 : 0,
   );
   migrate(db);
+  loadArtistAliases(db);
+  // Name, unter dem ein Interpret geführt wird (Verwaltung → Interpreten)
+  db.function('artist_alias', { deterministic: false }, (value) => (typeof value === 'string' ? aliasOf(db, value) : value));
   return db;
 }
 
