@@ -135,7 +135,7 @@ export function AlbumEditor({ id, onError }: Props) {
           </div>
         </div>
         <div class="hero-text">
-          <span class="eyebrow">{dated ? album.recording || 'Gottesdienst' : manual ? 'Eigenes Album' : 'Automatisches Album'}</span>
+          <span class="eyebrow">{dated ? album.recording || 'Gottesdienst' : manual ? 'Playlist' : 'Automatisches Album'}</span>
           <h1>{name}</h1>
           <p class="hero-sub">{dated ? serviceLine(album.date!, album.speaker) : album.artist}</p>
           <p class="hero-meta">
@@ -149,7 +149,7 @@ export function AlbumEditor({ id, onError }: Props) {
               onChange={(visible) => void run(() => adminRequest('PATCH', base, { hidden: !visible }))}
             />
             {album.hidden ? (
-              <span class="admin-hint">Hörer finden dieses Album nicht, z. B. weil die Titel jetzt in eigenen Alben stehen.</span>
+              <span class="admin-hint">Hörer finden dieses Album nicht, z. B. weil die Titel jetzt in Playlists stehen.</span>
             ) : (
               <a class="button-secondary button-small" href={`/album/${album.id}`}>
                 Ansehen
@@ -171,7 +171,7 @@ export function AlbumEditor({ id, onError }: Props) {
             <div class="admin-selection">
               <span>{selected.size} ausgewählt</span>
               <button type="button" class="button-secondary" onClick={() => setPicking(true)}>
-                Zu eigenem Album hinzufügen
+                Zu Playlist hinzufügen
               </button>
               <button type="button" class="more-link" onClick={() => setSelected(new Set())}>
                 Auswahl aufheben
@@ -184,8 +184,8 @@ export function AlbumEditor({ id, onError }: Props) {
         ) : (
           <>
             <p class="admin-hint admin-tracks-hint">
-              Mit dem Stift korrigierst du Name und Sprecher eines Titels. Mit den Häkchen wählst du Titel aus, um sie in ein
-              eigenes Album zu übernehmen.
+              Mit dem Stift korrigierst du Name und Sprecher eines Titels. Mit den Häkchen wählst du Titel aus, um sie in eine
+              Playlist zu übernehmen.
             </p>
             <ol class="admin-tracks">
               {album.tracks.map((track, index) => {
@@ -320,7 +320,7 @@ export function AlbumEditor({ id, onError }: Props) {
           <div class="section-head">
             <h2>Durch Regeln verschoben</h2>
           </div>
-          <p class="admin-hint">Diese Titel stehen jetzt in eigenen Alben. Ändern lässt sich das über die Regel dort.</p>
+          <p class="admin-hint">Diese Titel stehen jetzt in Playlists. Ändern lässt sich das über die Regel dort.</p>
           <ul class="admin-tracks">
             {album.movedByRule.map((track) => (
               <li key={track.id} class="admin-track admin-track-plain">
@@ -368,14 +368,14 @@ export function AlbumEditor({ id, onError }: Props) {
             class="button-secondary"
             disabled={busy}
             onClick={() => {
-              if (!confirm(`Album „${album.title}“ löschen? Die Titel selbst bleiben erhalten.`)) return;
+              if (!confirm(`Playlist „${album.title}“ löschen? Die Titel selbst bleiben erhalten.`)) return;
               void run(async () => {
                 await adminRequest('DELETE', base);
                 navigate('/admin');
               });
             }}
           >
-            Album löschen
+            Playlist löschen
           </button>
         </section>
       )}
@@ -469,7 +469,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
           rows={3}
           maxLength={2000}
           value={form.description}
-          placeholder={dated ? 'Ein, zwei Sätze zum Gottesdienst oder zur Predigt' : 'Ein, zwei Sätze zum Album'}
+          placeholder={dated ? 'Ein, zwei Sätze zum Gottesdienst oder zur Predigt' : manual ? 'Ein, zwei Sätze zur Playlist' : 'Ein, zwei Sätze zum Album'}
           onInput={(e) => setForm({ ...form, description: (e.target as HTMLTextAreaElement).value })}
         />
       </label>
@@ -718,7 +718,7 @@ function AddTracks({
   );
 }
 
-/** Dialog: ausgewählte Titel in ein bestehendes oder neues eigenes Album übernehmen. */
+/** Dialog: ausgewählte Titel in eine bestehende oder neue Playlist übernehmen. */
 function AddToAlbum({
   source,
   trackIds,
@@ -767,12 +767,12 @@ function AddToAlbum({
   return (
     <div class="admin-dialog-backdrop" onClick={(e) => e.target === e.currentTarget && onClose(false)}>
       <form class="admin-dialog" role="dialog" aria-modal="true" aria-labelledby="add-to-album" onSubmit={submit}>
-        <h2 id="add-to-album">{plural(trackIds.length, 'Titel', 'Titel')} zu eigenem Album hinzufügen</h2>
+        <h2 id="add-to-album">{plural(trackIds.length, 'Titel', 'Titel')} zu Playlist hinzufügen</h2>
         {!targets ? (
           <Loading />
         ) : (
           <label class="field">
-            <span>Album</span>
+            <span>Playlist</span>
             <select value={String(target)} onChange={(e) => {
               const value = (e.target as HTMLSelectElement).value;
               setTarget(value === 'new' ? 'new' : Number(value));
@@ -782,13 +782,13 @@ function AddToAlbum({
                   {a.title}
                 </option>
               ))}
-              <option value="new">Neues Album …</option>
+              <option value="new">Neue Playlist …</option>
             </select>
           </label>
         )}
         {target === 'new' && (
           <label class="field">
-            <span>Titel des neuen Albums</span>
+            <span>Name der neuen Playlist</span>
             <input value={title} maxLength={200} placeholder="z. B. Predigten" autoFocus onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
           </label>
         )}
