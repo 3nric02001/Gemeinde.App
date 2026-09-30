@@ -66,6 +66,14 @@ export class Queue<T extends object> {
     return undefined;
   }
 
+  /** Was `next(auto)` liefern würde, ohne weiterzuschalten (zum Vorladen) */
+  peekNext(auto = true): T | undefined {
+    if (!this.items.length) return undefined;
+    if (auto && this.repeat === 'one') return this.current;
+    if (this.index < this.items.length - 1) return this.items[this.index + 1];
+    return this.repeat !== 'off' ? this.items[0] : undefined;
+  }
+
   previous(): T | undefined {
     if (!this.items.length) return undefined;
     if (this.index > 0) this.index--;
