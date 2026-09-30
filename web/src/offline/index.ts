@@ -41,6 +41,8 @@ export interface OfflineState {
   error: string | undefined;
   /** Bis dahin bleiben die Kopien ohne Serverkontakt abspielbar */
   expiresAt: number | undefined;
+  /** Favoriten-Titel, die offline bleiben sollen (neue kommen von selbst dazu); undefined, wenn nicht gewünscht */
+  favorites: number[] | undefined;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -56,9 +58,11 @@ const listeners = new Set<() => void>();
 const coverUrls = new Map<number, string>();
 const queue: Track[] = [];
 let working = false;
+/** Die aktuellen Favoriten-Titel vom Server, für den Abgleich mit den Offline-Kopien */
+let favoriteTracks: Track[] | undefined;
 
 function empty(): OfflineState {
-  return { enabled: false, items: [], ids: new Set(), progress: new Map(), error: undefined, expiresAt: undefined };
+  return { enabled: false, items: [], ids: new Set(), progress: new Map(), error: undefined, expiresAt: undefined, favorites: undefined };
 }
 
 function set(next: Partial<OfflineState>): void {
@@ -117,7 +121,8 @@ async function loadItems(): Promise<void> {
       // Cover fehlt, dann der Platzhalter
     }
   }
-  set({ items, enabled: Boolean(profile), expiresAt: profile && profile.contactAt + profile.days * DAY_MS });
+  const favorites = (await idbGet<{ ids: number[] }>('meta', 'favorites'))?.ids;
+  set({ items, enabled: Boolean(profile), expiresAt: profile && profile.contactAt + profile.days * DAY_MS, favorites });
 }
 
 /**
@@ -152,6 +157,7 @@ export async function connectOffline(user: CurrentUser, branding?: Branding): Pr
     await idbPut('meta', next, 'profile');
     profile = next;
     await loadItems();
+    await applyFavorites();
   } catch {
     set({ enabled: false });
   }
@@ -173,6 +179,7 @@ export async function wipeOffline(): Promise<void> {
   generation++;
   queue.length = 0;
   profile = undefined;
+  favoriteTracks = undefined;
   for (const url of coverUrls.values()) URL.revokeObjectURL(url);
   coverUrls.clear();
   state = empty();
@@ -227,7 +234,9 @@ async function work(): Promise<void> {
   }
 }
 
-function setProgress(trackId: number, value: number): void {
+function setProgress(trackId: number, value: number, run: number): void {
+  // Nach dem Löschen (Abmelden) keinen Fortschritt mehr eintragen, sonst hinge der Titel als "wird geladen" fest.
+  if (run !== generation) return;
   const progress = new Map(state.progress);
   progress.set(trackId, value);
   set({ progress });
@@ -274,7 +283,7 @@ async function save(track: Track, run: number): Promise<void> {
     bufferedSize += value.length;
     size += value.length;
     if (bufferedSize >= PART_SIZE) await flush(false);
-    if (total) setProgress(track.id, Math.min(0.99, size / total));
+    if (total) setProgress(track.id, Math.min(0.99, size / total), run);
   }
   await flush(true);
 
@@ -303,6 +312,47 @@ export async function removeDownloads(trackIds: number[]): Promise<void> {
     coverUrls.delete(id);
   }
   await loadItems();
+}
+
+/**
+ * Favoriten offline halten (oder nicht mehr): an lädt alle Favoriten-Titel und künftig jeden neuen,
+ * aus löscht ihre Kopien. Die Wahl liegt mit den Kopien auf dem Gerät und verschwindet mit ihnen.
+ */
+export async function keepFavorites(on: boolean): Promise<void> {
+  await ready;
+  if (on) {
+    if (!state.enabled) return;
+    await idbPut('meta', { ids: (favoriteTracks ?? []).map((track) => track.id) }, 'favorites');
+    set({ favorites: (favoriteTracks ?? []).map((track) => track.id) });
+    await applyFavorites();
+    return;
+  }
+  const ids = state.favorites ?? [];
+  await idbDelete('meta', 'favorites').catch(() => undefined);
+  set({ favorites: undefined });
+  await removeDownloads(ids);
+}
+
+/** Die Favoriten haben sich geändert (geladen, Herz an oder aus): neue Titel mitnehmen, wenn gewünscht. */
+export async function syncFavorites(tracks: Track[]): Promise<void> {
+  favoriteTracks = tracks;
+  await ready;
+  await applyFavorites();
+}
+
+async function applyFavorites(): Promise<void> {
+  if (!state.enabled || !state.favorites || !favoriteTracks) return;
+  const ids = favoriteTracks.map((track) => track.id);
+  if (ids.join() !== state.favorites.join()) {
+    try {
+      await idbPut('meta', { ids }, 'favorites');
+    } catch {
+      return;
+    }
+    set({ favorites: ids });
+  }
+  const missing = favoriteTracks.filter((track) => !state.ids.has(track.id) && !state.progress.has(track.id));
+  if (missing.length) download(missing);
 }
 
 /** Entschlüsselter Titel als Blob, nur im Speicher; undefined, wenn nicht (mehr) vorhanden. */

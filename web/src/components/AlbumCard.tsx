@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Album } from '../api';
 import { coverUrl, getJson, kindLabel, type AlbumDetail } from '../api';
@@ -57,8 +58,11 @@ export function AlbumGrid({ albums, list = false }: { albums: Album[]; list?: bo
   );
 }
 
-/** Horizontale Reihe wie "Neu hinzugefügt" bei Spotify; am Rechner mit Pfeilen, sobald nicht alles hineinpasst */
-export function Shelf({ title, href, albums }: { title: string; href?: string; albums: Album[] }) {
+/**
+ * Horizontale Reihe wie "Neu hinzugefügt" bei Spotify; am Rechner mit Pfeilen, sobald nicht alles hineinpasst.
+ * `lead` steht vor den Alben, z. B. die Favoriten-Playlist.
+ */
+export function Shelf({ title, href, albums, lead }: { title: string; href?: string; albums: Album[]; lead?: ComponentChildren }) {
   const row = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ start: true, end: true });
 
@@ -75,9 +79,9 @@ export function Shelf({ title, href, albums }: { title: string; href?: string; a
       el.removeEventListener('scroll', update);
       observer?.disconnect();
     };
-  }, [albums.length]);
+  }, [albums.length, Boolean(lead)]);
 
-  if (!albums.length) return null;
+  if (!albums.length && !lead) return null;
   const page = (direction: number) => row.current?.scrollBy({ left: direction * row.current.clientWidth * 0.9, behavior: 'smooth' });
   const overflow = !(edges.start && edges.end);
   return (
@@ -101,6 +105,7 @@ export function Shelf({ title, href, albums }: { title: string; href?: string; a
         )}
       </div>
       <div ref={row} class={`shelf-row${edges.end ? '' : ' has-more'}`}>
+        {lead}
         {albums.map((album) => (
           <AlbumCard key={album.id} album={album} />
         ))}

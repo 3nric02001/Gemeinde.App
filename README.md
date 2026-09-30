@@ -16,8 +16,8 @@ Bedienung wie bei Spotify oder Apple Music, Farben schlicht schwarz auf weiß wi
 mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 
 - **Start**: Begrüßung mit Vornamen, der neueste Gottesdienst groß oben, „Weiterhören“ (angefangene
-  Predigten mit Fortschritt), „Zuletzt gehört“, weitere Gottesdienste, „Neue Musik“ (ohne Gottesdienste), eigene
-  Favoriten und Jahrzehnte
+  Predigten mit Fortschritt), „Zuletzt gehört“, weitere Gottesdienste, „Deine Favoriten“
+  (vorne die Favoriten-Playlist, dahinter die Alben mit Herz) und Jahrzehnte
 - **Gottesdienste**: Alben mit Datum heißen nach dem Anlass mit Wochentag und Datum
   („Erntedank, So., 27.09.2026“) und bekommen ohne eigenes Bild ein Kalenderblatt als Cover.
   Sprecher und Bibelstelle kommen aus den Dateinamen (`Predigt - Der gute Hirte - Pastor Meier.mp3`,
@@ -25,7 +25,9 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   Ordnername) oder werden in der Verwaltung am Album bzw. Titel gesetzt, dort auch eine Beschreibung für Hörer.
   Der Sprecher steht in der Titelliste bei seinem Titel (unter dem Albumtitel nur das Datum), das Jahr kommt aus dem Datum. Die Kategorie
   „Sprecher“ ist vorgegeben
-- **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer
+- **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer. Die Titel mit Herz sind dort eine
+  Playlist (Abspielen, Zufällig, „Jetzt läuft“ führt zurück) und lassen sich mit dem Pfeil offline halten: Neue
+  Favoriten kommen dann von selbst aufs Gerät, und unter „Heruntergeladen“ stehen sie auch ohne Netz als eigene Liste.
 - **Suche**: Treffer beim Tippen, gruppiert nach Titeln und Alben; findet Titel, Albumnamen, Inhalt und Sprecher
   aus den Dateinamen, Predigten neueste zuerst; ohne Suchbegriff Vorschläge und Stöbern nach Art (Gottesdienste,
   Bibelstunden …). Treffer im Titel stehen vorn: bei Alben genauer Titel, dann Titelanfang, dann Sprecher, dann Alben,
