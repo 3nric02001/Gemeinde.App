@@ -68,6 +68,8 @@ interface Described {
 const one = (db: DB, sql: string, id: unknown) => (db.prepare(sql).get(id) as { name: string } | undefined)?.name ?? null;
 const albumName = (db: DB, id: unknown) => one(db, 'SELECT title AS name FROM albums WHERE id = ?', id);
 const trackName = (db: DB, id: unknown) => one(db, 'SELECT title AS name FROM tracks WHERE id = ?', id);
+const replacementName = (search: unknown, replacement: unknown) =>
+  typeof search === 'string' ? `${search} → ${typeof replacement === 'string' && replacement ? replacement : '(entfernen)'}` : null;
 
 /**
  * Beschreibt eine Änderung in Worten, bevor sie ausgeführt wird (danach wäre z. B. ein gelöschtes
@@ -136,6 +138,20 @@ function describe(db: DB, method: string, route: string, params: Params, body: B
       return { action: 'Gruppe entfernt', target: String(params.name ?? '') };
     case 'PUT /api/admin/structure':
       return { action: 'Zuordnung von Aufnahmen geändert' };
+    case 'POST /api/admin/replacements':
+      return { action: 'Schreibweise hinzugefügt', target: replacementName(body?.search, body?.replacement) };
+    case 'PUT /api/admin/replacements/:id': {
+      const before = db.prepare('SELECT search, replacement FROM title_replacements WHERE id = ?').get(params.id) as
+        | { search: string; replacement: string }
+        | undefined;
+      return { action: 'Schreibweise geändert', target: replacementName(before?.search, before?.replacement) };
+    }
+    case 'DELETE /api/admin/replacements/:id': {
+      const before = db.prepare('SELECT search, replacement FROM title_replacements WHERE id = ?').get(params.id) as
+        | { search: string; replacement: string }
+        | undefined;
+      return { action: 'Schreibweise gelöscht', target: replacementName(before?.search, before?.replacement) };
+    }
     case 'PUT /api/admin/branding':
       return { action: 'Name und Begrüßung geändert' };
     case 'PUT /api/admin/oidc':

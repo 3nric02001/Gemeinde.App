@@ -4,6 +4,7 @@ import { parseFolderDate } from './dateText.js';
 import { PASSAGE_TAGS, SPEAKER_TAGS, UNKNOWN_ARTIST } from './metadata.js';
 import { evaluateRules } from './rules.js';
 import { albumFolderOf, basename, dirname, fileStem, folderDate, parsePath, type PathMeta } from './pathMeta.js';
+import { compileReplacements, listReplacements } from './replacements.js';
 import type { ManualDecision, Player } from './policies.js';
 import {
   applyToFolder,
@@ -40,6 +41,7 @@ interface TrackRow {
   album_artist_sort: string | null;
   album_tagged: number | null;
   display_title: string | null;
+  raw_title: string | null;
   display_artist: string | null;
   content: string | null;
   title_tagged: number | null;
@@ -282,7 +284,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     const tracks = db
       .prepare(
         `SELECT id, path, title, artist, album_artist, album, year, genre, duration, compilation, track_no, disc_no, album_id,
-                cover_id, album_key, added_at, album_sort, album_artist_sort, album_tagged, display_title, display_artist, content, title_tagged,
+                cover_id, album_key, added_at, album_sort, album_artist_sort, album_tagged, display_title, raw_title, display_artist, content, title_tagged,
                 playback, sermon, policy
          FROM tracks`,
       )
@@ -352,7 +354,9 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       }));
       recordings.set(folder, applyToFolder(kind, folder, files));
     }
-    applyRecordings(db, tracks, (track) => recordings.get(groups.get(track.id)!.folder), parsed, structure, manualDecisions);
+    // Ersetzungen für Tippfehler (Verwaltung → Schreibweisen) für Titel und Albumnamen ohne eigene Korrektur
+    const fix = compileReplacements(listReplacements(db));
+    applyRecordings(db, tracks, (track) => recordings.get(groups.get(track.id)!.folder), parsed, fix, structure, manualDecisions);
     // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) zählen zur Vorgabe für Ordner mit Datum.
     const defaultRecording = structure.structure.defaultKind || null;
 
@@ -457,7 +461,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
           .map((t) => t.album),
       );
       const ruleTitle = recording && !(recording.kind.preferTags && taggedAlbum) ? recording.title || basename(draft.folder) : undefined;
-      const title = override?.title ?? ruleTitle ?? tagTitle ?? draft.title;
+      const title = override?.title ?? fix(ruleTitle ?? tagTitle ?? draft.title);
       const tracks = draft.tracks.map((t) => ({ ...t, title: t.display_title ?? t.title, artist: t.display_artist ?? t.artist }));
       // Datum aus den Dateinamen, dem Albumordner ("2026-09-27 Erntedank") oder dem Albumnamen; nur bei automatischen Alben.
       const date = draft.folder
@@ -621,6 +625,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
  * Schreibt, was das Regelwerk je Titel ergibt: Anzeige-Titel, Inhalt, Interpret und die abgeleiteten
  * Tag-Felder "inhalt" und "sprecher" (für Kategorien). Nur geänderte Titel werden geschrieben.
  * Ein Interpret aus den Tags bleibt; ohne ihn steht der Sprecher, sonst der Name der Art.
+ * Die Ersetzungen für Tippfehler (fix) gelten für den Anzeige-Titel; raw_title hält ihn davor fest.
  */
 /** Art eines Albums ohne eigenen Aufnahme-Ordner: von Hand gesetzt ("" = keine), sonst die Vorgabe */
 function manualRecording(manual: string | null | undefined, fallback: string | null): string | null {
@@ -633,11 +638,12 @@ function applyRecordings(
   tracks: TrackRow[],
   recordingOf: (track: TrackRow) => FolderResult | undefined,
   parsed: (path: string) => PathMeta,
+  fix: (text: string) => string,
   structure: CompiledStructure,
   manualDecisions: Map<string, ManualDecision>,
 ): void {
   const setDisplay = db.prepare(
-    'UPDATE tracks SET display_title = ?, display_artist = ?, content = ?, sort_title = ?, sort_artist = ? WHERE id = ?',
+    'UPDATE tracks SET display_title = ?, raw_title = ?, display_artist = ?, content = ?, sort_title = ?, sort_artist = ? WHERE id = ?',
   );
   const setPolicy = db.prepare('UPDATE tracks SET playback = ?, sermon = ?, policy = ? WHERE id = ?');
   const derived = new Map<number, string>();
@@ -654,14 +660,18 @@ function applyRecordings(
     const recording = recordingOf(track);
     const file = recording?.files.get(track.path);
     const artistTagged = track.artist !== UNKNOWN_ARTIST && track.artist !== parsed(track.path).artist;
-    const title = file?.title ?? null;
+    const raw = file?.title ?? null;
+    // Ersetzungen nur speichern, wenn sie etwas ändern; sonst bleibt NULL (gescannten Titel zeigen).
+    const fixed = fix(raw ?? track.title);
+    const title = fixed !== (raw ?? track.title) ? fixed : raw;
     const content = file?.content ?? null;
     // Name aus dem Dateinamen vor dem Tag, außer die Art bevorzugt Tags; ohne beides der Sprecher, sonst die Art
     const named = file?.performer && !(recording!.kind.preferTags && artistTagged) ? file.performer : undefined;
     const artist = recording ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name))) : null;
-    if (title !== track.display_title || artist !== track.display_artist || content !== track.content) {
-      setDisplay.run(title, artist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
+    if (title !== track.display_title || raw !== track.raw_title || artist !== track.display_artist || content !== track.content) {
+      setDisplay.run(title, raw, artist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
       track.display_title = title;
+      track.raw_title = raw;
       track.display_artist = artist;
       track.content = content;
     }
