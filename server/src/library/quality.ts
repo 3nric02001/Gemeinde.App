@@ -18,8 +18,6 @@ interface AlbumRef {
 export interface QualityReport {
   /** Musikalben ohne Bild (Gottesdienste bekommen ein Kalenderblatt) */
   withoutCover: { total: number; items: AlbumRef[] };
-  /** Gottesdienste ohne Sprecher */
-  servicesWithoutSpeaker: { total: number; items: AlbumRef[] };
 }
 
 const ALBUM_REF = 'a.id, a.title, a.date, a.track_count AS trackCount';
@@ -31,10 +29,5 @@ export function libraryQuality(db: DB): QualityReport {
   });
   return {
     withoutCover: page('a.hidden = 0 AND a.date IS NULL AND a.cover_path IS NULL AND a.cover_id IS NULL'),
-    // Nur Aufnahmen mit Predigt (laut Policies im Regelwerk)
-    servicesWithoutSpeaker: page(
-      `a.hidden = 0 AND a.date IS NOT NULL AND a.speaker IS NULL AND a.kind = 'auto' AND a.recording IS NOT NULL
-       AND EXISTS (SELECT 1 FROM album_tracks x JOIN tracks t ON t.id = x.track_id WHERE x.album_id = a.id AND t.sermon = 1)`,
-    ),
   };
 }

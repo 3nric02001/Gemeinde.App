@@ -74,7 +74,6 @@ const FILTERS = [
   { value: 'sonstiges', label: 'Sonstiges', query: { section: 'other' } },
   { value: 'eigene', label: 'Playlists', query: { kind: 'manual' } },
   { value: 'ausgeblendet', label: 'Ausgeblendet', query: { hidden: 'true' } },
-  { value: 'ohne-sprecher', label: 'Sprecher fehlt', query: { noSpeaker: 'true' } },
 ] as const;
 const EMPTY: Record<string, string> = {
   gottesdienste: 'Keine Gottesdienste gefunden',
@@ -82,7 +81,6 @@ const EMPTY: Record<string, string> = {
   sonstiges: 'Alles hat eine Zuordnung',
   eigene: 'Noch keine Playlists',
   ausgeblendet: 'Keine ausgeblendeten Alben',
-  'ohne-sprecher': 'Alle Gottesdienste haben einen Sprecher',
 };
 const PAGE = 100;
 
@@ -174,7 +172,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
                     <span class="track-sub">
                       {[
                         album.date && formatCompactDate(album.date),
-                        album.speaker ?? (!album.date && album.year),
+                        !album.date && album.year,
                         plural(album.trackCount, 'Titel', 'Titel'),
                       ]
                         .filter(Boolean)
@@ -184,7 +182,6 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
                   </span>
                   <span class="admin-badges">
                     {album.kind === 'manual' && <span class="badge">Playlist</span>}
-                    {album.date && !album.speaker && <span class="badge badge-attention">Sprecher fehlt</span>}
                     {album.hidden && <span class="badge badge-muted">Ausgeblendet</span>}
                   </span>
                 </a>

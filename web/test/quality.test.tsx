@@ -14,8 +14,7 @@ describe('Verwaltung → Prüfen', () => {
   it('zeigt Alben ohne Cover-Spalte, damit Titel auf dem Handy lesbar bleiben', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       json({
-        withoutCover: { total: 0, items: [] },
-        servicesWithoutSpeaker: { total: 1, items: [{ id: 7, title: 'Gottesdienst Vormittag', date: '2024-08-04', trackCount: 5 }] },
+        withoutCover: { total: 1, items: [{ id: 7, title: 'Gottesdienst Vormittag', date: null, trackCount: 5 }] },
       }),
     );
     render(<QualityPanel />);
