@@ -138,7 +138,7 @@ export function AlbumEditor({ id, onError }: Props) {
         <div class="hero-text">
           <span class="eyebrow">{dated ? album.recording || 'Gottesdienst' : manual ? 'Playlist' : 'Automatisches Album'}</span>
           <h1>{name}</h1>
-          <p class="hero-sub">{[dated ? serviceLine(album.date!) : album.year, album.speaker].filter(Boolean).join(' · ')}</p>
+          <p class="hero-sub">{dated ? serviceLine(album.date!) : album.year}</p>
           <p class="hero-meta">
             {plural(album.trackCount, 'Titel', 'Titel')}, {formatDuration(album.duration)}
           </p>
