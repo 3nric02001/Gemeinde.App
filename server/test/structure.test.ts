@@ -208,3 +208,46 @@ describe('Regelwerk in der Verwaltung', () => {
     await call('PUT', '/api/admin/structure', { kinds: [] }, 400);
   });
 });
+
+describe('Uneinheitliche Dateinamen', () => {
+  const folder = 'Audio Aufnahmen/2026/2026_09_20';
+  beforeEach(async () => {
+    for (const [name, length] of [
+      ['01 - Lied - Einst scheint Ewiges Licht - Gemeindechor', 20],
+      ['03 - Begrüßung - Jakob Rauschenberger', 10],
+      ['05 - Einleitung - Text_Richter 7,1-4 - Jonathan Dürksen', 30],
+      ['07 - Beitrag - Es tut mir heute noch weh - Irene Krahn& Fam. Dückmann', 20],
+      ['09 - Predigt - Bergpredigt Text_Matthäus 7,7-14 - Jakob Rauschenberger', 90],
+      ['10 - Schlusslied_Chor', 20],
+    ] as Array<[string, number]>) {
+      cloud.put(`${folder}/${name}.mp3`, mp3({}, length));
+    }
+    await ctx.scanner.scan();
+  });
+
+  const service = async () => (await dated()).find((a) => a.date === '2026-09-20');
+
+  it('trennt nur an " - ", kennt Inhalte ohne Titel und liest "Text_" als Bibelstelle', async () => {
+    const album = await service();
+    expect(album).toMatchObject({ speaker: 'Jakob Rauschenberger', passage: 'Matthäus 7,7-14', artist: 'Jakob Rauschenberger' });
+    expect((await albumTracks(album.id)).map((t) => [t.title, t.artist, t.content])).toEqual([
+      ['Lied: Einst scheint Ewiges Licht', 'Gemeindechor', 'Lied'],
+      ['Begrüßung', 'Jakob Rauschenberger', 'Begrüßung'],
+      ['Einleitung: Richter 7,1-4', 'Jonathan Dürksen', 'Einleitung'],
+      ['Beitrag: Es tut mir heute noch weh', 'Irene Krahn& Fam. Dückmann', 'Beitrag'],
+      ['Predigt: Bergpredigt (Matthäus 7,7-14)', 'Jakob Rauschenberger', 'Predigt'],
+      ['Schlusslied: Chor', 'Jakob Rauschenberger', 'Schlusslied'],
+    ]);
+  });
+
+  it('behält eine Korrektur aus der Verwaltung, wenn die Datei umbenannt wird', async () => {
+    const album = await service();
+    const odd = (await albumTracks(album.id)).find((t) => t.title === 'Schlusslied: Chor');
+    await call('PATCH', `/api/admin/albums/${album.id}/tracks/${odd.id}`, { title: 'Lied: Schlusslied', speaker: 'Chor' });
+    const fixed = async () => (await albumTracks(album.id)).find((t) => t.id === odd.id);
+    expect(await fixed()).toMatchObject({ title: 'Lied: Schlusslied' });
+    cloud.move(`${folder}/10 - Schlusslied_Chor.mp3`, `${folder}/10 - Schlusslied.mp3`);
+    await ctx.scanner.scan();
+    expect(await fixed()).toMatchObject({ title: 'Lied: Schlusslied' });
+  });
+});

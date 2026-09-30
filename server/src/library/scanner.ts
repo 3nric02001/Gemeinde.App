@@ -382,6 +382,7 @@ export class LibraryScanner {
       'UPDATE OR IGNORE manual_album_tracks SET path = ? WHERE path = ?',
       'UPDATE OR IGNORE manual_album_removed SET path = ? WHERE path = ?',
       'UPDATE OR IGNORE track_exclusions SET path = ? WHERE path = ?',
+      'UPDATE OR IGNORE track_overrides SET path = ? WHERE path = ?',
     ].map((sql) => this.db.prepare(sql));
     this.db.transaction(() => {
       for (const [from, to] of moves) for (const statement of statements) statement.run(to, from);

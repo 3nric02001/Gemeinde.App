@@ -95,6 +95,7 @@ export function relocateLibrary(db: DB, base: string, musicPaths: string[], log:
     updateKeyed('track_exclusions', 'album_key', ['path'], moveKey);
     updateKeyed('manual_album_tracks', 'path', ['album_id'], move);
     updateKeyed('manual_album_removed', 'path', ['album_id'], move);
+    updateKeyed('track_overrides', 'path', [], move);
     update('album_rules', 'condition', (json) => JSON.stringify(moveRule(JSON.parse(json) as RuleCondition)));
     setMeta(db, META_KEY, base);
   })();

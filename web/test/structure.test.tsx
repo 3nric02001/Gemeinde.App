@@ -16,7 +16,8 @@ const structure: Structure = {
       filePattern: '{inhalt} - {titel}', albumTitle: '{anlass}', trackTitle: '{inhalt}: {titel}', sermon: 'Predigt', preferTags: true,
     },
   ],
-  contents: ['Lied', 'Predigt'],
+  contents: ['Lied', 'Predigt', 'Begrüßung'],
+  untitled: ['Begrüßung'],
 };
 
 const preview = {
