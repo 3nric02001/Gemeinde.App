@@ -16,6 +16,8 @@
   --shadow: 0 8px 30px rgb(0 0 0 / 0.12);
   --cover-l: 88%;
   --cover-text: rgb(0 0 0 / 0.45);
+  --attention-bg: #fbe7c6;
+  --attention-fg: #6b4000;
 
   --radius: 10px;
   --radius-lg: 14px;
@@ -42,6 +44,8 @@
     --shadow: 0 8px 30px rgb(0 0 0 / 0.5);
     --cover-l: 24%;
     --cover-text: rgb(255 255 255 / 0.5);
+    --attention-bg: #4a3512;
+    --attention-fg: #f6d9a4;
     color-scheme: dark;
   }
 }
@@ -2659,6 +2663,332 @@ html[data-text='xlarge'] .now-playing {
 
 .scan-panel .admin-error {
   overflow-wrap: anywhere;
+}
+
+/* ---------- Album-Editor: Kopf, Felder, Titel korrigieren ---------- */
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: background 0.15s;
+}
+
+.switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--accent);
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(18px);
+  background: var(--bg);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.switch.is-disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.admin-cover {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.admin-cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.admin-file {
+  position: relative;
+  cursor: pointer;
+}
+
+.admin-file input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.admin-file:focus-within {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.admin-file.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.admin-visibility {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 14px;
+}
+
+.admin-visibility .admin-hint {
+  margin: 0;
+  font-size: 13px;
+}
+
+.admin-hero .admin-last {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.admin-fields-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-wrap {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  align-content: start;
+}
+
+.field-source {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.field-source .link-button {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.field-static {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--line);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.admin-more-fields summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.admin-more-fields[open] summary {
+  margin-bottom: 12px;
+}
+
+.admin-tracks-hint {
+  font-size: 13px;
+  margin: -4px 0 12px;
+}
+
+.admin-inline-badge {
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 8px;
+  font-size: 11px;
+  vertical-align: 2px;
+}
+
+.admin-track-edit {
+  margin: 4px 0 12px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.admin-track-form {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-track-form .admin-hint,
+.admin-track-form .actions {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .admin-fields-2 {
+    grid-template-columns: 1fr;
+  }
+  .admin-visibility {
+    justify-content: center;
+  }
+}
+
+/* ---------- Albumliste der Verwaltung ---------- */
+
+.scan-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 12px 12px 20px;
+}
+
+.scan-line {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.scan-less {
+  margin-top: 8px;
+}
+
+.badge-attention {
+  background: var(--attention-bg);
+  color: var(--attention-fg);
+}
+
+.admin-help {
+  margin-top: 32px;
+}
+
+.admin-help summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.admin-help[open] summary {
+  margin-bottom: 8px;
+}
+
+
+/* ---------- Benutzer, Gruppen, Anmeldung, Änderungen ---------- */
+
+.chip-count {
+  margin-left: 6px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.admin-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0 0 24px;
+}
+
+.admin-roles div {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.admin-roles dt {
+  color: var(--text);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.admin-roles dd {
+  margin: 2px 0 0;
+}
+
+.admin-group {
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.admin-group .track-main {
+  flex: 1;
+  min-width: 200px;
+}
+
+.admin-group.is-off .track-title {
+  color: var(--muted);
+}
+
+.admin-group .track-sub a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.admin-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--attention-bg);
+  color: var(--attention-fg);
+  font-size: 14px;
+}
+
+.admin-change {
+  display: grid;
+  gap: 2px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-change a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.admin-change .track-title {
+  white-space: normal;
+}
+
+.admin-group .track-sub,
+.admin-user .track-sub {
+  white-space: normal;
 }
 
 /* ---------- Offline hören ---------- */

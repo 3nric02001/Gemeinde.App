@@ -3,7 +3,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { setMeta, type DB } from '../db.js';
 import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextcloud/webdav.js';
 import { rebuildAlbums } from './albums.js';
-import { extractMetadata, searchExtra, tagSpan, type TrackMeta } from './metadata.js';
+import { extractMetadata, searchExtra, tagSpan, withOverride, type TrackMeta } from './metadata.js';
 import { basename, coverRank, dirname, isAudioFile } from './pathMeta.js';
 import { foldValue, sortKey } from './text.js';
 
@@ -229,6 +229,7 @@ export class LibraryScanner {
     const clearTags = this.db.prepare('DELETE FROM track_tags WHERE track_id = ?');
     const addTag = this.db.prepare('INSERT INTO track_tags (track_id, tag, value, vkey) VALUES (?, ?, ?, ?)');
     const setSearchExtra = this.db.prepare('UPDATE tracks SET search_extra = ? WHERE id = ? AND search_extra IS NOT ?');
+    const trackOverride = this.db.prepare('SELECT title, speaker FROM track_overrides WHERE path = ?');
     const saveCover = this.db.prepare(`
       INSERT INTO covers (hash, mime, data) VALUES (?, ?, ?)
       ON CONFLICT(hash) DO UPDATE SET mime = excluded.mime
@@ -270,7 +271,10 @@ export class LibraryScanner {
         }) as { id: number };
         clearTags.run(id);
         for (const [tag, value] of meta.tags) addTag.run(id, tag, value, foldValue(value));
-        const extra = searchExtra(meta.tags);
+        const extra = withOverride(
+          searchExtra(meta.tags),
+          trackOverride.get(entry.path) as { title: string | null; speaker: string | null } | undefined,
+        );
         setSearchExtra.run(extra, id, extra);
         if (moved.has(entry.path)) continue;
         if (known.has(entry.path)) this.status.updated++;
@@ -340,7 +344,12 @@ export class LibraryScanner {
     this.saveCovers(covers, keepCovers);
     rebuildAlbums(this.db);
     // Bilder, auf die kein Titel mehr zeigt, wegräumen, ebenso Vorschaubilder verschwundener Quellen.
-    this.db.prepare('DELETE FROM covers WHERE id NOT IN (SELECT cover_id FROM tracks WHERE cover_id IS NOT NULL)').run();
+    this.db
+      .prepare(
+        `DELETE FROM covers WHERE id NOT IN (SELECT cover_id FROM tracks WHERE cover_id IS NOT NULL)
+           AND id NOT IN (SELECT cover_id FROM album_overrides WHERE cover_id IS NOT NULL)`,
+      )
+      .run();
     this.db
       .prepare(
         `DELETE FROM cover_thumbs WHERE source NOT IN (SELECT 'file:' || path FROM folder_covers)

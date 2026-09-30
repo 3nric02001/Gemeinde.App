@@ -527,6 +527,28 @@ export const migrations: string[] = [
   -- "Lied - Großer Gott" in einem Gottesdienst-Ordner ergab bisher den Interpreten "Lied"; einmal neu lesen.
   UPDATE tracks SET etag = '';
   `,
+  `
+  -- Korrekturen einzelner Titel aus der Verwaltung (Titelname, Sprecher), je Pfad wie die übrigen
+  -- Korrekturen. Sie gehen allem vor, was Dateien und Regelwerk ergeben (queries.ts TRACK_COLUMNS).
+  CREATE TABLE track_overrides (
+    path    TEXT PRIMARY KEY,
+    title   TEXT,
+    speaker TEXT
+  ) WITHOUT ROWID;
+  -- Hochgeladenes Titelbild eines Albums; liegt wie eingebettete Bilder in covers.
+  ALTER TABLE album_overrides ADD COLUMN cover_id INTEGER REFERENCES covers(id) ON DELETE SET NULL;
+  -- Wer hat in der Verwaltung was geändert (library/changes.ts).
+  CREATE TABLE changes (
+    id        INTEGER PRIMARY KEY,
+    at        INTEGER NOT NULL,
+    user_id   INTEGER,
+    user_name TEXT NOT NULL,
+    action    TEXT NOT NULL,
+    target    TEXT,
+    album_id  INTEGER
+  );
+  CREATE INDEX changes_album ON changes(album_id, id);
+  `,
 ];
 
 export function openDatabase(path: string): DB {
