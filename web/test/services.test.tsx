@@ -54,24 +54,24 @@ describe('Seite eines Gottesdienstes', () => {
 });
 
 describe('Tab-Leiste', () => {
-  const setup = (scrollTop: number) => {
+  const setup = (scrollY: number) => {
     const main = document.createElement('main');
     main.className = 'main';
-    Object.defineProperty(main, 'scrollTop', { value: scrollTop, configurable: true });
-    main.scrollTo = vi.fn() as typeof main.scrollTo;
+    Object.defineProperty(window, 'scrollY', { value: scrollY, configurable: true });
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
     const input = document.createElement('input');
     input.type = 'search';
     main.append(input);
     document.body.append(main);
     render(<TabBar path="/suche" />);
-    return { main, input };
+    return { main, input, scrollTo };
   };
 
   it('springt beim Tipp auf den aktiven Tab nach oben', () => {
-    const { main } = setup(400);
+    const { scrollTo } = setup(400);
     const tab = screen.getByText('Suche').closest('a')!;
     expect(fireEvent.click(tab)).toBe(false); // kein Seitenwechsel
-    expect(main.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
   });
 
   it('setzt oben angekommen den Cursor ins Suchfeld', () => {
