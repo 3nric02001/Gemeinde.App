@@ -16,9 +16,18 @@
   --shadow: 0 8px 30px rgb(0 0 0 / 0.12);
   --cover-l: 88%;
   --cover-text: rgb(0 0 0 / 0.45);
+  --cover-ink: 32%;
+  --cal-strip: #141414;
+  --cal-strip-text: #ffffff;
   --attention-bg: #fbe7c6;
   --attention-fg: #6b4000;
+  --danger: #b3261e;
 
+  /* Schriftstufen: Seitentitel, Abschnitt, Text, klein; nichts unter 12 px */
+  --fs-title: clamp(26px, 3.2vw, 34px);
+  --fs-section: 20px;
+  --fs-body: 15px;
+  --fs-small: 13px;
   --radius: 10px;
   --radius-lg: 14px;
   --sidebar: 232px;
@@ -44,8 +53,12 @@
     --shadow: 0 8px 30px rgb(0 0 0 / 0.5);
     --cover-l: 24%;
     --cover-text: rgb(255 255 255 / 0.5);
+    --cover-ink: 78%;
+    --cal-strip: #3a3a39;
+    --cal-strip-text: #f3f3f2;
     --attention-bg: #4a3512;
     --attention-fg: #f6d9a4;
+    --danger: #f2b8b5;
     color-scheme: dark;
   }
 }
@@ -182,7 +195,7 @@ h2 {
   padding: 10px 12px;
   border-radius: var(--radius);
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .sidebar li a:hover {
@@ -235,7 +248,7 @@ html[data-text='xlarge'] .now-playing {
   background: var(--accent);
   color: var(--on-accent);
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .profile-text {
@@ -271,7 +284,7 @@ html[data-text='xlarge'] .now-playing {
   padding: 0 4px;
   border-bottom: 1px solid var(--line);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
 }
 
@@ -306,7 +319,7 @@ html[data-text='xlarge'] .now-playing {
   white-space: nowrap;
   border-radius: 999px;
   border: 1px solid var(--line);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .segmented button.is-on {
@@ -323,7 +336,7 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .segmented-sample {
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -350,8 +363,8 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .page-title {
-  font-size: clamp(26px, 3.2vw, 34px);
-  font-weight: 800;
+  font-size: var(--fs-title);
+  font-weight: 700;
   margin-bottom: 20px;
 }
 
@@ -372,14 +385,14 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .section-head h2 {
-  font-size: 21px;
-  font-weight: 700;
+  font-size: var(--fs-section);
+  font-weight: 600;
 }
 
 .more-link {
   color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -465,7 +478,7 @@ html[data-text='xlarge'] .now-playing {
 
 .latest-title {
   font-size: clamp(22px, 2.6vw, 30px);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.15;
 }
@@ -476,6 +489,7 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .latest-play {
+  position: relative;
   flex-shrink: 0;
 }
 
@@ -507,7 +521,7 @@ html[data-text='xlarge'] .now-playing {
   width: 100%;
   border-radius: var(--radius);
   overflow: hidden;
-  background: hsl(var(--hue, 0) 12% var(--cover-l));
+  background: hsl(var(--hue, 0) 32% var(--cover-l));
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -527,9 +541,9 @@ html[data-text='xlarge'] .now-playing {
 
 .cover-initials {
   font-size: 30cqw;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.03em;
-  color: var(--cover-text);
+  color: hsl(var(--hue, 0) 30% var(--cover-ink));
 }
 
 /* Angaben zur Predigt über der Titelliste */
@@ -549,7 +563,7 @@ html[data-text='xlarge'] .now-playing {
 
 .sermon-info dt {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -585,29 +599,38 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .cover-date {
-  background: var(--surface-2);
+  place-items: stretch;
+  background: var(--elevated);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
-/* Kalenderblatt für Gottesdienste ohne Bild: Monat klein, Tag groß */
+/* Kalenderblatt für Gottesdienste ohne Bild: Monat als Streifen oben, Tag groß darunter, wie ein Abreißkalender */
 .cover-cal {
   display: grid;
-  justify-items: center;
+  grid-template-rows: 26% 1fr;
+  justify-items: stretch;
+  align-items: center;
   line-height: 1;
   color: var(--text);
 }
 
 .cover-cal small {
-  font-size: 11cqw;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  background: var(--cal-strip);
+  color: var(--cal-strip-text);
+  font-size: 12cqw;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
 }
 
 .cover-cal b {
-  font-size: 40cqw;
-  font-weight: 800;
-  letter-spacing: -0.04em;
+  justify-self: center;
+  font-size: 36cqw;
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
 
 .cover-sm {
@@ -657,12 +680,13 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .card-title {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .card-sub {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
 }
 
 .card-play {
@@ -722,7 +746,7 @@ html[data-text='xlarge'] .now-playing {
   padding: 0 18px;
   border-radius: var(--radius);
   background: var(--surface);
-  font-weight: 700;
+  font-weight: 600;
   transition: background 0.15s;
 }
 
@@ -747,7 +771,7 @@ html[data-text='xlarge'] .now-playing {
   background: var(--accent);
   color: var(--on-accent);
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .browse-tile:nth-child(3n + 2) {
@@ -790,7 +814,7 @@ html[data-text='xlarge'] .now-playing {
   border-radius: 999px;
   background: var(--surface);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   transition: background 0.15s;
 }
@@ -836,7 +860,7 @@ button.more-link {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23888' d='M4.6 8.6 6 7.2l6 6 6-6 1.4 1.4L12 16z'/%3E%3C/svg%3E")
     no-repeat right 12px center;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -901,14 +925,14 @@ button.more-link {
 .eyebrow {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .hero h1 {
   font-size: clamp(28px, 4.5vw, 52px);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.05;
   margin: 6px 0 10px;
   overflow-wrap: anywhere;
@@ -934,7 +958,7 @@ button.more-link {
   flex-shrink: 0;
   background: hsl(var(--hue, 0) 10% var(--cover-l));
   color: var(--cover-text);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .avatar-hero {
@@ -960,7 +984,7 @@ button.more-link {
   height: 44px;
   padding: 0 22px;
   border-radius: 999px;
-  font-weight: 700;
+  font-weight: 600;
   transition:
     transform 0.1s,
     background 0.15s;
@@ -973,6 +997,17 @@ button.more-link {
 
 .button-secondary {
   background: var(--surface);
+}
+
+/* Was sich nicht rückgängig machen lässt (Entfernen, Löschen), in Rot */
+.button-danger {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+  color: var(--danger);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
 .button-secondary:hover {
@@ -1057,13 +1092,15 @@ button.more-link {
 }
 
 .track-title {
-  font-weight: 600;
+  font-weight: 500;
+}
+
+.track.is-current {
+  background: var(--surface);
 }
 
 .track.is-current .track-title {
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
+  font-weight: 650;
 }
 
 .track-sub {
@@ -1085,9 +1122,9 @@ button.more-link {
   padding: 18px 8px 6px;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .eq {
@@ -1155,7 +1192,7 @@ button.more-link {
 }
 
 .artist-name {
-  font-weight: 600;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1243,9 +1280,7 @@ button.more-link {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
   align-items: center;
   gap: 16px;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: saturate(1.4) blur(18px);
-  -webkit-backdrop-filter: saturate(1.4) blur(18px);
+  background: var(--elevated);
   border-top: 1px solid var(--line);
 }
 
@@ -1354,7 +1389,7 @@ button.more-link {
 .seek-time {
   width: 42px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -1395,8 +1430,6 @@ button.more-link {
   margin-top: -4px;
   border-radius: 50%;
   background: var(--text);
-  opacity: 0;
-  transition: opacity 0.1s;
 }
 
 .range::-moz-range-thumb {
@@ -1405,17 +1438,11 @@ button.more-link {
   border: 0;
   border-radius: 50%;
   background: var(--text);
-  opacity: 0;
 }
 
 .range:hover::-webkit-slider-thumb,
 .range:focus-visible::-webkit-slider-thumb {
-  opacity: 1;
-}
-
-.range:hover::-moz-range-thumb,
-.range:focus-visible::-moz-range-thumb {
-  opacity: 1;
+  transform: scale(1.25);
 }
 
 .range:disabled {
@@ -1460,9 +1487,9 @@ button.more-link {
 
 .now-label {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   color: var(--muted);
 }
 
@@ -1482,9 +1509,9 @@ button.more-link {
 }
 
 .now-from small {
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   color: var(--muted);
 }
 
@@ -1546,7 +1573,7 @@ button.more-link {
 
 .now-title {
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 700;
   text-align: left;
   letter-spacing: -0.01em;
 }
@@ -1576,7 +1603,7 @@ button.more-link {
   border-radius: 999px;
   border: 1px solid var(--line);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
@@ -1662,7 +1689,7 @@ button.more-link {
   border-radius: var(--radius);
   color: var(--muted);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .sidebar-admin:hover,
@@ -1795,10 +1822,10 @@ button.more-link {
   height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  background: var(--accent);
-  color: var(--on-accent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -1913,7 +1940,7 @@ button.more-link {
   background: none;
   color: var(--text);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -2108,7 +2135,7 @@ button.more-link {
   padding: 8px 8px 8px 14px;
   border-radius: var(--radius);
   background: var(--bg);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .admin-rules .badge {
@@ -2158,7 +2185,7 @@ button.more-link {
   border: 1px solid var(--line);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .rule-item {
@@ -2169,9 +2196,9 @@ button.more-link {
 .rule-joiner {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   padding-left: 4px;
 }
 
@@ -2309,9 +2336,7 @@ button.more-link {
     grid-template-columns: repeat(5, 1fr);
     height: calc(var(--tabbar) + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
-    background: color-mix(in srgb, var(--bg) 94%, transparent);
-    backdrop-filter: saturate(1.4) blur(18px);
-    -webkit-backdrop-filter: saturate(1.4) blur(18px);
+    background: var(--bg);
     border-top: 1px solid var(--line);
   }
 
@@ -2321,8 +2346,8 @@ button.more-link {
     align-content: center;
     gap: 2px;
     color: var(--muted);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 500;
   }
 
   .tabbar a:hover {
@@ -2343,8 +2368,8 @@ button.more-link {
     grid-template-columns: minmax(0, 1fr) auto;
     border: 0;
     border-radius: 12px;
-    background: color-mix(in srgb, var(--surface-2) 90%, transparent);
-    box-shadow: var(--shadow);
+    background: var(--elevated);
+    box-shadow: var(--shadow), 0 0 0 1px var(--line);
     overflow: hidden;
   }
 
@@ -2545,6 +2570,17 @@ button.more-link {
   background: var(--surface);
 }
 
+/* Was sich nicht rückgängig machen lässt (Entfernen, Löschen), in Rot */
+.button-danger {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+  color: var(--danger);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
 /* ---------- Anmeldung, Benutzer und Gruppen ---------- */
 
 .login {
@@ -2611,7 +2647,7 @@ button.more-link {
   width: 100%;
   font: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .admin-user,
@@ -2717,7 +2753,7 @@ button.more-link {
   align-items: center;
   gap: 10px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -2881,7 +2917,7 @@ button.more-link {
   height: 20px;
   margin-left: 8px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: 12px;
   vertical-align: 2px;
 }
 
@@ -2978,7 +3014,7 @@ button.more-link {
 
 .admin-roles dt {
   color: var(--text);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 14px;
 }
 
@@ -3086,7 +3122,7 @@ button.more-link {
 
 .structure-grid .field input {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .structure-grid .field:first-child input,
@@ -3280,9 +3316,9 @@ button.more-link {
 .admin-nav-label {
   padding: 0 12px 6px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -3292,7 +3328,7 @@ button.more-link {
   border-radius: var(--radius);
   color: var(--muted);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 

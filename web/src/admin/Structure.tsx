@@ -591,7 +591,7 @@ function PreviewList({ preview }: { preview: Preview }) {
           <h3>
             {kind.name} <span class="badge badge-muted">{plural(kind.albums, 'Album', 'Alben')}</span>
             {kind.unmatchedFiles > 0 && (
-              <span class="badge"> {plural(kind.unmatchedFiles, 'Datei passt', 'Dateien passen')} nicht zum Muster</span>
+              <span class="badge badge-attention"> {plural(kind.unmatchedFiles, 'Datei passt', 'Dateien passen')} nicht zum Muster</span>
             )}
           </h3>
           {kind.examples.map((example) => (
@@ -615,7 +615,7 @@ function PreviewList({ preview }: { preview: Preview }) {
                       {track.content && <span class="badge badge-muted">{track.content}</span>}
                       {track.sermon && <span class="badge badge-muted">Predigt</span>}
                       {track.player === 'sermon' && <span class="badge badge-muted">Predigt-Player</span>}
-                      {!track.matched && <span class="badge">passt nicht</span>}
+                      {!track.matched && <span class="badge badge-attention">passt nicht</span>}
                     </span>
                   </li>
                 ))}

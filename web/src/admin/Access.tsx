@@ -292,7 +292,7 @@ function UsersAdmin({ params }: SectionProps) {
                         </button>
                         <button
                           type="button"
-                          class="button-secondary button-small"
+                          class="button-secondary button-small button-danger"
                           onClick={() => {
                             if (
                               window.confirm(
