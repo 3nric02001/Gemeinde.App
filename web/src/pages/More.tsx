@@ -1,5 +1,5 @@
 import { categoryUrl } from '../api';
-import { hasRole, logout, ROLE_LABELS, useAuth } from '../auth';
+import { hasRole, logout, ROLE_LABELS, showOnboarding, useAuth } from '../auth';
 import { Icon, type IconName } from '../components/Icon';
 import { InstallSteps } from '../components/InstallHint';
 import { setTextSize, TEXT_SIZES, useTextSize } from '../display';
@@ -83,6 +83,12 @@ export function More() {
 
       <ul class="more-list">
         {hasRole(user, 'manager') && <Row href="/admin" icon="settings" label="Verwaltung" />}
+        <li>
+          <button type="button" class="more-row" onClick={showOnboarding}>
+            <Icon name="play" size={22} />
+            <span>Einführung ansehen</span>
+          </button>
+        </li>
         <li>
           <button type="button" class="more-row" onClick={() => void logout()}>
             <Icon name="logout" size={22} />

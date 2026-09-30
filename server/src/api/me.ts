@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
+import { markOnboarded } from '../auth/users.js';
 import { recordPlay } from '../library/popularity.js';
 import { recordSearch } from '../library/searches.js';
 import { getOfflineSettings, offlineKey } from '../offline.js';
@@ -28,6 +29,12 @@ export async function registerMeRoutes(app: FastifyInstance, { db }: { db: DB })
   };
   app.put('/api/me/favorites/:kind/:id', { schema: { params: favoriteParams } }, toggle(true));
   app.delete('/api/me/favorites/:kind/:id', { schema: { params: favoriteParams } }, toggle(false));
+
+  // Die kurze Einführung beim ersten Öffnen ist gesehen (oder übersprungen); gilt auf allen Geräten.
+  app.post('/api/me/onboarding', async (request, reply) => {
+    markOnboarded(db, userId(request));
+    return reply.code(204).send();
+  });
 
   app.get('/api/me/progress', async (request) => ({ items: listProgress(db, userId(request)) }));
 

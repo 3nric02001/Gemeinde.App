@@ -66,7 +66,12 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - **Predigt-Player**: Titel ab 10 Minuten (einstellbar unter Verwaltung → Zuordnung) bekommen 15 s zurück / 30 s vor statt Zufall und
   Wiederholen, ein Tempo von 1× bis 2× und merken sich je Hörer die Stelle zum Weiterhören
   (auch geräteübergreifend, auf dem Server gespeichert).
-- **Mehr** (Handy-Tab bzw. Name unten in der Seitenleiste): Profil, Favoriten, Kategorien,
+- **Einführung**: Beim ersten Öffnen erklärt eine kurze Einführung in vier Schritten Start, Suche und Datum, das
+  Abspielen und Favoriten/Mehr. „Überspringen“ oder „Los geht’s“ merkt sie sich am Benutzer auf dem Server, sie kommt
+  also auch auf anderen Geräten nicht wieder; unter „Mehr“ lässt sie sich erneut ansehen.
+
+  ![Einführung beim ersten Öffnen](docs/screenshots/einfuehrung-desktop.png)
+- **Mehr** (Handy-Tab bzw. Name unten in der Seitenleiste): Profil, Favoriten, alle Titel (am Rechner nicht mehr in der Seitenleiste), Kategorien,
   Textgröße (Normal, Groß, Sehr groß), Installationshinweis, Verwaltung und Abmelden
 - **Als App installieren**: Web-App-Manifest und Icons; Android/Chrome bieten die Installation an,
   für iPhone steht die Anleitung auf der Startseite und unter „Mehr“.

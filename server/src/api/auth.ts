@@ -5,7 +5,7 @@ import { getBranding } from '../branding.js';
 import { librarySettings } from '../library/settings.js';
 import { OidcService } from '../auth/oidc.js';
 import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_MS, sessionUser, type SessionUser } from '../auth/sessions.js';
-import { AuthError, changePassword, checkLocalLogin, hasRole, recordDeniedLogin, upsertOidcUser, type Role } from '../auth/users.js';
+import { AuthError, changePassword, isOnboarded, checkLocalLogin, hasRole, recordDeniedLogin, upsertOidcUser, type Role } from '../auth/users.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -177,7 +177,7 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
       const user = sessionUser(db, request.cookies[SESSION_COOKIE]);
       const settings = oidc.settings();
       return {
-        user: user ? { id: user.id, name: user.name, role: user.role, kind: user.kind } : null,
+        user: user ? { id: user.id, name: user.name, role: user.role, kind: user.kind, onboarded: isOnboarded(db, user.id) } : null,
         oidc: oidc.isReady(settings) ? { label: settings.label } : null,
         branding: getBranding(db),
         // Ohne Policy läuft ein Titel ab dieser Länge im Predigt-Player (Verwaltung → Zuordnung)
@@ -222,7 +222,7 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
         ipThrottle.succeed(request.ip);
         userThrottle.succeed(userKey);
         startSession(request, reply, user.id);
-        return { user: { id: user.id, name: user.name, role: user.role, kind: user.kind } };
+        return { user: { id: user.id, name: user.name, role: user.role, kind: user.kind, onboarded: isOnboarded(db, user.id) } };
       },
     );
 

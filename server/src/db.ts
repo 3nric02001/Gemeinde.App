@@ -710,6 +710,10 @@ export const migrations: string[] = [
   -- Art von Hand: '' hieß keine Art, also Musik
   UPDATE album_overrides SET recording = 'Musik' WHERE recording = '';
   `,
+  `
+  -- Wann der Benutzer die kurze Einführung gesehen oder übersprungen hat; NULL zeigt sie beim nächsten Öffnen.
+  ALTER TABLE users ADD COLUMN onboarded_at INTEGER;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

@@ -3715,3 +3715,110 @@ dl.structure-placeholders {
     color: var(--text);
   }
 }
+
+/* ---------- Einführung beim ersten Öffnen ---------- */
+.onboarding-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.45);
+}
+
+.onboarding {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(440px, 100%);
+  padding: 40px 28px 24px;
+  border-radius: var(--radius-lg);
+  background: var(--elevated);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.onboarding-skip {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.onboarding-skip:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.onboarding-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.onboarding-count {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.onboarding h2 {
+  margin: 0 0 10px;
+  font-size: var(--fs-section);
+}
+
+.onboarding-text {
+  margin: 0;
+  min-height: 4.4em;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.onboarding-dots {
+  display: flex;
+  gap: 6px;
+  margin: 22px 0;
+}
+
+.onboarding-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  transition: width 0.2s;
+}
+
+.onboarding-dots span.is-on {
+  width: 20px;
+  border-radius: 4px;
+  background: var(--text);
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .onboarding-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .onboarding {
+    width: 100%;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+}
