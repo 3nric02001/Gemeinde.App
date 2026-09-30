@@ -39,4 +39,24 @@ describe('Albenseite', () => {
     expect(urls()[0]).not.toContain('dated=');
     expect(screen.getByRole('radio', { name: 'Alle' }).getAttribute('aria-checked')).toBe('true');
   });
+
+  it('filtert Aufnahmen je Art aus der Zuordnung', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const body = String(input).startsWith('/api/facets')
+        ? { genres: [], decades: [], totals: { tracks: 0, albums: 0, duration: 0 }, recordings: [
+            { name: 'Bibelstunde', plural: 'Bibelstunden', count: 2 },
+            { name: 'Gottesdienst', plural: 'Gottesdienste', count: 5 },
+          ] }
+        : { items: [], total: 0, limit: 50, offset: 0 };
+      return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+    });
+    render(<Albums params={new URLSearchParams('art=Bibelstunde')} />);
+    expect(await screen.findByRole('radio', { name: 'Bibelstunden' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Bibelstunden' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Gottesdienste' })).toBeTruthy();
+    const url = fetch.mock.calls.map(([u]) => String(u)).find((u) => u.startsWith('/api/albums'))!;
+    expect(url).toContain('recording=Bibelstunde');
+    expect(url).toContain('dated=true');
+    expect(url).toContain('sort=date');
+  });
 });

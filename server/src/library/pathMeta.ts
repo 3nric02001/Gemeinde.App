@@ -131,12 +131,14 @@ export function parsePath(path: string): PathMeta {
     result.trackNo = Number(numbered[2]);
     stem = numbered[3];
   }
-  const dash = stem.indexOf(' - ');
+  // In einem Ordner mit Datum (Gottesdienst) steht vor dem Bindestrich meist der Inhalt ("Lied - …",
+  // "Predigt - …"), kein Interpret; das liest das Regelwerk der Verwaltung (structure.ts). Bei einem Datum im
+  // Dateinamen selbst ("2026-09-27 Meier - Psalm 23") steht davor, wer predigt.
+  const dash = datedFolder && !result.date ? -1 : stem.indexOf(' - ');
   if (dash > 0) {
     result.artist = clean(stem.slice(0, dash));
     stem = stem.slice(dash + 3);
-    // Bei Aufnahmen mit Datum steht vor dem Bindestrich meist, wer predigt.
-    if (result.date || datedFolder) result.speaker = result.artist;
+    if (result.date) result.speaker = result.artist;
   }
   result.title = clean(stem) || basename(path);
 

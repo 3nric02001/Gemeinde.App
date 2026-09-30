@@ -2,6 +2,7 @@ import { getMeta, type DB } from '../db.js';
 import type { CategoryFilter } from './categories.js';
 import { SPEAKER_TAGS } from './metadata.js';
 import { albumTierSql, decayFactor, trackTierSql } from './popularity.js';
+import { getStructure } from './structure.js';
 import { artistKey, artistNames, foldValue, sortKey } from './text.js';
 
 export interface Page<T> {
@@ -46,12 +47,15 @@ export interface AlbumFilter {
   hidden?: boolean;
   /** Verwaltung: nur Gottesdienste, bei denen noch kein Sprecher eingetragen ist */
   noSpeaker?: boolean;
+  /** Nur Aufnahmen einer Art aus dem Regelwerk ("Gottesdienst", "Bibelstunde") */
+  recording?: string;
   limit: number;
   offset: number;
 }
 
 const TRACK_COLUMNS = `
-  t.id, t.title, t.artist, t.album_artist AS albumArtist,
+  t.id, coalesce((SELECT title FROM track_overrides WHERE path = t.path), t.display_title, t.title) AS title, coalesce(t.display_artist, t.artist) AS artist, t.album_artist AS albumArtist,
+  t.content,
   coalesce((SELECT title FROM albums WHERE id = t.album_id), t.album) AS album, t.album_id AS albumId,
   t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType,
   (SELECT date FROM albums WHERE id = t.album_id) AS albumDate,
@@ -66,7 +70,7 @@ const TRACK_COLUMNS = `
 const ALBUM_COLUMNS = `
   a.id, a.title, a.artist, a.year, a.genre, a.track_count AS trackCount, a.duration,
   (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover, a.kind,
-  a.date, a.speaker, a.passage, a.description
+  a.date, a.speaker, a.passage, a.description, a.recording
 `;
 
 /**
@@ -130,7 +134,7 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
   }
   if (filter.artist) {
     // Auch andere Schreibweisen und Gastauftritte ("Anna feat. Ben" gehört auch zu Ben)
-    where.clauses.push('(has_artist(t.artist, @artistKey) OR has_artist(t.album_artist, @artistKey))');
+    where.clauses.push('(has_artist(coalesce(t.display_artist, t.artist), @artistKey) OR has_artist(t.album_artist, @artistKey))');
     where.params.artistKey = artistKey(filter.artist);
   }
   if (filter.albumId) {
@@ -170,7 +174,7 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
 /** Parameter für die Trefferqualität: Suchbegriff als Sortierschlüssel (Anfang des Titels) und nur im Titel */
 function relevanceParams(q: string, fts: string) {
   const qkey = sortKey(q);
-  return { qkey, qkeyEnd: `${qkey}\uffff`, ftsTitle: `title : (${fts})` };
+  return { qkey, qkeyEnd: `${qkey}\uffff`, ftsTitle: `{title structure} : (${fts})` };
 }
 
 // Sortiert wird über die Schlüssel aus text.ts sortKey (Umlaute bei ihrem Grundbuchstaben, Zahlen nach Wert).
@@ -204,7 +208,8 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
   if (filter.artist) {
     where.clauses.push(
       `(has_artist(a.artist, @artistKey) OR a.id IN (
-        SELECT at.album_id FROM album_tracks at JOIN tracks t ON t.id = at.track_id WHERE has_artist(t.artist, @artistKey)))`,
+        SELECT at.album_id FROM album_tracks at JOIN tracks t ON t.id = at.track_id
+        WHERE has_artist(coalesce(t.display_artist, t.artist), @artistKey)))`,
     );
     where.params.artistKey = artistKey(filter.artist);
   }
@@ -216,6 +221,10 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
   if (filter.dated !== undefined) where.clauses.push(filter.dated ? 'a.date IS NOT NULL' : 'a.date IS NULL');
   if (filter.hidden) where.clauses.push('a.hidden = 1');
   if (filter.noSpeaker) where.clauses.push('a.date IS NOT NULL AND a.speaker IS NULL');
+  if (filter.recording) {
+    where.clauses.push('a.recording = @recording COLLATE NOCASE');
+    where.params.recording = filter.recording;
+  }
   if (filter.kind) {
     where.clauses.push('a.kind = @kind');
     where.params.kind = filter.kind;
@@ -342,11 +351,12 @@ const artistCache = new WeakMap<DB, { version: string; artists: ArtistEntry[] }>
  */
 function allArtists(db: DB): ArtistEntry[] {
   const { n, albums } = db.prepare('SELECT count(*) AS n, total(album_id) AS albums FROM tracks').get() as { n: number; albums: number };
-  const version = `${getMeta(db, 'lastScanAt') ?? ''}:${n}:${albums}`;
+  // Das Regelwerk ändert Anzeige-Interpreten ohne Scan; es gehört deshalb zum Stand.
+  const version = `${getMeta(db, 'lastScanAt') ?? ''}:${n}:${albums}:${getMeta(db, 'structure') ?? ''}`;
   const cached = artistCache.get(db);
   if (cached?.version === version) return cached.artists;
 
-  const rows = db.prepare('SELECT id, artist, album_artist, album_id FROM tracks').all() as Array<{
+  const rows = db.prepare('SELECT id, coalesce(display_artist, artist) AS artist, album_artist, album_id FROM tracks').all() as Array<{
     id: number;
     artist: string;
     album_artist: string | null;
@@ -365,7 +375,10 @@ function allArtists(db: DB): ArtistEntry[] {
       entry.tracks.add(row.id);
     }
   }
+  // Der Name einer Art ("Gottesdienst") steht bei Aufnahmen ohne Sprecher als Interpret, ist aber keiner.
+  const kinds = new Set(getStructure(db).kinds.map((kind) => artistKey(kind.name)));
   const artists = [...byKey]
+    .filter(([key]) => !kinds.has(key))
     .map(([key, entry]) => ({
       key,
       name: [...entry.spellings].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]![0],
@@ -404,5 +417,15 @@ export function getFacets(db: DB) {
               (SELECT coalesce(sum(duration), 0) FROM tracks) AS duration`,
     )
     .get();
-  return { genres, decades, totals };
+  // Arten von Aufnahmen aus dem Regelwerk, in dessen Reihenfolge, mit Anzahl sichtbarer Alben
+  const counts = new Map(
+    (db.prepare('SELECT recording, count(*) AS n FROM albums WHERE recording IS NOT NULL AND hidden = 0 GROUP BY recording').all() as Array<{
+      recording: string;
+      n: number;
+    }>).map((row) => [row.recording, row.n]),
+  );
+  const recordings = getStructure(db)
+    .kinds.map((kind) => ({ name: kind.name, plural: kind.plural, count: counts.get(kind.name) ?? 0 }))
+    .filter((kind) => kind.count > 0);
+  return { genres, decades, totals, recordings };
 }

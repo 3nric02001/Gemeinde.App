@@ -64,6 +64,16 @@ albums.forEach(([artist, album, year, genre, titles, colors], n) => {
   });
   if (colors && !embedded) cloud.put(`${artist}/${album}/cover.png`, png(colors[0]!, colors[1]!));
 });
+// Aufnahmen wie in der Gemeinde abgelegt, ohne Tags: Jahr / JJJJ_MM_TT_Anlass / "Inhalt - Titel",
+// Bibelstunden in einem eigenen Ordner mit nummerierten Teilen (siehe Verwaltung → Zuordnung)
+for (const [folder, files] of [
+  ['Audio Aufnahmen/2026/2026_09_06', ['Begrüßung', 'Lied - Großer Gott, wir loben dich', 'Predigt - Joh 10, 11 Der gute Hirte - Pastor Meier', 'Segen']],
+  ['Audio Aufnahmen/2026/2026_08_30_Einschulung', ['Lied - Vergiss nicht zu danken - Kinderchor', 'Predigt - Gott geht mit - Anna Schulz', 'Gebet']],
+  ['Audio Aufnahmen/2026/Bibelstunden/2026_01_14_Matthäus 9, 27-38', ['2026_01_14_001', '2026_01_14_002']],
+  ['Audio Aufnahmen/2026/Bibelstunden/2026_01_21_Matthäus 10, 1-15', ['2026_01_21_001']],
+] as Array<[string, string[]]>) {
+  files.forEach((file, i) => cloud.put(`${folder}/${file}.mp3`, mp3({}, file.startsWith('Predigt') || file.startsWith('2026') ? 9000 : 2500 + i * 300)));
+}
 // Gottesdienst-Aufnahmen in Datumsordnern für den Reiter "Datum"
 /** Sprecher und Bibelstelle als eigene ID3-Felder, wie sie z. B. mp3tag schreibt */
 function sermonTags(title: string): Record<string, string> {

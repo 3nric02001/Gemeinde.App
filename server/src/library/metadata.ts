@@ -20,6 +20,8 @@ export interface TrackMeta {
   sort: { title?: string; artist?: string; album?: string; albumArtist?: string };
   /** Albumname steht im Tag (sonst aus dem Ordner abgeleitet) */
   albumTagged: boolean;
+  /** Titel steht im Tag (sonst aus dem Dateinamen abgeleitet) */
+  titleTagged: boolean;
 }
 
 /** Standardfelder, die immer mit den aufbereiteten Werten (inkl. Pfad-Fallback) belegt werden */
@@ -51,10 +53,14 @@ export function searchExtra(tags: Array<[string, string]>): string | null {
   return values.length ? values.join(' ') : null;
 }
 
-/** Ein in der Verwaltung gesetzter Sprecher soll in der Suche genauso zählen wie einer aus den Tags. */
-export function withSpeakerOverride(extra: string | null, speaker: string | null | undefined): string | null {
-  if (!speaker) return extra;
-  return extra ? `${extra} ${speaker}` : speaker;
+/** Titelname und Sprecher aus der Verwaltung sollen in der Suche genauso zählen wie die aus den Tags. */
+export function withOverride(
+  extra: string | null,
+  override: { title?: string | null; speaker?: string | null } | undefined,
+): string | null {
+  const added = [override?.title, override?.speaker].filter(Boolean).join(' ');
+  if (!added) return extra;
+  return extra ? `${extra} ${added}` : added;
 }
 
 const MAX_TAGS = 60;
@@ -231,6 +237,7 @@ export async function extractMetadata(path: string, head: Buffer, mimeType?: str
     genre,
     tags,
     albumTagged: text(common?.album) !== undefined,
+    titleTagged: text(common?.title) !== undefined,
     sort: {
       title: text(common?.titlesort),
       artist: text(common?.artistsort),

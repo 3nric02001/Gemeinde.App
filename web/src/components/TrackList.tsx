@@ -15,6 +15,8 @@ interface Props {
   variant?: 'album' | 'list';
   /** In der Albumansicht wird der Interpret nur gezeigt, wenn er vom Album-Interpreten abweicht */
   albumArtist?: string;
+  /** Weiterer Interpret, der nicht genannt wird (bei Aufnahmen die Art, z. B. "Gottesdienst") */
+  hideArtist?: string;
   /** Wird statt `tracks` in die Warteschlange gelegt, z. B. alle Treffer statt der sichtbaren */
   onPlay?: (index: number) => void;
   /** Laufende Nummer statt Tracknummer, z. B. in selbst zusammengestellten Alben */
@@ -37,7 +39,7 @@ export function trackMenu(track: Track) {
   return items;
 }
 
-export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordinal = false }: Props) {
+export function TrackList({ tracks, variant = 'list', albumArtist, hideArtist, onPlay, ordinal = false }: Props) {
   const currentId = usePlayerSelect((s) => s.current?.id);
   const playing = usePlayerSelect((s) => s.playing);
   useMe(); // Herzen und Fortschritt aktuell halten
@@ -59,7 +61,8 @@ export function TrackList({ tracks, variant = 'list', albumArtist, onPlay, ordin
         const resume = savedProgress(track);
         const album = albumLabel(track.album, track.albumDate);
         // In der Albumansicht Interpret nur, wenn er abweicht; der Sprecher einer Predigt steht immer da.
-        const who = track.speaker ?? (variant === 'album' && track.artist === albumArtist ? '' : track.artist);
+        const who =
+          track.speaker ?? (variant === 'album' && (track.artist === albumArtist || track.artist === hideArtist) ? '' : track.artist);
         return (
           <Fragment key={`${track.id}-${index}`}>
             {showDisc && <li class="disc-head">CD {disc}</li>}

@@ -316,6 +316,9 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .segmented-kinds {
+  /* Musik, je Art von Aufnahmen ein Feld, Alle: Anzahl hängt von der Zuordnung ab */
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  max-width: 640px;
   margin-bottom: 12px;
 }
 
@@ -3026,4 +3029,124 @@ html[data-text='xlarge'] .now-playing {
   margin-bottom: 24px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
+}
+
+/* ---------- Verwaltung: Zuordnung von Aufnahmen ---------- */
+
+.structure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.structure-grid .field input {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+
+.structure-grid .field:first-child input,
+.structure-grid .field:nth-child(2) input {
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.field-hint {
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.structure-help summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.structure-help dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px 20px;
+  margin: 14px 0 0;
+}
+
+.structure-help dl > div {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.structure-help dt {
+  flex: none;
+  min-width: 110px;
+}
+
+.structure-help dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.structure-preview h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.structure-example {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+
+.structure-example p {
+  margin: 0;
+}
+
+.structure-files {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.structure-files li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.structure-files li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.structure-files .badge {
+  margin-left: 6px;
+}
+
+.structure-file {
+  color: var(--muted);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.structure-files li.is-unmatched .structure-file {
+  color: var(--text);
+}
+
+@media (max-width: 560px) {
+  .structure-files li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .structure-files li > span[aria-hidden] {
+    display: none;
+  }
 }

@@ -133,6 +133,8 @@ function describe(db: DB, method: string, route: string, params: Params, body: B
     }
     case 'DELETE /api/admin/groups/:name':
       return { action: 'Gruppe entfernt', target: String(params.name ?? '') };
+    case 'PUT /api/admin/structure':
+      return { action: 'Zuordnung von Aufnahmen geändert' };
     case 'PUT /api/admin/branding':
       return { action: 'Name und Begrüßung geändert' };
     case 'PUT /api/admin/oidc':

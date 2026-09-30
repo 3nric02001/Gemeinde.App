@@ -472,11 +472,64 @@ export const migrations: string[] = [
     SELECT c.id, t.value FROM categories c, json_each('["sprecher","speaker","prediger","predigerin","referent","referentin"]') t
     WHERE c.slug = 'sprecher' AND NOT EXISTS (SELECT 1 FROM category_fields WHERE category_id = c.id);
   `,
+  // Regelwerk für Aufnahmen (library/structure.ts): Anzeige-Titel, Inhalt und Interpret je Titel, Art je Album.
+  `
+  -- Aus dem Regelwerk abgeleitet (füllt rebuildAlbums); NULL: gescannten Wert zeigen
+  ALTER TABLE tracks ADD COLUMN display_title TEXT;
+  ALTER TABLE tracks ADD COLUMN display_artist TEXT;
+  -- Inhalt einer Aufnahme ("Lied", "Predigt") aus dem Dateinamen
+  ALTER TABLE tracks ADD COLUMN content TEXT;
+  -- 1: Titel aus einem Tag, 0: aus dem Dateinamen abgeleitet, NULL: unbekannt (vor dem nächsten Lesen)
+  ALTER TABLE tracks ADD COLUMN title_tagged INTEGER;
+  -- Art einer Aufnahme ("Gottesdienst", "Bibelstunde"); NULL bei Musik
+  ALTER TABLE albums ADD COLUMN recording TEXT;
+  CREATE INDEX albums_recording ON albums(recording, date);
+  -- 1: vom Regelwerk abgeleiteter Wert (Inhalt, Sprecher), den rebuildAlbums selbst pflegt
+  ALTER TABLE track_tags ADD COLUMN derived INTEGER NOT NULL DEFAULT 0;
+
+  DROP TRIGGER tracks_ai;
+  DROP TRIGGER tracks_ad;
+  DROP TRIGGER tracks_au;
+  DROP TABLE tracks_fts;
+  CREATE VIRTUAL TABLE tracks_fts USING fts5(
+    title, artist, album, genre, search_extra, structure,
+    content='', contentless_delete=1,
+    tokenize='unicode61 remove_diacritics 2'
+  );
+  CREATE TRIGGER tracks_ai AFTER INSERT ON tracks BEGIN
+    INSERT INTO tracks_fts(rowid, title, artist, album, genre, search_extra, structure)
+    VALUES (new.id, new.title, new.artist || ' ' || coalesce(new.album_artist, ''), coalesce(new.album, ''), coalesce(new.genre, ''),
+            coalesce(new.search_extra, ''),
+            coalesce(new.display_title, '') || ' ' || coalesce(new.content, '') || ' ' || coalesce(new.display_artist, ''));
+  END;
+  CREATE TRIGGER tracks_ad AFTER DELETE ON tracks BEGIN
+    DELETE FROM tracks_fts WHERE rowid = old.id;
+  END;
+  CREATE TRIGGER tracks_au AFTER UPDATE OF title, artist, album_artist, album, genre, search_extra, display_title, content, display_artist
+  ON tracks BEGIN
+    DELETE FROM tracks_fts WHERE rowid = old.id;
+    INSERT INTO tracks_fts(rowid, title, artist, album, genre, search_extra, structure)
+    VALUES (new.id, new.title, new.artist || ' ' || coalesce(new.album_artist, ''), coalesce(new.album, ''), coalesce(new.genre, ''),
+            coalesce(new.search_extra, ''),
+            coalesce(new.display_title, '') || ' ' || coalesce(new.content, '') || ' ' || coalesce(new.display_artist, ''));
+  END;
+  INSERT INTO tracks_fts(rowid, title, artist, album, genre, search_extra, structure)
+    SELECT id, title, artist || ' ' || coalesce(album_artist, ''), coalesce(album, ''), coalesce(genre, ''), coalesce(search_extra, ''), ''
+    FROM tracks;
+
+  -- Kategorie "Inhalt" (Lied, Predigt …) aus dem Regelwerk, zunächst nicht im Menü
+  INSERT INTO categories (name, slug, position, in_nav, created_at)
+    SELECT 'Inhalt', 'inhalt', coalesce((SELECT max(position) + 1 FROM categories), 0), 0, unixepoch() * 1000
+    WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'inhalt');
+  INSERT INTO category_fields (category_id, tag)
+    SELECT id, 'inhalt' FROM categories WHERE slug = 'inhalt' AND NOT EXISTS (SELECT 1 FROM category_fields WHERE category_id = categories.id);
+
+  -- "Lied - Großer Gott" in einem Gottesdienst-Ordner ergab bisher den Interpreten "Lied"; einmal neu lesen.
+  UPDATE tracks SET etag = '';
+  `,
   `
   -- Korrekturen einzelner Titel aus der Verwaltung (Titelname, Sprecher), je Pfad wie die übrigen
-  -- Korrekturen. Der Scan übernimmt sie; tag_title hält den Namen aus der Datei fürs Zurücksetzen.
-  ALTER TABLE tracks ADD COLUMN tag_title TEXT;
-  UPDATE tracks SET tag_title = title;
+  -- Korrekturen. Sie gehen allem vor, was Dateien und Regelwerk ergeben (queries.ts TRACK_COLUMNS).
   CREATE TABLE track_overrides (
     path    TEXT PRIMARY KEY,
     title   TEXT,

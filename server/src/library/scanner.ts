@@ -3,7 +3,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { setMeta, type DB } from '../db.js';
 import { WebDavError, type NextcloudClient, type RemoteEntry } from '../nextcloud/webdav.js';
 import { rebuildAlbums } from './albums.js';
-import { extractMetadata, searchExtra, tagSpan, withSpeakerOverride, type TrackMeta } from './metadata.js';
+import { extractMetadata, searchExtra, tagSpan, withOverride, type TrackMeta } from './metadata.js';
 import { basename, coverRank, dirname, isAudioFile } from './pathMeta.js';
 import { foldValue, sortKey } from './text.js';
 
@@ -209,26 +209,27 @@ export class LibraryScanner {
     if (changed.length > 0) this.log.info({ files: files.length, toRead: changed.length }, 'Bibliotheks-Scan liest Dateien');
 
     const upsert = this.db.prepare(`
-      INSERT INTO tracks (path, etag, size, mime, title, tag_title, artist, album_artist, album, track_no, disc_no, year, genre, duration,
-                          compilation, cover_id, scanned_at, file_id, added_at, sort_title, sort_artist, album_sort, album_artist_sort, album_tagged)
-      VALUES (@path, @etag, @size, @mime, coalesce((SELECT title FROM track_overrides WHERE path = @path), @title), @title,
-              @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @coverId,
-              @now, @fileId, coalesce(@addedAt, @now), @sortTitle, @sortArtist, @albumSort, @albumArtistSort, @albumTagged)
+      INSERT INTO tracks (path, etag, size, mime, title, artist, album_artist, album, track_no, disc_no, year, genre, duration, compilation, cover_id,
+                          scanned_at, file_id, added_at, sort_title, sort_artist, album_sort, album_artist_sort, album_tagged, title_tagged)
+      VALUES (@path, @etag, @size, @mime, @title, @artist, @albumArtist, @album, @trackNo, @discNo, @year, @genre, @duration, @compilation, @coverId,
+              @now, @fileId, coalesce(@addedAt, @now), @sortTitle, @sortArtist, @albumSort, @albumArtistSort, @albumTagged, @titleTagged)
       ON CONFLICT(path) DO UPDATE SET
-        etag = excluded.etag, size = excluded.size, mime = excluded.mime, title = excluded.title, tag_title = excluded.tag_title,
+        etag = excluded.etag, size = excluded.size, mime = excluded.mime, title = excluded.title,
         artist = excluded.artist, album_artist = excluded.album_artist, album = excluded.album,
         track_no = excluded.track_no, disc_no = excluded.disc_no, year = excluded.year, genre = excluded.genre,
         duration = excluded.duration, compilation = excluded.compilation, cover_id = excluded.cover_id,
         scanned_at = excluded.scanned_at, file_id = coalesce(excluded.file_id, tracks.file_id),
         added_at = coalesce(@addedAt, tracks.added_at, excluded.added_at),
-        sort_title = excluded.sort_title, sort_artist = excluded.sort_artist,
-        album_sort = excluded.album_sort, album_artist_sort = excluded.album_artist_sort, album_tagged = excluded.album_tagged
+        -- Anzeige-Titel und -Interpret aus dem Regelwerk bestimmen die Sortierung selbst (albums.ts applyRecordings).
+        sort_title = CASE WHEN tracks.display_title IS NULL THEN excluded.sort_title ELSE tracks.sort_title END,
+        sort_artist = CASE WHEN tracks.display_artist IS NULL THEN excluded.sort_artist ELSE tracks.sort_artist END,
+        album_sort = excluded.album_sort, album_artist_sort = excluded.album_artist_sort, album_tagged = excluded.album_tagged, title_tagged = excluded.title_tagged
       RETURNING id
     `);
     const clearTags = this.db.prepare('DELETE FROM track_tags WHERE track_id = ?');
     const addTag = this.db.prepare('INSERT INTO track_tags (track_id, tag, value, vkey) VALUES (?, ?, ?, ?)');
     const setSearchExtra = this.db.prepare('UPDATE tracks SET search_extra = ? WHERE id = ? AND search_extra IS NOT ?');
-    const overrideSpeaker = this.db.prepare('SELECT speaker FROM track_overrides WHERE path = ?');
+    const trackOverride = this.db.prepare('SELECT title, speaker FROM track_overrides WHERE path = ?');
     const saveCover = this.db.prepare(`
       INSERT INTO covers (hash, mime, data) VALUES (?, ?, ?)
       ON CONFLICT(hash) DO UPDATE SET mime = excluded.mime
@@ -266,12 +267,13 @@ export class LibraryScanner {
           albumSort: meta.sort.album ?? null,
           albumArtistSort: meta.sort.albumArtist ?? null,
           albumTagged: meta.albumTagged ? 1 : 0,
+          titleTagged: meta.titleTagged ? 1 : 0,
         }) as { id: number };
         clearTags.run(id);
         for (const [tag, value] of meta.tags) addTag.run(id, tag, value, foldValue(value));
-        const extra = withSpeakerOverride(
+        const extra = withOverride(
           searchExtra(meta.tags),
-          (overrideSpeaker.get(entry.path) as { speaker: string | null } | undefined)?.speaker,
+          trackOverride.get(entry.path) as { title: string | null; speaker: string | null } | undefined,
         );
         setSearchExtra.run(extra, id, extra);
         if (moved.has(entry.path)) continue;

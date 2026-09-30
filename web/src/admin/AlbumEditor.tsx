@@ -70,7 +70,7 @@ export function AlbumEditor({ id, onError }: Props) {
 
   const manual = album.kind === 'manual';
   const dated = Boolean(album.date);
-  const name = albumTitle(album.title, album.date);
+  const name = albumTitle(album.title, album.date, album.recording);
   const base = `/api/admin/albums/${id}`;
   const ids = album.tracks.map((t) => t.id);
   const viaRule = new Set(album.ruleTrackIds);
@@ -135,7 +135,7 @@ export function AlbumEditor({ id, onError }: Props) {
           </div>
         </div>
         <div class="hero-text">
-          <span class="eyebrow">{dated ? 'Gottesdienst' : manual ? 'Eigenes Album' : 'Automatisches Album'}</span>
+          <span class="eyebrow">{dated ? album.recording || 'Gottesdienst' : manual ? 'Eigenes Album' : 'Automatisches Album'}</span>
           <h1>{name}</h1>
           <p class="hero-sub">{dated ? serviceLine(album.date!, album.speaker) : album.artist}</p>
           <p class="hero-meta">
@@ -400,8 +400,8 @@ export function AlbumEditor({ id, onError }: Props) {
 
 const TEXT_FIELDS = ['title', 'artist', 'genre', 'speaker', 'passage', 'description'] as const;
 type FieldName = (typeof TEXT_FIELDS)[number] | 'year';
-/** Ohne Anlass heißt ein Gottesdienst einfach so (siehe albumTitle) */
-const NO_OCCASION = 'Gottesdienst';
+/** Ohne Anlass heißt eine Aufnahme wie ihre Art, etwa „Gottesdienst“ (siehe albumTitle) */
+const noOccasion = (album: AdminAlbumDetail) => album.recording || 'Gottesdienst';
 
 function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: boolean; onSave: (fields: Partial<AlbumFields>) => void }) {
   const dated = Boolean(album.date);
@@ -423,7 +423,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
   const changes: Partial<AlbumFields> = {};
   for (const name of TEXT_FIELDS) {
     if (form[name].trim() === shown(name)) continue;
-    changes[name] = form[name].trim() || (name === 'title' && dated ? NO_OCCASION : null);
+    changes[name] = form[name].trim() || (name === 'title' && dated ? noOccasion(album) : null);
   }
   if (form.year.trim() !== (album.year ? String(album.year) : '')) changes.year = form.year.trim() ? Number(form.year) : null;
   const yearValid = !form.year.trim() || /^\d{4}$/.test(form.year.trim());
@@ -488,7 +488,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
       {dated ? (
         <>
           <div class="admin-fields admin-fields-2">
-            {field('title', 'Anlass', { maxLength: 200, placeholder: NO_OCCASION })}
+            {field('title', 'Anlass', { maxLength: 200, placeholder: noOccasion(album) })}
             <div class="field-wrap">
               <div class="field">
                 <span>Datum</span>
@@ -590,7 +590,7 @@ function TrackForm({
             <span>Name</span>
             <input value={title} maxLength={300} placeholder={edit?.fileTitle} autoFocus onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
           </label>
-          {edit?.title && <p class="field-source">In der Datei: „{edit.fileTitle}“</p>}
+          {edit?.title && <p class="field-source">Automatisch: „{edit.fileTitle}“</p>}
         </div>
         <div class="field-wrap">
           <label class="field">
@@ -602,7 +602,7 @@ function TrackForm({
               onInput={(e) => setSpeaker((e.target as HTMLInputElement).value)}
             />
           </label>
-          {edit?.speaker && <p class="field-source">In der Datei: {edit.fileSpeaker ? `„${edit.fileSpeaker}“` : 'kein Sprecher'}</p>}
+          {edit?.speaker && <p class="field-source">Automatisch: {edit.fileSpeaker ? `„${edit.fileSpeaker}“` : 'kein Sprecher'}</p>}
         </div>
       </div>
       <p class="admin-hint">Die Korrektur bleibt auch nach neuen Scans erhalten; die Datei in der Nextcloud ändert sich nicht.</p>

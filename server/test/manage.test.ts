@@ -34,7 +34,9 @@ function addUser(name: string, role: 'listener' | 'manager'): number {
   return id;
 }
 
-const albumId = (title: string) => (ctx.db.prepare('SELECT id FROM albums WHERE title = ?').get(title) as { id: number }).id;
+/** Album nach Namen oder, bei Aufnahmen, nach Ordner ("2026-09-27 Erntedank") */
+const albumId = (name: string) =>
+  (ctx.db.prepare("SELECT id FROM albums WHERE title = ? OR folder LIKE '%/' || ?").get(name, name) as { id: number }).id;
 const service = (folder: string, title: string, custom: Record<string, string> = {}) =>
   cloud.put(`Gottesdienste/2026/${folder}/01 ${title}.mp3`, mp3({ title, artist: 'MBG', genre: 'Gottesdienst', custom }));
 
@@ -83,7 +85,7 @@ describe('Titel korrigieren', () => {
     const album = await get(`/api/admin/albums/${id}`);
     const track = album.tracks[0];
     expect(album.trackEdits).toEqual([
-      { id: track.id, fileTitle: 'Predigt_final2', title: null, speaker: null, fileSpeaker: null },
+      { id: track.id, fileTitle: 'Predigt: final2', title: null, speaker: null, fileSpeaker: null },
     ]);
 
     const edited = await send('PATCH', `/api/admin/albums/${id}/tracks/${track.id}`, { title: 'Predigt: Dankbar leben', speaker: 'Pastorin Schulz' });
@@ -93,15 +95,15 @@ describe('Titel korrigieren', () => {
     expect((await get('/api/tracks?q=Schulz')).items.map((t: any) => t.title)).toEqual(['Predigt: Dankbar leben']);
     expect((await get('/api/tracks?q=dankbar')).items).toHaveLength(1);
 
-    // Datei ändert sich in der Nextcloud: die Korrektur bleibt, der Dateiname wird aktualisiert
+    // Datei ändert sich in der Nextcloud: die Korrektur bleibt, der Name aus Datei und Regelwerk wird aktualisiert
     service('2026-09-27 Erntedank', 'Predigt_final2', { Kommentar: 'neu' });
     await ctx.scanner.scan();
     const rescanned = await get(`/api/admin/albums/${id}`);
     expect(rescanned.tracks[0].title).toBe('Predigt: Dankbar leben');
-    expect(rescanned.trackEdits[0]).toMatchObject({ fileTitle: 'Predigt_final2', title: 'Predigt: Dankbar leben' });
+    expect(rescanned.trackEdits[0]).toMatchObject({ fileTitle: 'Predigt: final2', title: 'Predigt: Dankbar leben' });
 
     const reset = await send('PATCH', `/api/admin/albums/${id}/tracks/${track.id}`, { title: null, speaker: null });
-    expect(reset.tracks[0]).toMatchObject({ title: 'Predigt_final2', speaker: null });
+    expect(reset.tracks[0]).toMatchObject({ title: 'Predigt: final2', speaker: null });
     expect(reset.speaker).toBeNull();
     expect((await get('/api/tracks?q=Schulz')).items).toEqual([]);
     expect(ctx.db.prepare('SELECT count(*) AS n FROM track_overrides').get()).toEqual({ n: 0 });
@@ -189,7 +191,7 @@ describe('Änderungsprotokoll', () => {
     const log = await get('/api/admin/changes');
     expect(log.items.map((c: any) => [c.userName, c.action, c.target])).toEqual([
       ['Anna Beispiel', 'Album ausgeblendet', 'Erntedank-Gottesdienst'],
-      ['Anna Beispiel', 'Album bearbeitet (Name, Sprecher)', '2026-09-27 Erntedank'],
+      ['Anna Beispiel', 'Album bearbeitet (Name, Sprecher)', 'Erntedank'],
     ]);
   });
 

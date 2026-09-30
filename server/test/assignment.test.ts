@@ -4,6 +4,7 @@ import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
+import { preferTags } from './helpers/structure.js';
 import { sessionCookie } from './helpers/session.js';
 
 let cloud: FakeNextcloud;
@@ -33,6 +34,7 @@ beforeEach(async () => {
     DATABASE_PATH: ':memory:',
   });
   ctx = await buildApp(config, { logger: false });
+  preferTags(ctx.db);
   cookie = sessionCookie(ctx.db);
 });
 
@@ -211,7 +213,8 @@ describe('Hinweise zur Datenqualität', () => {
     ]);
     expect(report.withoutCover.total).toBe(3);
     expect(report.servicesWithoutSpeaker.items.map((a: any) => a.date)).toEqual(['2026-09-27']);
-    expect(report.suspiciousArtists.map((a: any) => a.name).sort()).toEqual(['2019', 'Unbekannter Interpret']);
+    // Die Predigt ohne Interpret steht unter der Art ("Gottesdienst"), nicht als unbekannt
+    expect(report.suspiciousArtists.map((a: any) => a.name).sort()).toEqual(['2019']);
     expect(report.artistVariants).toEqual([{ names: ['Hillsong UNITED', 'Hillsong United'], trackCount: 2 }]);
   });
 });

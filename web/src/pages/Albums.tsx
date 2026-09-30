@@ -1,9 +1,9 @@
-import type { Album } from '../api';
+import type { Album, Facets } from '../api';
 import { query } from '../api';
 import { AlbumGrid } from '../components/AlbumCard';
 import { Filters, readFilter, type FilterValue } from '../components/Filters';
 import { plural } from '../format';
-import { usePaged } from '../hooks';
+import { useApi, usePaged } from '../hooks';
 import { navigate } from '../router';
 import { Empty, ErrorNote, Loading } from './common';
 
@@ -15,27 +15,29 @@ const SORTS = [
   ['recent', 'Neu hinzugefügt'],
 ] as const;
 
-/** Musik und Gottesdienste getrennt; Gottesdienste haben zusätzlich den Reiter "Datum". */
-const KINDS = [
-  ['musik', 'Musik'],
-  ['gottesdienste', 'Gottesdienste'],
-  ['alle', 'Alle'],
-] as const;
-type Kind = (typeof KINDS)[number][0];
+/**
+ * Musik und Aufnahmen getrennt, Aufnahmen je Art aus der Zuordnung (Gottesdienste, Bibelstunden …);
+ * sie stehen zusätzlich unter "Datum". `art` ist "musik", "alle" oder der Name einer Art.
+ * "gottesdienste" aus älteren Links heißt: alle Aufnahmen mit Datum.
+ */
+const ALL_RECORDINGS = 'gottesdienste';
 
 export function Albums({ params }: { params: URLSearchParams }) {
   const filter = readFilter(params);
   const q = params.get('q') ?? undefined;
+  const recordings = useApi<Facets>('/api/facets').data?.recordings ?? [];
+  const kinds: Array<[string, string]> = [
+    ['musik', 'Musik'],
+    ...(recordings.length ? recordings.map((r): [string, string] => [r.name, r.plural]) : [[ALL_RECORDINGS, 'Gottesdienste'] as [string, string]]),
+    ['alle', 'Alle'],
+  ];
   // Ohne Auswahl nur Musik; kommt man über eine Suche, ein Genre oder Jahrzehnt, alles, damit nichts fehlt.
-  const kind: Kind = KINDS.some(([key]) => key === params.get('art'))
-    ? (params.get('art') as Kind)
-    : q || filter.genre || filter.decade
-      ? 'alle'
-      : 'musik';
-  const defaultSort = kind === 'gottesdienste' ? 'date' : 'artist';
+  const kind = params.get('art') || (q || filter.genre || filter.decade ? 'alle' : 'musik');
+  const recording = kind !== 'musik' && kind !== 'alle' && kind !== ALL_RECORDINGS ? kind : undefined;
+  const defaultSort = kind === 'musik' || kind === 'alle' ? 'artist' : 'date';
   const sort = SORTS.some(([key]) => key === params.get('sort')) ? params.get('sort')! : defaultSort;
-  const dated = kind === 'musik' ? 'false' : kind === 'gottesdienste' ? 'true' : undefined;
-  const { items, total, loading, error, sentinel } = usePaged<Album>(`/api/albums${query({ ...filter, q, sort, dated })}`);
+  const dated = kind === 'musik' ? 'false' : kind === 'alle' ? undefined : 'true';
+  const { items, total, loading, error, sentinel } = usePaged<Album>(`/api/albums${query({ ...filter, q, sort, dated, recording })}`);
 
   const update = (next: { sort?: string; genre?: string; decade?: number; art?: string }) =>
     navigate(`/alben${query({ q, sort: params.get('sort') ?? undefined, art: params.get('art') ?? undefined, ...filter, ...next })}`, {
@@ -58,7 +60,7 @@ export function Albums({ params }: { params: URLSearchParams }) {
         </label>
       </div>
       <div class="segmented segmented-kinds" role="radiogroup" aria-label="Art">
-        {KINDS.map(([key, label]) => (
+        {kinds.map(([key, label]) => (
           <button
             key={key}
             type="button"

@@ -4,7 +4,8 @@ import { parseFolderDate } from './dateText.js';
 import { PASSAGE_TAGS, SPEAKER_TAGS, UNKNOWN_ARTIST } from './metadata.js';
 import { evaluateRules } from './rules.js';
 import { albumFolderOf, basename, dirname, fileStem, folderDate, parsePath, type PathMeta } from './pathMeta.js';
-import { sortKey } from './text.js';
+import { applyToFolder, compileStructure, getStructure, kindOfFolder, type FolderResult } from './structure.js';
+import { foldValue, sortKey } from './text.js';
 
 export const VARIOUS_ARTISTS = 'Verschiedene Interpreten';
 export const LOOSE_TRACKS = 'Einzeltitel';
@@ -29,6 +30,10 @@ interface TrackRow {
   album_sort: string | null;
   album_artist_sort: string | null;
   album_tagged: number | null;
+  display_title: string | null;
+  display_artist: string | null;
+  content: string | null;
+  title_tagged: number | null;
 }
 
 interface AlbumDraft {
@@ -194,7 +199,7 @@ interface Override {
 
 const COMPARED = [
   'title', 'artist', 'year', 'genre', 'folder', 'cover', 'coverId', 'count', 'duration', 'hidden',
-  'date', 'speaker', 'passage', 'description', 'sortTitle', 'sortArtist', 'createdAt',
+  'date', 'speaker', 'passage', 'description', 'sortTitle', 'sortArtist', 'createdAt', 'recording',
 ] as const;
 
 export const MANUAL_KEY_PREFIX = 'manual:';
@@ -263,7 +268,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     const tracks = db
       .prepare(
         `SELECT id, path, title, artist, album_artist, album, year, genre, duration, compilation, track_no, disc_no, album_id,
-                cover_id, album_key, added_at, album_sort, album_artist_sort, album_tagged
+                cover_id, album_key, added_at, album_sort, album_artist_sort, album_tagged, display_title, display_artist, content, title_tagged
          FROM tracks`,
       )
       .all() as TrackRow[];
@@ -291,6 +296,24 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       track.album_key = key;
       keyMembers.set(key, (keyMembers.get(key) ?? new Set()).add(track.id));
     }
+
+    // 1b. Regelwerk für Aufnahmen (Verwaltung → Zuordnung): Art, Albumname, Titel, Inhalt und Sprecher.
+    const structure = compileStructure(getStructure(db));
+    const byFolder = new Map<string, TrackRow[]>();
+    for (const track of tracks) {
+      const { folder } = groups.get(track.id)!;
+      byFolder.set(folder, [...(byFolder.get(folder) ?? []), track]);
+    }
+    const recordings = new Map<string, FolderResult>();
+    for (const [folder, list] of byFolder) {
+      const kind = kindOfFolder(structure, folder);
+      if (!kind) continue;
+      const files = list.map((t) => ({ path: t.path, title: t.title, titleTagged: t.title_tagged === 1 || (t.title_tagged === null && t.title !== parsed(t.path).title), duration: t.duration }));
+      recordings.set(folder, applyToFolder(kind, folder, files));
+    }
+    applyRecordings(db, tracks, (track) => recordings.get(groups.get(track.id)!.folder), parsed);
+    // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) zählen zur Art ohne Ordner-Kennzeichen.
+    const defaultRecording = structure.kinds.find((k) => !k.folderKey)?.kind.name ?? structure.kinds[0]?.kind.name ?? null;
 
     // Bisheriger Inhalt aller Alben (für Wiedererkennung und um unnötiges Schreiben zu sparen)
     const current = new Map<number, number[]>();
@@ -344,7 +367,8 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     const sermonTag = (tags: string[]) => {
       const values = new Map<number, string>();
       const rows = db
-        .prepare(`SELECT track_id, value FROM track_tags WHERE tag IN (SELECT value FROM json_each(?)) ORDER BY rowid`)
+        // Nur echte Tags; was das Regelwerk ableitet, kommt über recording dazu
+        .prepare(`SELECT track_id, value FROM track_tags WHERE tag IN (SELECT value FROM json_each(?)) AND derived = 0 ORDER BY rowid`)
         .all(JSON.stringify(tags)) as Array<{ track_id: number; value: string }>;
       for (const row of rows) if (!values.has(row.track_id)) values.set(row.track_id, row.value);
       return values;
@@ -376,29 +400,40 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
 
     const derive = (draft: AlbumDraft, cover: string | undefined, createdAt: number) => {
       const override = overrides.get(draft.key);
+      const recording = draft.folder ? recordings.get(draft.folder) : undefined;
       const tagTitle = draft.fixedTitle ? undefined : mostCommon(draft.tracks.map((t) => t.album));
-      const title = override?.title ?? tagTitle ?? draft.title;
+      // Bei Aufnahmen gilt die Vorlage aus dem Regelwerk; ohne Anlass bleibt der Ordnername (die Oberfläche zeigt dann die Art).
+      // Steht der Albumname in den Tags und soll die Art Tags bevorzugen, bleibt er.
+      const taggedAlbum = mostCommon(
+        draft.tracks
+          .filter((t) => t.album_tagged === 1 || (t.album_tagged === null && t.album && t.album !== parsed(t.path).album))
+          .map((t) => t.album),
+      );
+      const ruleTitle = recording && !(recording.kind.preferTags && taggedAlbum) ? recording.title || basename(draft.folder) : undefined;
+      const title = override?.title ?? ruleTitle ?? tagTitle ?? draft.title;
+      const tracks = draft.tracks.map((t) => ({ ...t, title: t.display_title ?? t.title, artist: t.display_artist ?? t.artist }));
       // Datum aus den Dateinamen, dem Albumordner ("2026-09-27 Erntedank") oder dem Albumnamen; nur bei automatischen Alben.
       const date = draft.folder
         ? (draft.date ?? folderDate(draft.folder) ?? (tagTitle ? parseFolderDate(tagTitle) : undefined))
         : undefined;
       // Längster Titel zuerst: bei einem Gottesdienst meist die Predigt
-      const byLength = [...draft.tracks].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
+      const byLength = [...tracks].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
       const speaker =
         override?.speaker ??
         mostCommon(draft.tracks.map((t) => speakers.get(t.id))) ??
-        (date ? mostCommon(byLength.map((t) => parsed(t.path).speaker)) : undefined) ??
+        recording?.speaker ??
+        (date && !recording ? mostCommon(byLength.map((t) => parsed(t.path).speaker)) : undefined) ??
         null;
       const passage =
         override?.passage ??
         mostCommon(draft.tracks.map((t) => passages.get(t.id))) ??
-        (date
+        recording?.passage ??
+        (date && !recording
           ? [...byLength.map((t) => t.title), ...byLength.map((t) => fileStem(t.path)), title].map(findPassage).find(Boolean)
           : undefined) ??
         null;
       // Bei Gottesdiensten ist, wer predigt, der Interpret; das Jahr kommt aus dem Datum.
-      const artist =
-        override?.artist ?? (date && speaker ? speaker : draft.tracks.length ? albumArtist(draft.tracks) : UNKNOWN_ARTIST);
+      const artist = override?.artist ?? (date && speaker ? speaker : tracks.length ? albumArtist(tracks) : UNKNOWN_ARTIST);
       const sortTitle = sortKey(override?.title ?? mostCommon(draft.tracks.map((t) => t.album_sort)) ?? title);
       const sortArtist = sortKey(override?.artist ?? mostCommon(draft.tracks.map((t) => t.album_artist_sort)) ?? artist);
       return {
@@ -423,34 +458,37 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         sortTitle,
         sortArtist,
         createdAt,
+        recording: recording?.kind.name ?? (date ? defaultRecording : null),
       };
     };
 
     const upsertAuto = db.prepare(`
       INSERT INTO albums (key, title, artist, year, genre, folder, cover_path, cover_id, track_count, duration, hidden, created_at,
-                          date, speaker, passage, description, sort_title, sort_artist)
+                          date, speaker, passage, description, sort_title, sort_artist, recording)
       VALUES (@key, @title, @artist, @year, @genre, @folder, @cover, @coverId, @count, @duration, @hidden, @createdAt,
-              @date, @speaker, @passage, @description, @sortTitle, @sortArtist)
+              @date, @speaker, @passage, @description, @sortTitle, @sortArtist, @recording)
       ON CONFLICT(key) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, year = excluded.year, genre = excluded.genre,
         folder = excluded.folder, cover_path = excluded.cover_path, cover_id = excluded.cover_id,
         track_count = excluded.track_count, duration = excluded.duration, hidden = excluded.hidden,
         date = excluded.date, speaker = excluded.speaker, passage = excluded.passage, description = excluded.description,
-        sort_title = excluded.sort_title, sort_artist = excluded.sort_artist, created_at = excluded.created_at
+        sort_title = excluded.sort_title, sort_artist = excluded.sort_artist, created_at = excluded.created_at,
+        recording = excluded.recording
       RETURNING id
     `);
     const updateManual = db.prepare(`
       UPDATE albums SET title = @title, artist = @artist, year = @year, genre = @genre, folder = @folder,
         cover_path = @cover, cover_id = @coverId, track_count = @count, duration = @duration, hidden = @hidden,
         date = @date, speaker = @speaker, passage = @passage, description = @description,
-        sort_title = @sortTitle, sort_artist = @sortArtist
+        sort_title = @sortTitle, sort_artist = @sortArtist, recording = @recording
       WHERE id = @id
     `);
 
     const existing = db
       .prepare(
         `SELECT id, key, kind, title, artist, year, genre, folder, cover_path AS cover, cover_id AS coverId, track_count AS count, duration, hidden,
-                date, speaker, passage, description, sort_title AS sortTitle, sort_artist AS sortArtist, created_at AS createdAt
+                date, speaker, passage, description, sort_title AS sortTitle, sort_artist AS sortArtist, created_at AS createdAt,
+                recording
          FROM albums`,
       )
       .all() as Array<AlbumRow & Record<string, unknown>>;
@@ -523,4 +561,54 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       if (track.album_id !== albumId) assign.run(albumId, track.id);
     }
   })();
+}
+
+/**
+ * Schreibt, was das Regelwerk je Titel ergibt: Anzeige-Titel, Inhalt, Interpret und die abgeleiteten
+ * Tag-Felder "inhalt" und "sprecher" (für Kategorien). Nur geänderte Titel werden geschrieben.
+ * Ein Interpret aus den Tags bleibt; ohne ihn steht der Sprecher, sonst der Name der Art.
+ */
+function applyRecordings(
+  db: DB,
+  tracks: TrackRow[],
+  recordingOf: (track: TrackRow) => FolderResult | undefined,
+  parsed: (path: string) => PathMeta,
+): void {
+  const setDisplay = db.prepare(
+    'UPDATE tracks SET display_title = ?, display_artist = ?, content = ?, sort_title = ?, sort_artist = ? WHERE id = ?',
+  );
+  const derived = new Map<number, string>();
+  for (const row of db.prepare('SELECT track_id, tag, value FROM track_tags WHERE derived = 1 ORDER BY tag, value').all() as Array<{
+    track_id: number;
+    tag: string;
+    value: string;
+  }>) {
+    derived.set(row.track_id, `${derived.get(row.track_id) ?? ''}${row.tag}\u0000${row.value}\u0001`);
+  }
+  const clearDerived = db.prepare('DELETE FROM track_tags WHERE track_id = ? AND derived = 1');
+  const addDerived = db.prepare('INSERT INTO track_tags (track_id, tag, value, vkey, derived) VALUES (?, ?, ?, ?, 1)');
+  for (const track of tracks) {
+    const recording = recordingOf(track);
+    const file = recording?.files.get(track.path);
+    const artistTagged = track.artist !== UNKNOWN_ARTIST && track.artist !== parsed(track.path).artist;
+    const title = file?.title ?? null;
+    const content = file?.content ?? null;
+    // Name aus dem Dateinamen vor dem Tag, außer die Art bevorzugt Tags; ohne beides der Sprecher, sonst die Art
+    const named = file?.performer && !(recording!.kind.preferTags && artistTagged) ? file.performer : undefined;
+    const artist = recording ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name))) : null;
+    if (title !== track.display_title || artist !== track.display_artist || content !== track.content) {
+      setDisplay.run(title, artist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
+      track.display_title = title;
+      track.display_artist = artist;
+      track.content = content;
+    }
+    const tags = ([['inhalt', content], ['sprecher', file?.speaker ?? null]] as Array<[string, string | null]>)
+      .filter((entry): entry is [string, string] => entry[1] !== null)
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const wanted = tags.map(([tag, value]) => `${tag}\u0000${value}\u0001`).join('');
+    if (wanted !== (derived.get(track.id) ?? '')) {
+      clearDerived.run(track.id);
+      for (const [tag, value] of tags) addDerived.run(track.id, tag, value, foldValue(value));
+    }
+  }
 }

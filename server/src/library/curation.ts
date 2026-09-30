@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import type { DB } from '../db.js';
 import { MANUAL_KEY_PREFIX, rebuildAlbums } from './albums.js';
 import { lastChange } from './changes.js';
-import { searchExtra, SPEAKER_TAGS, withSpeakerOverride } from './metadata.js';
+import { searchExtra, SPEAKER_TAGS, withOverride } from './metadata.js';
 import { getAlbum } from './queries.js';
 import { evaluateRules, listRules, parseCondition, ruleMatcher, type RuleCondition, type RuleTrack } from './rules.js';
 
@@ -175,10 +175,10 @@ export function albumDetail(db: DB, id: number) {
     }>).map((r) => [r.id, r.path]),
   );
   const ruleTrackIds = row.kind === 'manual' ? [...paths].filter(([, path]) => !explicit.has(path)).map(([trackId]) => trackId) : [];
-  // Je Titel: was in der Datei steht und was in der Verwaltung korrigiert wurde
+  // Je Titel: was Datei und Regelwerk ergeben und was in der Verwaltung korrigiert wurde
   const trackEdits = db
     .prepare(
-      `SELECT t.id, coalesce(t.tag_title, t.title) AS fileTitle, o.title, o.speaker,
+      `SELECT t.id, coalesce(t.display_title, t.title) AS fileTitle, o.title, o.speaker,
               (SELECT value FROM track_tags WHERE track_id = t.id AND tag IN (SELECT value FROM json_each(?)) LIMIT 1) AS fileSpeaker
        FROM album_tracks at JOIN tracks t ON t.id = at.track_id LEFT JOIN track_overrides o ON o.path = t.path
        WHERE at.album_id = ? ORDER BY at.position`,
@@ -440,8 +440,10 @@ export function updateTrack(db: DB, albumId: number, trackId: number, fields: Tr
     throw new CurationError(404, 'Titel ist nicht in diesem Album');
   }
   db.transaction(() => {
-    db.prepare('UPDATE tracks SET tag_title = coalesce(tag_title, title) WHERE id = ?').run(trackId);
-    const track = db.prepare('SELECT path, tag_title FROM tracks WHERE id = ?').get(trackId) as { path: string; tag_title: string };
+    const track = db.prepare('SELECT path, coalesce(display_title, title) AS fileTitle FROM tracks WHERE id = ?').get(trackId) as {
+      path: string;
+      fileTitle: string;
+    };
     const current = (db.prepare('SELECT title, speaker FROM track_overrides WHERE path = ?').get(track.path) as
       | { title: string | null; speaker: string | null }
       | undefined) ?? { title: null, speaker: null };
@@ -449,8 +451,8 @@ export function updateTrack(db: DB, albumId: number, trackId: number, fields: Tr
       title: fields.title !== undefined ? (cleanText(fields.title) ?? null) : current.title,
       speaker: fields.speaker !== undefined ? (cleanText(fields.speaker) ?? null) : current.speaker,
     };
-    // Derselbe Name wie in der Datei ist keine Korrektur.
-    if (next.title === track.tag_title) next.title = null;
+    // Derselbe Name wie aus Datei und Regelwerk ist keine Korrektur.
+    if (next.title === track.fileTitle) next.title = null;
     if (!next.title && !next.speaker) db.prepare('DELETE FROM track_overrides WHERE path = ?').run(track.path);
     else {
       db.prepare(
@@ -459,13 +461,11 @@ export function updateTrack(db: DB, albumId: number, trackId: number, fields: Tr
       ).run(track.path, next.title, next.speaker);
     }
     const tags = (
-      db.prepare('SELECT tag, value FROM track_tags WHERE track_id = ? ORDER BY rowid').all(trackId) as Array<{ tag: string; value: string }>
+      db
+        .prepare('SELECT tag, value FROM track_tags WHERE track_id = ? AND derived = 0 ORDER BY rowid')
+        .all(trackId) as Array<{ tag: string; value: string }>
     ).map((row): [string, string] => [row.tag, row.value]);
-    db.prepare('UPDATE tracks SET title = ?, search_extra = ? WHERE id = ?').run(
-      next.title ?? track.tag_title,
-      withSpeakerOverride(searchExtra(tags), next.speaker),
-      trackId,
-    );
+    db.prepare('UPDATE tracks SET search_extra = ? WHERE id = ?').run(withOverride(searchExtra(tags), next), trackId);
   })();
   rebuildAlbums(db);
 }

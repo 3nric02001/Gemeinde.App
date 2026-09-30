@@ -11,7 +11,7 @@ export async function playAlbum(albumId: number, options: { shuffle?: boolean; s
 }
 
 export function AlbumCard({ album, subtitle }: { album: Album; subtitle?: string }) {
-  const title = albumTitle(album.title, album.date);
+  const title = albumTitle(album.title, album.date, album.recording);
   return (
     <div class="card">
       <a class="card-link" href={`/album/${album.id}`}>

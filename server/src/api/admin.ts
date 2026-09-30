@@ -38,7 +38,17 @@ import {
   updateCategory,
   type CategoryInput,
 } from '../library/categories.js';
+import { rebuildAlbums } from '../library/albums.js';
 import { libraryQuality } from '../library/quality.js';
+import {
+  DEFAULT_STRUCTURE,
+  getStructure,
+  parseStructure,
+  PLACEHOLDERS,
+  previewStructure,
+  saveStructure,
+  StructureError,
+} from '../library/structure.js';
 import { searchAlbums, type AlbumFilter } from '../library/queries.js';
 import { RULE_FIELDS, RULE_OPS } from '../library/rules.js';
 
@@ -114,6 +124,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
   await app.register(async (admin) => {
     admin.setErrorHandler((error, request, reply: FastifyReply) => {
       if (error instanceof CurationError) return reply.code(error.status).send({ error: error.message });
+      if (error instanceof StructureError) return reply.code(400).send({ error: error.message });
       if ((error as { validation?: unknown }).validation) return reply.code(400).send({ error: (error as Error).message });
       // Von Fastify selbst, z. B. falscher Dateityp oder zu großes Bild beim Hochladen
       const status = (error as { statusCode?: number }).statusCode;
@@ -389,6 +400,20 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
 
     // Hinweise, wo die automatische Zuordnung vermutlich nicht passt (Verwaltung → Prüfen)
     admin.get('/api/admin/quality', async () => libraryQuality(db));
+
+    // Regelwerk für Aufnahmen (Verwaltung → Zuordnung), für Manager und Admins
+    admin.get('/api/admin/structure', async () => ({
+      structure: getStructure(db),
+      defaults: DEFAULT_STRUCTURE,
+      placeholders: PLACEHOLDERS,
+    }));
+    admin.post('/api/admin/structure/preview', async (request) => previewStructure(db, parseStructure(request.body)));
+    admin.put('/api/admin/structure', async (request) => {
+      const structure = parseStructure(request.body);
+      saveStructure(db, structure);
+      rebuildAlbums(db);
+      return { structure };
+    });
 
     // Aktueller Inhalt eines Tag-Felds, damit man beim Zuordnen sieht, was in den Dateien steht
     admin.get(
