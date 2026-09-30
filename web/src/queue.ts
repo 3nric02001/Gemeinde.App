@@ -38,16 +38,20 @@ export class Queue<T extends object> {
     return this.items.slice(this.index + 1);
   }
 
-  set(items: T[], start = 0, shuffle = this.shuffle): void {
+  /** Ohne `start` beginnt die gemischte Liste mit einem zufälligen Titel, die geordnete mit dem ersten. */
+  set(items: T[], start?: number, shuffle = this.shuffle): void {
     this.original = [...items];
     this.shuffle = shuffle;
-    if (shuffle && items.length) {
-      const first = items[Math.min(Math.max(start, 0), items.length - 1)]!;
+    if (shuffle && items.length && start === undefined) {
+      this.items = shuffled(items, this.random);
+      this.index = 0;
+    } else if (shuffle && items.length) {
+      const first = items[Math.min(Math.max(start!, 0), items.length - 1)]!;
       this.items = [first, ...shuffled(items.filter((item) => item !== first), this.random)];
       this.index = 0;
     } else {
       this.items = [...items];
-      this.index = items.length ? Math.min(Math.max(start, 0), items.length - 1) : -1;
+      this.index = items.length ? Math.min(Math.max(start ?? 0, 0), items.length - 1) : -1;
     }
   }
 

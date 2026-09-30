@@ -55,7 +55,7 @@ export function Downloads() {
                 <button type="button" class="button-primary" onClick={() => player.playList(tracks, 0, { shuffle: false })}>
                   <Icon name="play" size={20} /> Abspielen
                 </button>
-                <button type="button" class="button-secondary" onClick={() => player.playList(tracks, 0, { shuffle: true })}>
+                <button type="button" class="button-secondary" onClick={() => player.playShuffled(tracks)}>
                   <Icon name="shuffle" size={18} /> Zufällig
                 </button>
                 <button

@@ -40,7 +40,7 @@ export function Tracks({ params }: { params: URLSearchParams }) {
             type="button"
             class="button-secondary"
             onClick={() => void getJson<Page<Track>>(`${base}${base.includes('?') ? '&' : '?'}limit=${QUEUE_LIMIT}`).then((p) =>
-              player.playList(p.items, Math.floor(Math.random() * p.items.length), { shuffle: true }),
+              player.playShuffled(p.items),
             )}
           >
             <Icon name="shuffle" size={18} /> Zufällig

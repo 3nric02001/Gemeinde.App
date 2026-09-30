@@ -56,7 +56,7 @@ export function Album({ id }: { id: number }) {
         <button type="button" class="button-primary" onClick={() => player.playList(album.tracks, 0, { shuffle: false, from })}>
           <Icon name="play" size={20} /> Abspielen
         </button>
-        <button type="button" class="button-secondary" aria-label="Zufällig abspielen" onClick={() => player.playList(album.tracks, 0, { shuffle: true, from })}>
+        <button type="button" class="button-secondary" aria-label="Zufällig abspielen" onClick={() => player.playShuffled(album.tracks, from)}>
           <Icon name="shuffle" size={18} /> <span class="button-label">Zufällig</span>
         </button>
         <FavoriteButton kind="album" item={album} />
