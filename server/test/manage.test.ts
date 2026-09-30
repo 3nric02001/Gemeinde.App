@@ -85,7 +85,16 @@ describe('Titel korrigieren', () => {
     const album = await get(`/api/admin/albums/${id}`);
     const track = album.tracks[0];
     expect(album.trackEdits).toEqual([
-      { id: track.id, fileTitle: 'Predigt: final2', title: null, speaker: null, fileSpeaker: null },
+      {
+        id: track.id,
+        fileTitle: 'Predigt: final2',
+        title: null,
+        speaker: null,
+        fileSpeaker: null,
+        sermon: null,
+        player: null,
+        auto: { sermon: true, sermonBy: 'Predigt im Gottesdienst', player: 'sermon', playerBy: 'Predigt im Gottesdienst' },
+      },
     ]);
 
     const edited = await send('PATCH', `/api/admin/albums/${id}/tracks/${track.id}`, { title: 'Predigt: Dankbar leben', speaker: 'Pastorin Schulz' });

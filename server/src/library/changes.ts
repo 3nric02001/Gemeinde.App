@@ -53,6 +53,7 @@ const FIELD_NAMES: Record<string, string> = {
   speaker: 'Sprecher',
   passage: 'Bibelstelle',
   description: 'Beschreibung',
+  recording: 'Art',
 };
 
 type Body = Record<string, unknown> | undefined;

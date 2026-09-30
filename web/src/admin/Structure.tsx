@@ -3,17 +3,31 @@ import { Icon } from '../components/Icon';
 import { formatCompactDate, plural } from '../format';
 import { ErrorNote, Loading } from '../pages/common';
 import { adminRequest } from './api';
+import { asGroup, ConditionGroup, type Condition, type Leaf } from './Conditions';
 
 export interface RecordingKind {
   name: string;
   plural: string;
-  folder: string;
+  /** Woran die Art ihre Ordner erkennt; null: alle übrigen Ordner mit Datum */
+  match: Condition | null;
+  /** Nur Ordner mit Datum im Namen */
+  datedOnly: boolean;
   folderPattern: string;
   filePattern: string;
   albumTitle: string;
   trackTitle: string;
-  sermon: string;
   preferTags: boolean;
+}
+
+export type Player = 'sermon' | 'music';
+
+/** Wenn … dann …: was als Predigt gilt und welcher Player läuft */
+export interface Policy {
+  name: string;
+  enabled: boolean;
+  when: Condition;
+  sermon?: boolean;
+  player?: Player;
 }
 
 export interface Structure {
@@ -21,7 +35,36 @@ export interface Structure {
   contents: string[];
   /** Inhalte ohne Titel: ein einzelner Teil danach ist der Name ("Begrüßung - Jakob Rauschenberger") */
   untitled: string[];
+  policies: Policy[];
 }
+
+const FOLDER_FIELDS: Record<string, string> = { folder: 'Ordner im Pfad', path: 'Pfad' };
+const POLICY_FIELDS: Record<string, string> = {
+  kind: 'Art',
+  content: 'Inhalt',
+  title: 'Titel',
+  artist: 'Interpret',
+  album: 'Album (Tag)',
+  genre: 'Genre',
+  folder: 'Ordner im Pfad',
+  path: 'Pfad',
+  duration: 'Dauer (Minuten)',
+};
+const TEXT_OPS: Record<string, string> = { equals: 'ist genau', contains: 'enthält', not_contains: 'enthält nicht', starts: 'beginnt mit' };
+const DURATION_OPS: Record<string, string> = { at_least: 'mindestens', less_than: 'kürzer als' };
+const opsFor = (field: string) => (field === 'duration' ? DURATION_OPS : TEXT_OPS);
+const POLICY_PLACEHOLDERS: Record<string, string> = {
+  kind: 'z. B. Gottesdienst',
+  content: 'z. B. Predigt',
+  folder: 'z. B. Bibelstunden',
+  path: 'z. B. Jugend',
+  duration: 'z. B. 20',
+  genre: 'z. B. Predigt',
+};
+const placeholderFor = (field: string) => POLICY_PLACEHOLDERS[field] ?? 'Suchbegriff';
+const newFolderLeaf = (): Leaf => ({ field: 'folder', op: 'equals', value: '' });
+const newPolicyLeaf = (): Leaf => ({ field: 'content', op: 'equals', value: '' });
+const EMPTY_POLICY: Policy = { name: '', enabled: true, when: { match: 'all', conditions: [newPolicyLeaf()] }, sermon: true, player: 'sermon' };
 
 interface Preview {
   kinds: Array<{
@@ -34,7 +77,7 @@ interface Preview {
       title: string;
       speaker: string | null;
       passage: string | null;
-      tracks: Array<{ file: string; title: string; content: string | null; matched: boolean }>;
+      tracks: Array<{ file: string; title: string; content: string | null; matched: boolean; sermon: boolean; player: Player }>;
     }>;
   }>;
 }
@@ -52,16 +95,30 @@ const PLACEHOLDER_HELP: Array<[string, string]> = [
 const EMPTY_KIND: RecordingKind = {
   name: '',
   plural: '',
-  folder: '',
+  match: { match: 'all', conditions: [newFolderLeaf()] },
+  datedOnly: true,
   folderPattern: '{datum}_{anlass}',
   filePattern: '{inhalt} - {titel} - {sprecher}',
   albumTitle: '{anlass}',
   trackTitle: '{inhalt}: {titel}',
-  sermon: '',
   preferTags: false,
 };
 
-type TextField = Exclude<keyof RecordingKind, 'preferTags'>;
+type TextField = 'name' | 'plural' | 'folderPattern' | 'filePattern' | 'albumTitle' | 'trackTitle';
+
+/** Bedingungen „Art ist genau <from>“ auf den neuen Namen der Art umstellen */
+function renameKind(condition: Condition, from: string, to: string): Condition {
+  if ('match' in condition) return { ...condition, conditions: condition.conditions.map((c) => renameKind(c, from, to)) };
+  return condition.field === 'kind' && condition.op === 'equals' && condition.value === from ? { ...condition, value: to } : condition;
+}
+
+/** Eintrag in einer Liste um `delta` verschieben */
+function move<T>(list: T[], index: number, delta: number): T[] {
+  const next = [...list];
+  const [item] = next.splice(index, 1);
+  next.splice(index + delta, 0, item!);
+  return next;
+}
 
 /** Verwaltung → Zuordnung: Regelwerk für Gottesdienste, Bibelstunden und andere Aufnahmen */
 export function StructurePanel() {
@@ -87,14 +144,20 @@ export function StructurePanel() {
     setDraft(next);
     setMessage(undefined);
   };
-  const updateKind = (index: number, patch: Partial<RecordingKind>) =>
-    change({ ...draft, kinds: draft.kinds.map((kind, i) => (i === index ? { ...kind, ...patch } : kind)) });
-  const moveKind = (index: number, delta: number) => {
-    const kinds = [...draft.kinds];
-    const [kind] = kinds.splice(index, 1);
-    kinds.splice(index + delta, 0, kind!);
-    change({ ...draft, kinds });
+  const updateKind = (index: number, patch: Partial<RecordingKind>) => {
+    const before = draft.kinds[index]!.name;
+    const kinds = draft.kinds.map((kind, i) => (i === index ? { ...kind, ...patch } : kind));
+    // Umbenennen: Policies mit „Art ist genau …“ ziehen mit
+    const policies =
+      patch.name !== undefined && before
+        ? (draft.policies ?? []).map((policy) => ({ ...policy, when: renameKind(policy.when, before, patch.name!) }))
+        : draft.policies;
+    change({ ...draft, kinds, policies });
   };
+  const moveKind = (index: number, delta: number) => change({ ...draft, kinds: move(draft.kinds, index, delta) });
+  const policies = draft.policies ?? [];
+  const updatePolicy = (index: number, patch: Partial<Policy>) =>
+    change({ ...draft, policies: policies.map((policy, i) => (i === index ? { ...policy, ...patch } : policy)) });
 
   const run = async (action: 'preview' | 'save') => {
     setBusy(true);
@@ -139,10 +202,10 @@ export function StructurePanel() {
     >
       <h1 class="page-title">Zuordnung von Aufnahmen</h1>
       <p class="admin-hint">
-        Hier steht, wie die App Gottesdienste, Bibelstunden und andere Aufnahmen in der Nextcloud erkennt und wie sie Ordner- und
-        Dateinamen liest. Es gilt die erste Art, deren Ordner im Pfad vorkommt; eine Art ohne Ordner nimmt alle übrigen Ordner mit
-        Datum. Trennzeichen sind austauschbar: „ - “, „_“ und „.“ passen aufeinander. Musik ohne Datum im Ordner bleibt davon
-        unberührt.
+        Hier steht, wie die App Gottesdienste, Bibelstunden und eigene Arten von Aufnahmen in der Nextcloud erkennt, wie sie Ordner-
+        und Dateinamen liest und was als Predigt gilt. Es gilt die erste Art, deren Bedingung passt; eine Art ohne Bedingung nimmt
+        alle übrigen Ordner mit Datum. Trennzeichen sind austauschbar: „ - “, „_“ und „.“ passen aufeinander. Einzelne Alben
+        lassen sich im Album-Editor einer anderen Art zuordnen.
       </p>
 
       <details class="admin-panel structure-help">
@@ -190,12 +253,47 @@ export function StructurePanel() {
           <div class="structure-grid">
             {text(index, 'name', 'Name', undefined, 'z. B. Bibelstunde')}
             {text(index, 'plural', 'Mehrzahl', 'Für Überschriften und Filter', 'z. B. Bibelstunden')}
-            {text(index, 'folder', 'Erkennen am Ordner', 'Ordnername irgendwo im Pfad; leer: alle übrigen Ordner mit Datum', 'z. B. Bibelstunden')}
-            {text(index, 'sermon', 'Inhalt der Predigt', 'Liefert Sprecher und Bibelstelle; leer: alle Aufnahmen', 'z. B. Predigt')}
             {text(index, 'folderPattern', 'Ordnername', 'z. B. 2026_08_30_Einschulung', '{datum}_{anlass}')}
             {text(index, 'filePattern', 'Dateiname (ohne Endung)', 'z. B. Predigt - Der gute Hirte - Pastor Meier', '{inhalt} - {titel} - {sprecher}')}
             {text(index, 'albumTitle', 'Name des Albums', 'Leer oder ohne Wert: der Name der Art', '{anlass}')}
             {text(index, 'trackTitle', 'Titel einer Aufnahme', 'Leere Platzhalter fallen samt Trennern weg', '{inhalt}: {titel}')}
+          </div>
+          <div class="structure-match">
+            <h3>Erkennen an</h3>
+            {kind.match ? (
+              <>
+                <ConditionGroup
+                  group={asGroup(kind.match)}
+                  fields={FOLDER_FIELDS}
+                  ops={opsFor}
+                  newLeaf={newFolderLeaf}
+                  placeholder={(field) => (field === 'folder' ? 'z. B. Bibelstunden' : 'z. B. Jugend')}
+                  onChange={(match) => updateKind(index, { match })}
+                />
+                <label class="admin-check">
+                  <input
+                    type="checkbox"
+                    checked={kind.datedOnly}
+                    onChange={(e) => updateKind(index, { datedOnly: (e.target as HTMLInputElement).checked })}
+                  />
+                  Nur Ordner mit Datum im Namen
+                </label>
+                <button type="button" class="more-link" onClick={() => updateKind(index, { match: null, datedOnly: true })}>
+                  Ohne Bedingung: alle übrigen Ordner mit Datum
+                </button>
+              </>
+            ) : (
+              <p class="admin-hint">
+                Alle übrigen Ordner mit Datum.{' '}
+                <button
+                  type="button"
+                  class="more-link"
+                  onClick={() => updateKind(index, { match: { match: 'all', conditions: [newFolderLeaf()] } })}
+                >
+                  Bedingung festlegen
+                </button>
+              </p>
+            )}
           </div>
           <label class="admin-check">
             <input
@@ -223,6 +321,116 @@ export function StructurePanel() {
           </button>
         )}
       </div>
+
+      <section class="shelf admin-panel structure-policies">
+        <h2>Policies: Predigt und Player</h2>
+        <p class="admin-hint">
+          Wenn … dann …: Die Liste gilt von oben nach unten, für jede Wirkung entscheidet die erste passende Policy. Eine Predigt
+          liefert Sprecher und Bibelstelle des Albums. Der Predigt-Player hat Sprünge, Tempo und merkt sich die Stelle. Passt keine
+          Policy, ist ein Titel keine Predigt und bekommt ab 10 Minuten Länge den Predigt-Player.
+        </p>
+        {policies.map((policy, index) => (
+          <div key={index} class={`structure-policy${policy.enabled ? '' : ' is-disabled'}`}>
+            <div class="section-head">
+              <label class="field structure-policy-name">
+                <span class="visually-hidden">Name der Policy</span>
+                <input
+                  value={policy.name}
+                  maxLength={80}
+                  placeholder={`Policy ${index + 1}`}
+                  onInput={(e) => updatePolicy(index, { name: (e.target as HTMLInputElement).value })}
+                />
+              </label>
+              <span class="admin-track-actions">
+                <button
+                  type="button"
+                  class="icon-button"
+                  aria-label={`${policy.name || `Policy ${index + 1}`} nach oben`}
+                  disabled={index === 0}
+                  onClick={() => change({ ...draft, policies: move(policies, index, -1) })}
+                >
+                  <Icon name="down" size={18} class="flip" />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  aria-label={`${policy.name || `Policy ${index + 1}`} nach unten`}
+                  disabled={index === policies.length - 1}
+                  onClick={() => change({ ...draft, policies: move(policies, index, 1) })}
+                >
+                  <Icon name="down" size={18} />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  aria-label={`${policy.name || `Policy ${index + 1}`} entfernen`}
+                  onClick={() => change({ ...draft, policies: policies.filter((_, i) => i !== index) })}
+                >
+                  <Icon name="close" size={18} />
+                </button>
+              </span>
+            </div>
+            <label class="admin-check">
+              <input
+                type="checkbox"
+                checked={policy.enabled}
+                onChange={(e) => updatePolicy(index, { enabled: (e.target as HTMLInputElement).checked })}
+              />
+              Aktiv
+            </label>
+            <h3>Wenn</h3>
+            <ConditionGroup
+              group={asGroup(policy.when)}
+              fields={POLICY_FIELDS}
+              ops={opsFor}
+              newLeaf={newPolicyLeaf}
+              placeholder={placeholderFor}
+              onChange={(when) => updatePolicy(index, { when })}
+            />
+            <h3>Dann</h3>
+            <div class="structure-grid">
+              <label class="field">
+                <span>Gilt als Predigt</span>
+                <select
+                  value={policy.sermon === undefined ? '' : policy.sermon ? 'yes' : 'no'}
+                  onChange={(e) => {
+                    const value = (e.target as HTMLSelectElement).value;
+                    updatePolicy(index, { sermon: value === '' ? undefined : value === 'yes' });
+                  }}
+                >
+                  <option value="">nicht festlegen</option>
+                  <option value="yes">ja, liefert Sprecher und Bibelstelle</option>
+                  <option value="no">nein</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Player</span>
+                <select
+                  value={policy.player ?? ''}
+                  onChange={(e) => {
+                    const value = (e.target as HTMLSelectElement).value;
+                    updatePolicy(index, { player: value ? (value as Player) : undefined });
+                  }}
+                >
+                  <option value="">nicht festlegen</option>
+                  <option value="sermon">Predigt-Player</option>
+                  <option value="music">Musik-Player</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        ))}
+        <div class="actions">
+          <button
+            type="button"
+            class="button-secondary"
+            disabled={policies.length >= 50}
+            onClick={() => change({ ...draft, policies: [...policies, structuredClone(EMPTY_POLICY)] })}
+          >
+            Policy hinzufügen
+          </button>
+        </div>
+      </section>
 
       <section class="shelf admin-panel">
         <h2>Inhalte</h2>
@@ -319,6 +527,8 @@ function PreviewList({ preview }: { preview: Preview }) {
                     <span>
                       {track.title}
                       {track.content && <span class="badge badge-muted">{track.content}</span>}
+                      {track.sermon && <span class="badge badge-muted">Predigt</span>}
+                      {track.player === 'sermon' && <span class="badge badge-muted">Predigt-Player</span>}
                       {!track.matched && <span class="badge">passt nicht</span>}
                     </span>
                   </li>

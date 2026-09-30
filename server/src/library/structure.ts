@@ -2,6 +2,21 @@ import { getMeta, setMeta, type DB } from '../db.js';
 import { findPassage } from './bible.js';
 import { findDate } from './dateText.js';
 import { albumFolderOf, basename, dirname, fileStem, folderDate, folderYear } from './pathMeta.js';
+import {
+  compilePolicies,
+  FOLDER_FIELDS,
+  folderCondition,
+  parsePolicies,
+  parsePolicyCondition,
+  PolicyError,
+  policyMatcher,
+  type Decision,
+  type ManualDecision,
+  type Player,
+  type Policy,
+  type PolicyCondition,
+  type PolicySubject,
+} from './policies.js';
 import { foldValue } from './text.js';
 
 /**
@@ -13,11 +28,13 @@ import { foldValue } from './text.js';
  *     Datei  "{inhalt} - {titel}"     -> Inhalt "Predigt", Titel "Der gute Hirte"
  *
  *   Audio Aufnahmen/2026/Bibelstunden/2026_01_14_Matthäus 9, 27-38/2026_01_14_001.mp3
- *     Art "Bibelstunde" (Pfad enthält den Ordner "Bibelstunden")
+ *     Art "Bibelstunde" (Bedingung: Ordner heißt "Bibelstunden")
  *     Ordner "{datum}_{bibelstelle}"  -> Bibelstelle "Matthäus 9, 27-38"
  *     Datei  "{datum}_{nr}"           -> Teil 1
  *
  * Trennzeichen in Mustern sind austauschbar: " - ", "_", "." und Leerzeichen passen aufeinander.
+ *
+ * Was als Predigt gilt und welchen Player ein Titel bekommt, legen die Policies fest (policies.ts).
  */
 
 export const PLACEHOLDERS = ['datum', 'anlass', 'bibelstelle', 'sprecher', 'inhalt', 'titel', 'nr'] as const;
@@ -28,8 +45,10 @@ export interface RecordingKind {
   name: string;
   /** Mehrzahl für Überschriften und Filter: "Gottesdienste" */
   plural: string;
-  /** Ordnername irgendwo im Pfad, an dem die Art zu erkennen ist; leer: alle übrigen Ordner mit Datum */
-  folder: string;
+  /** Woran die Art ihre Albumordner erkennt (Ordnername, Pfad); null: alle übrigen Ordner mit Datum */
+  match: PolicyCondition | null;
+  /** Nur Ordner mit Datum im Namen; sonst auch Ordner ohne Datum, auf die die Bedingung passt */
+  datedOnly: boolean;
   /** Muster für den Namen des Aufnahme-Ordners */
   folderPattern: string;
   /** Muster für Dateinamen (ohne Endung) */
@@ -38,8 +57,6 @@ export interface RecordingKind {
   albumTitle: string;
   /** Vorlage für den Titel einer Aufnahme */
   trackTitle: string;
-  /** Inhalt, dessen Titel Sprecher und Bibelstelle liefert ("Predigt"); leer: alle Titel */
-  sermon: string;
   /** Titel aus den Tags der Datei behalten, wenn es welche gibt */
   preferTags: boolean;
 }
@@ -53,30 +70,35 @@ export interface Structure {
    * ({sprecher}), nicht der Titel.
    */
   untitled: string[];
+  /** Was als Predigt gilt und welcher Player läuft, von oben nach unten */
+  policies: Policy[];
 }
+
+/** Ohne passende Policy bekommen Titel ab dieser Länge den Predigt-Player (wie web/src/me.ts) */
+export const LONG_TRACK_SECONDS = 10 * 60;
 
 export const DEFAULT_STRUCTURE: Structure = {
   kinds: [
     {
       name: 'Bibelstunde',
       plural: 'Bibelstunden',
-      folder: 'Bibelstunden',
+      match: folderCondition('Bibelstunden'),
+      datedOnly: true,
       folderPattern: '{datum}_{bibelstelle}',
       filePattern: '{datum}_{nr}',
       albumTitle: '{bibelstelle}',
       trackTitle: 'Teil {nr}',
-      sermon: '',
       preferTags: false,
     },
     {
       name: 'Gottesdienst',
       plural: 'Gottesdienste',
-      folder: '',
+      match: null,
+      datedOnly: true,
       folderPattern: '{datum}_{anlass}',
       filePattern: '{inhalt} - {titel} - {sprecher}',
       albumTitle: '{anlass}',
       trackTitle: '{inhalt}: {titel}',
-      sermon: 'Predigt',
       preferTags: false,
     },
   ],
@@ -86,6 +108,22 @@ export const DEFAULT_STRUCTURE: Structure = {
     'Gedicht', 'Ansage', 'Schlusswort',
   ],
   untitled: ['Begrüßung', 'Abkündigungen', 'Gebet', 'Segen', 'Grußwort', 'Ansage', 'Schlusswort', 'Bericht', 'Zeugnis'],
+  policies: [
+    {
+      name: 'Predigt im Gottesdienst',
+      enabled: true,
+      when: {
+        match: 'all',
+        conditions: [
+          { field: 'kind', op: 'equals', value: 'Gottesdienst' },
+          { field: 'content', op: 'equals', value: 'Predigt' },
+        ],
+      },
+      sermon: true,
+      player: 'sermon',
+    },
+    { name: 'Bibelstunden', enabled: true, when: { field: 'kind', op: 'equals', value: 'Bibelstunde' }, sermon: true, player: 'sermon' },
+  ],
 };
 
 const META_KEY = 'structure';
@@ -94,6 +132,26 @@ const MAX_TEXT = 200;
 const MAX_CONTENTS = 100;
 
 export class StructureError extends Error {}
+
+/**
+ * Policies aus dem früheren Feld "Inhalt der Predigt" je Art: mit Inhalt gilt nur dieser als Predigt,
+ * ohne alle Titel der Art. Für Regelwerke, die gespeichert wurden, bevor es Policies gab.
+ */
+function legacyPolicies(kinds: Array<Record<string, unknown>>): Policy[] {
+  return kinds
+    .filter((k) => typeof k.name === 'string' && k.name.trim())
+    .map((k): Policy => {
+      const kind: PolicyCondition = { field: 'kind', op: 'equals', value: String(k.name).trim() };
+      const sermon = typeof k.sermon === 'string' ? k.sermon.trim() : '';
+      return {
+        name: sermon ? `${sermon} (${String(k.name).trim()})` : String(k.name).trim(),
+        enabled: true,
+        when: sermon ? { match: 'all', conditions: [kind, { field: 'content', op: 'equals', value: sermon }] } : kind,
+        sermon: true,
+        player: 'sermon',
+      };
+    });
+}
 
 const text = (value: unknown, field: string, max = MAX_TEXT): string => {
   if (value === undefined || value === null) return '';
@@ -118,7 +176,7 @@ function checkPattern(pattern: string, field: string): void {
 /** Prüft ein Regelwerk aus der Verwaltung und bringt es in Normalform. Wirft mit verständlicher Meldung. */
 export function parseStructure(input: unknown): Structure {
   if (!input || typeof input !== 'object') throw new StructureError('Ungültiges Regelwerk');
-  const body = input as { kinds?: unknown; contents?: unknown };
+  const body = input as { kinds?: unknown; contents?: unknown; policies?: unknown };
   if (!Array.isArray(body.kinds) || body.kinds.length === 0) throw new StructureError('Mindestens eine Art ist nötig');
   if (body.kinds.length > MAX_KINDS) throw new StructureError(`Höchstens ${MAX_KINDS} Arten`);
   const names = new Set<string>();
@@ -129,15 +187,28 @@ export function parseStructure(input: unknown): Structure {
     if (!name) throw new StructureError(`Art ${index + 1} braucht einen Namen`);
     if (names.has(foldValue(name))) throw new StructureError(`„${name}“ gibt es doppelt`);
     names.add(foldValue(name));
+    // Früher ein einzelner Ordnername ("folder"), heute eine Bedingung
+    const legacyFolder = k.match === undefined ? text(k.folder, 'Ordner', 100) : '';
+    let match: PolicyCondition | null;
+    try {
+      match = legacyFolder
+        ? folderCondition(legacyFolder)
+        : k.match === undefined || k.match === null
+          ? null
+          : parsePolicyCondition(k.match, FOLDER_FIELDS, `${name}, Erkennen an`);
+    } catch (error) {
+      if (error instanceof PolicyError) throw new StructureError(error.message);
+      throw error;
+    }
     const kind: RecordingKind = {
       name,
       plural: text(k.plural, 'Mehrzahl', 60) || name,
-      folder: text(k.folder, 'Ordner', 100),
+      match,
+      datedOnly: match === null || k.datedOnly !== false,
       folderPattern: text(k.folderPattern, 'Muster für Ordner'),
       filePattern: text(k.filePattern, 'Muster für Dateien'),
       albumTitle: text(k.albumTitle, 'Name des Albums'),
       trackTitle: text(k.trackTitle, 'Titel einer Aufnahme'),
-      sermon: text(k.sermon, 'Inhalt der Predigt', 60),
       preferTags: k.preferTags === true,
     };
     checkPattern(kind.folderPattern, `${name}, Ordner`);
@@ -154,7 +225,14 @@ export function parseStructure(input: unknown): Structure {
   const untitled = list((body as { untitled?: unknown }).untitled, 'Inhalte ohne Titel');
   // Inhalte ohne Titel sind auch Inhalte
   const contents = list([...(Array.isArray(body.contents) ? body.contents : []), ...untitled], 'Inhalte');
-  return { kinds, contents, untitled };
+  let policies: Policy[];
+  try {
+    policies = body.policies === undefined ? legacyPolicies(body.kinds as Array<Record<string, unknown>>) : parsePolicies(body.policies);
+  } catch (error) {
+    if (error instanceof PolicyError) throw new StructureError(error.message);
+    throw error;
+  }
+  return { kinds, contents, untitled, policies };
 }
 
 export function getStructure(db: DB): Structure {
@@ -297,26 +375,33 @@ export function fillTemplate(template: string, values: Values): string {
 
 export interface CompiledKind {
   kind: RecordingKind;
-  folderKey: string;
+  /** Erkennt die Albumordner der Art; undefined: alle übrigen Ordner mit Datum */
+  matches?: (subject: PolicySubject) => boolean;
   folder?: CompiledPattern;
   file?: CompiledPattern;
   /** Dasselbe Dateimuster für Namen mit " - " als Trenner */
   fileDash?: CompiledPattern;
   /** Inhalte ohne Titel, als Vergleichsschlüssel */
   untitled: Set<string>;
+  /** Policies: gilt als Predigt, Player */
+  decide: (subject: PolicySubject) => Decision;
 }
 
 export interface CompiledStructure {
   structure: Structure;
   kinds: CompiledKind[];
+  decide: (subject: PolicySubject) => Decision;
 }
 
 export function compileStructure(structure: Structure): CompiledStructure {
+  const decide = compilePolicies(structure.policies);
   return {
     structure,
+    decide,
     kinds: structure.kinds.map((kind) => ({
       kind,
-      folderKey: foldValue(kind.folder),
+      matches: kind.match ? policyMatcher(kind.match) : undefined,
+      decide,
       folder: compilePattern(kind.folderPattern),
       file: compilePattern(kind.filePattern, structure.contents, { leadingNumber: true }),
       fileDash: compilePattern(kind.filePattern, structure.contents, { leadingNumber: true, dashOnly: true }),
@@ -325,12 +410,22 @@ export function compileStructure(structure: Structure): CompiledStructure {
   };
 }
 
-/** Art eines Albumordners mit Datum: die erste, deren Ordner im Pfad vorkommt, sonst die erste ohne Ordner. */
-export function kindOfFolder(compiled: CompiledStructure, folder: string): CompiledKind | undefined {
-  if (!folder || !folderDate(folder)) return undefined;
-  const segments = folder.split('/').map(foldValue);
+/**
+ * Art eines Albumordners: die erste, deren Bedingung passt, sonst die erste ohne Bedingung (nur Ordner mit Datum).
+ * `manual`: in der Verwaltung für dieses Album gesetzte Art; sie geht allen Bedingungen vor, "" heißt keine Art.
+ */
+export function kindOfFolder(compiled: CompiledStructure, folder: string, manual?: string | null): CompiledKind | undefined {
+  if (!folder) return undefined;
+  if (manual !== undefined && manual !== null) {
+    const key = foldValue(manual);
+    return key ? compiled.kinds.find((k) => foldValue(k.kind.name) === key) : undefined;
+  }
+  const dated = Boolean(folderDate(folder));
+  // Der Ordner selbst zählt mit ("Ordner heißt …"); der Schrägstrich macht ihn zum Ordner statt zur Datei
+  const subject = { path: `${folder}/` };
   return (
-    compiled.kinds.find((k) => k.folderKey && segments.includes(k.folderKey)) ?? compiled.kinds.find((k) => !k.folderKey)
+    compiled.kinds.find((k) => k.matches && (dated || !k.kind.datedOnly) && k.matches(subject)) ??
+    (dated ? compiled.kinds.find((k) => !k.matches) : undefined)
   );
 }
 
@@ -341,6 +436,11 @@ export interface FileInfo {
   /** Titel steht in einem Tag (nicht aus dem Dateinamen abgeleitet) */
   titleTagged: boolean;
   duration: number | null;
+  artist?: string | null;
+  album?: string | null;
+  genre?: string | null;
+  /** Korrektur aus der Verwaltung; geht den Policies vor */
+  manual?: ManualDecision;
 }
 
 export interface FileResult {
@@ -355,6 +455,12 @@ export interface FileResult {
   passage?: string;
   nr?: number;
   matched: boolean;
+  /** Gilt laut Policies als Predigt (liefert Sprecher und Bibelstelle) */
+  sermon: boolean;
+  /** Player laut Policies oder Korrektur; undefined: nach Länge */
+  player?: Player;
+  /** Was die Policies ohne Korrektur ergeben */
+  auto: Decision;
 }
 
 export interface FolderResult {
@@ -375,36 +481,55 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
   const folderValues = matchPattern(compiled.folder, basename(folder)) ?? {};
   if (folderValues.anlass) folderValues.anlass = tidy(folderValues.anlass);
   const results = new Map<string, FileResult>();
-  const sermonKey = foldValue(kind.sermon);
-  // Sprecher nur von der Predigt; "Lied - Befiehl du deine Wege" nennt keinen Sprecher
-  const isSermon = (values: Values | undefined) => !sermonKey || (values?.inhalt !== undefined && foldValue(values.inhalt) === sermonKey);
+  // Policies entscheiden, was als Predigt gilt; nur die Predigt nennt den Sprecher ("Lied - Befiehl du deine Wege" nicht)
+  const decide = (file: FileInfo, values: Values | undefined, title: string | undefined) => {
+    const auto = compiled.decide({
+      title: title ?? file.title,
+      content: values?.inhalt,
+      kind: kind.name,
+      artist: file.artist,
+      album: file.album,
+      genre: file.genre,
+      path: file.path,
+      duration: file.duration,
+    });
+    return withManual(auto, file.manual);
+  };
   const parsed = files.map((file) => {
     const values = readFileName(compiled, fileStem(file.path));
     const nr = values?.nr ?? values?.lead;
-    return { file, values, nr: nr !== undefined ? Number(nr) : undefined };
+    return { file, values, nr: nr !== undefined ? Number(nr) : undefined, sermon: false };
   });
-  for (const { file, values, nr } of parsed) {
+  for (const entry of parsed) {
+    const { file, values, nr } = entry;
     if (!values) {
-      results.set(file.path, { matched: false });
+      const decision = decide(file, undefined, undefined);
+      entry.sermon = decision.sermon === true;
+      results.set(file.path, { matched: false, sermon: entry.sermon, player: decision.player, auto: decision.auto });
       continue;
     }
     const all: Values = { ...folderValues, ...values, nr: nr !== undefined ? String(nr) : undefined };
     if (all.datum) all.datum = findDate(all.datum, folderYear(dirname(file.path)))?.date ?? all.datum;
     const title = kind.preferTags && file.titleTagged ? undefined : fillTemplate(kind.trackTitle || '{titel}', all) || undefined;
+    const decision = decide(file, values, title);
+    entry.sermon = decision.sermon === true;
     results.set(file.path, {
       matched: true,
       title,
       content: values.inhalt,
-      speaker: isSermon(values) ? values.sprecher : undefined,
+      speaker: entry.sermon ? values.sprecher : undefined,
       performer: values.sprecher,
       passage: values.bibelstelle,
       nr,
+      sermon: entry.sermon,
+      player: decision.player,
+      auto: decision.auto,
     });
   }
 
-  // Predigt: der Titel mit dem eingestellten Inhalt, sonst der längste
+  // Predigt: die längste Aufnahme, die laut Policies als Predigt gilt
   const sermons = parsed
-    .filter(({ values }) => isSermon(values))
+    .filter(({ sermon }) => sermon)
     .sort((a, b) => (b.file.duration ?? 0) - (a.file.duration ?? 0));
   const speaker =
     folderValues.sprecher ?? sermons.map(({ values }) => values?.sprecher).find(Boolean) ?? undefined;
@@ -419,6 +544,15 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
     passage: passage ?? undefined,
     speaker: speaker ?? undefined,
     files: results,
+  };
+}
+
+/** Korrektur aus der Verwaltung über das Ergebnis der Policies legen; `auto` bleibt zum Anzeigen */
+export function withManual(auto: Decision, manual: ManualDecision | undefined): { sermon?: boolean; player?: Player; auto: Decision } {
+  return {
+    sermon: manual?.sermon ?? auto.sermon,
+    player: manual?.player ?? auto.player,
+    auto,
   };
 }
 
@@ -465,7 +599,7 @@ export interface PreviewAlbum {
   title: string;
   speaker: string | null;
   passage: string | null;
-  tracks: Array<{ file: string; title: string; content: string | null; matched: boolean }>;
+  tracks: Array<{ file: string; title: string; content: string | null; matched: boolean; sermon: boolean; player: Player }>;
 }
 
 export interface Preview {
@@ -475,11 +609,17 @@ export interface Preview {
 /** Was das Regelwerk aus der aktuellen Bibliothek machen würde: je Art Anzahl und die neuesten Beispiele. */
 export function previewStructure(db: DB, structure: Structure, examples = 4): Preview {
   const compiled = compileStructure(structure);
-  const rows = db.prepare('SELECT path, title, duration FROM tracks').all() as Array<{ path: string; title: string; duration: number | null }>;
+  const rows = db.prepare('SELECT path, title, duration, artist, album, genre FROM tracks').all() as Array<{
+    path: string;
+    title: string;
+    duration: number | null;
+    artist: string;
+    album: string | null;
+    genre: string | null;
+  }>;
   const byFolder = new Map<string, typeof rows>();
   for (const row of rows) {
     const folder = albumFolderOf(row.path);
-    if (!folderDate(folder)) continue;
     byFolder.set(folder, [...(byFolder.get(folder) ?? []), row]);
   }
   const result = compiled.kinds.map((k) => ({ name: k.kind.name, albums: 0, unmatchedFiles: 0, examples: [] as PreviewAlbum[] }));
@@ -499,7 +639,14 @@ export function previewStructure(db: DB, structure: Structure, examples = 4): Pr
       .map((f) => {
         const r = applied.files.get(f.path)!;
         if (!r.matched) entry.unmatchedFiles++;
-        return { file: basename(f.path), title: r.title ?? f.title, content: r.content ?? null, matched: r.matched };
+        return {
+          file: basename(f.path),
+          title: r.title ?? f.title,
+          content: r.content ?? null,
+          matched: r.matched,
+          sermon: r.sermon,
+          player: playerOf(r.player, f.duration),
+        };
       });
     if (entry.examples.length < examples) {
       entry.examples.push({
@@ -514,3 +661,7 @@ export function previewStructure(db: DB, structure: Structure, examples = 4): Pr
   }
   return { kinds: result };
 }
+
+/** Player eines Titels: laut Policy, sonst nach Länge */
+export const playerOf = (player: Player | undefined | null, duration: number | null | undefined): Player =>
+  player ?? ((duration ?? 0) >= LONG_TRACK_SECONDS ? 'sermon' : 'music');

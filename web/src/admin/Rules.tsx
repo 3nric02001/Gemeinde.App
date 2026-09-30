@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { plural } from '../format';
 import { useDebounced } from '../hooks';
+import { ConditionGroup } from './Conditions';
 import {
   adminRequest,
   describeRule,
@@ -10,14 +11,9 @@ import {
   RULE_OP_LABELS,
   type AdminAlbumDetail,
   type RuleCondition,
-  type RuleField,
   type RuleGroup,
   type RuleLeaf,
-  type RuleOp,
 } from './api';
-
-/** Wie tief Gruppen verschachtelt werden können (muss zum Server passen) */
-const MAX_DEPTH = 4;
 
 interface RuleInput {
   condition: RuleCondition;
@@ -94,7 +90,13 @@ export function Rules({
         }}
       >
         <h3>{editing.id === undefined ? 'Neue Regel' : 'Regel bearbeiten'}</h3>
-        <ConditionGroup group={editing.condition} depth={0} onChange={(condition) => setEditing({ ...editing, condition })} />
+        <ConditionGroup
+          group={editing.condition}
+          fields={RULE_FIELD_LABELS}
+          ops={() => RULE_OP_LABELS}
+          newLeaf={newLeaf}
+          onChange={(condition) => setEditing({ ...editing, condition: condition as RuleGroup })}
+        />
         <label class="admin-check">
           <input
             type="checkbox"
@@ -116,101 +118,6 @@ export function Rules({
         </div>
       </form>
     </section>
-  );
-}
-
-function ConditionGroup({
-  group,
-  depth,
-  onChange,
-  onRemove,
-}: {
-  group: RuleGroup;
-  depth: number;
-  onChange: (group: RuleGroup) => void;
-  onRemove?: () => void;
-}) {
-  const set = (index: number, condition: RuleCondition) =>
-    onChange({ ...group, conditions: group.conditions.map((c, i) => (i === index ? condition : c)) });
-  const remove = (index: number) => onChange({ ...group, conditions: group.conditions.filter((_, i) => i !== index) });
-  const canRemoveChild = group.conditions.length > 1 || depth > 0;
-
-  return (
-    <div class={`rule-group${depth > 0 ? ' is-nested' : ''}`} role="group" aria-label={depth ? 'Bedingungsgruppe' : 'Bedingungen'}>
-      <div class="rule-group-head">
-        <label class="field">
-          <span class="visually-hidden">Verknüpfung</span>
-          <select value={group.match} onChange={(e) => onChange({ ...group, match: (e.target as HTMLSelectElement).value as RuleGroup['match'] })}>
-            <option value="all">Alle Bedingungen (UND)</option>
-            <option value="any">Mindestens eine (ODER)</option>
-          </select>
-        </label>
-        {onRemove && (
-          <button type="button" class="more-link" onClick={onRemove}>
-            Gruppe entfernen
-          </button>
-        )}
-      </div>
-      {group.conditions.map((condition, index) => (
-        <div key={index} class="rule-item">
-          {index > 0 && <span class="rule-joiner">{group.match === 'all' ? 'und' : 'oder'}</span>}
-          {isGroup(condition) ? (
-            <ConditionGroup group={condition} depth={depth + 1} onChange={(c) => set(index, c)} onRemove={() => remove(index)} />
-          ) : (
-            <ConditionRow leaf={condition} onChange={(c) => set(index, c)} onRemove={canRemoveChild ? () => remove(index) : undefined} />
-          )}
-        </div>
-      ))}
-      <div class="rule-group-add">
-        <button type="button" class="button-secondary button-small" onClick={() => onChange({ ...group, conditions: [...group.conditions, newLeaf()] })}>
-          + Bedingung
-        </button>
-        {depth + 1 < MAX_DEPTH && (
-          <button
-            type="button"
-            class="button-secondary button-small"
-            onClick={() => onChange({ ...group, conditions: [...group.conditions, newGroup(group.match === 'all' ? 'any' : 'all')] })}
-          >
-            + Gruppe
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ConditionRow({ leaf, onChange, onRemove }: { leaf: RuleLeaf; onChange: (leaf: RuleLeaf) => void; onRemove?: () => void }) {
-  return (
-    <div class="rule-row">
-      <select aria-label="Feld" value={leaf.field} onChange={(e) => onChange({ ...leaf, field: (e.target as HTMLSelectElement).value as RuleField })}>
-        {Object.entries(RULE_FIELD_LABELS).map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <select aria-label="Bedingung" value={leaf.op} onChange={(e) => onChange({ ...leaf, op: (e.target as HTMLSelectElement).value as RuleOp })}>
-        {Object.entries(RULE_OP_LABELS).map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <input
-        aria-label="Suchbegriff"
-        value={leaf.value}
-        maxLength={200}
-        placeholder="z. B. Predigt"
-        onInput={(e) => onChange({ ...leaf, value: (e.target as HTMLInputElement).value })}
-      />
-      {onRemove ? (
-        <button type="button" class="icon-button" aria-label="Bedingung entfernen" onClick={onRemove}>
-          ×
-        </button>
-      ) : (
-        <span />
-      )}
-    </div>
   );
 }
 

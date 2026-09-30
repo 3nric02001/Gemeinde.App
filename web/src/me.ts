@@ -110,29 +110,38 @@ export async function toggleFavorite(kind: 'track' | 'album', item: Track | Albu
   }
 }
 
-/** Ab dieser Länge (Sekunden) merkt sich die App die Stelle, wie der Server. */
+/** Ab dieser Länge (Sekunden) merkt sich die App die Stelle, wie der Server, wenn keine Policy den Player festlegt. */
 export const RESUME_MIN_DURATION = 10 * 60;
 /** So nah am Ende gilt ein Titel als fertig gehört. */
 const FINISHED_MARGIN = 30;
 
 export const isLong = (duration: number | null | undefined) => (duration ?? 0) >= RESUME_MIN_DURATION;
 
-/** Gespeicherte Stelle eines langen Titels, falls er angefangen und nicht fertig ist, mit seiner Länge */
-export function savedProgress(track: Pick<Track, 'id' | 'duration'>): Progress | undefined {
+type PlayerTrack = Pick<Track, 'id' | 'duration' | 'player'>;
+
+/**
+ * Predigt-Player (Sprünge, Tempo, Weiterhören): wie es die Policies im Regelwerk festlegen,
+ * sonst bei langen Titeln. `duration` ist die gemessene Länge, falls schon bekannt.
+ */
+export const usesSermonPlayer = (track: Partial<PlayerTrack> | undefined, duration?: number | null) =>
+  track?.player ? track.player === 'sermon' : isLong(duration || track?.duration);
+
+/** Gespeicherte Stelle eines Titels im Predigt-Player, falls er angefangen und nicht fertig ist, mit seiner Länge */
+export function savedProgress(track: PlayerTrack): Progress | undefined {
   const saved = state.progress.get(track.id);
   if (!saved) return undefined;
   const duration = saved.duration || track.duration || 0;
-  if (!isLong(duration) || saved.position < 15 || saved.position >= duration - FINISHED_MARGIN) return undefined;
+  if (!usesSermonPlayer(track, duration) || saved.position < 15 || saved.position >= duration - FINISHED_MARGIN) return undefined;
   return { position: saved.position, duration };
 }
 
-export const resumePosition = (track: Pick<Track, 'id' | 'duration'>) => savedProgress(track)?.position;
+export const resumePosition = (track: PlayerTrack) => savedProgress(track)?.position;
 
-/** Hörstand an den Server; lange Titel merken sich die Stelle auch sofort hier. */
-export function saveProgress(track: Pick<Track, 'id' | 'duration'>, position: number): void {
+/** Hörstand an den Server; Titel im Predigt-Player merken sich die Stelle auch sofort hier. */
+export function saveProgress(track: PlayerTrack, position: number): void {
   const duration = track.duration ?? 0;
   const progress = new Map(state.progress);
-  if (isLong(duration) && position < duration - FINISHED_MARGIN) progress.set(track.id, { position, duration });
+  if (usesSermonPlayer(track, duration) && position < duration - FINISHED_MARGIN) progress.set(track.id, { position, duration });
   else progress.delete(track.id);
   set({ progress });
   const round = (seconds: number) => Math.round(seconds * 10) / 10;

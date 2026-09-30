@@ -73,6 +73,7 @@ const albumFields = {
   passage: nullableText(200),
   description: nullableText(2000),
   hidden: { type: 'boolean' },
+  recording: nullableText(60),
 } as const;
 
 // Die Struktur verschachtelter Bedingungen prüft parseCondition, hier nur die äußere Form.
@@ -246,7 +247,12 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
           params: trackParam,
           body: {
             type: 'object',
-            properties: { title: nullableText(300), speaker: nullableText(200) },
+            properties: {
+              title: nullableText(300),
+              speaker: nullableText(200),
+              sermon: { type: ['boolean', 'null'] },
+              player: { type: ['string', 'null'], enum: ['sermon', 'music', null] },
+            },
             additionalProperties: false,
           },
         },

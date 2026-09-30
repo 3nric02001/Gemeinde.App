@@ -142,7 +142,8 @@ und Musikalben ohne Bild.
 ## Verwaltung: Zuordnung von Aufnahmen
 
 Unter **Verwaltung → Zuordnung** (Manager und Admins) steht das Regelwerk, nach dem die App Gottesdienste,
-Bibelstunden und andere Aufnahmen erkennt und benennt. Es gilt für Ordner mit Datum; Musik bleibt unberührt.
+Bibelstunden und eigene Arten von Aufnahmen erkennt, benennt und abspielt. Vorgegeben gilt es für Ordner mit Datum;
+Musik bleibt unberührt.
 Vorgegeben ist diese Ablage:
 
 ```
@@ -150,9 +151,9 @@ Audio Aufnahmen/2026/2026_08_30_Einschulung/Predigt - Der gute Hirte.mp3
 Audio Aufnahmen/2026/Bibelstunden/2026_01_14_Matthäus 9, 27-38/2026_01_14_001.mp3
 ```
 
-| Art | Erkennen am Ordner | Ordnername | Dateiname | Name des Albums | Titel |
+| Art | Erkennen an | Ordnername | Dateiname | Name des Albums | Titel |
 | --- | --- | --- | --- | --- | --- |
-| Bibelstunde | `Bibelstunden` | `{datum}_{bibelstelle}` | `{datum}_{nr}` | `{bibelstelle}` | `Teil {nr}` |
+| Bibelstunde | Ordner im Pfad ist genau „Bibelstunden“ | `{datum}_{bibelstelle}` | `{datum}_{nr}` | `{bibelstelle}` | `Teil {nr}` |
 | Gottesdienst | (alle übrigen mit Datum) | `{datum}_{anlass}` | `{inhalt} - {titel} - {sprecher}` | `{anlass}` | `{inhalt}: {titel}` |
 
 Daraus werden „Einschulung“ mit „Predigt: Der gute Hirte“ und die Bibelstunde „Matthäus 9, 27-38“ mit
@@ -160,16 +161,29 @@ Daraus werden „Einschulung“ mit „Predigt: Der gute Hirte“ und die Bibels
 Gottesdienstes; bei `Lied - Nun danket alle Gott - Chor.mp3` ist der Chor Interpret des Liedes, aber nicht
 Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
 
-- **Arten**: Es gilt die erste Art, deren Ordner irgendwo im Pfad vorkommt; eine Art ohne Ordner nimmt alle übrigen
-  Ordner mit Datum. Reihenfolge, Namen und Mehrzahl (für Filter und Überschriften) sind frei, bis zu zehn Arten.
+- **Arten**: Gottesdienst und Bibelstunde sind nur Vorgaben; Arten lassen sich umbenennen, löschen und neu anlegen
+  (etwa „Jugendabend“), bis zu zehn. Jede Art erkennt ihre Albumordner an einer Bedingung auf „Ordner im Pfad“ oder
+  „Pfad“ (verschachtelbar mit UND/ODER). Es gilt die erste Art, deren Bedingung passt; eine Art ohne Bedingung nimmt
+  alle übrigen Ordner mit Datum. Mit abgewähltem „Nur Ordner mit Datum“ erkennt eine Art auch Ordner ohne Datum.
+- **Art je Album**: Im Album-Editor lässt sich die Art eines Albums von Hand setzen, auch „Keine Art (Musik)“. Das
+  geht dem Regelwerk vor, wie alle Korrekturen aus der Verwaltung.
 - **Muster** für Ordner- und Dateinamen mit den Platzhaltern `{datum}`, `{anlass}`, `{bibelstelle}`,
   `{sprecher}`, `{inhalt}`, `{titel}` und `{nr}`. Trennzeichen sind austauschbar („ - “, „_“, „.“, „:“); zwischen
   zwei freien Textfeldern (etwa `{sprecher} - {titel}`) muss aber ein echtes Trennzeichen stehen, kein
   Leerzeichen. Alles nach dem ersten Platzhalter ist optional (`{datum}_{anlass}` passt auch auf `2026_09_06`),
   eine vorangestellte Tracknummer (`03 Lied - …`) wird erkannt.
 - **Vorlagen** für den Namen des Albums und den Titel einer Aufnahme; leere Platzhalter fallen samt Trennern weg.
-- **Inhalt der Predigt** (z. B. „Predigt“): Diese Aufnahme liefert Sprecher (`{sprecher}`) und Bibelstelle
-  (`{bibelstelle}`, sonst aus ihrem Titel erkannt). Wer predigt, steht als Interpret am Gottesdienst.
+- **Policies** („Wenn … dann …“) legen fest, was als Predigt gilt und welcher Player läuft. Bedingungen auf Art,
+  Inhalt, Titel, Interpret, Album, Genre, Ordner, Pfad und Dauer (Minuten) lassen sich mit UND/ODER verschachteln.
+  Wirkungen: **gilt als Predigt** (liefert Sprecher `{sprecher}` und Bibelstelle `{bibelstelle}`, sonst aus ihrem
+  Titel erkannt; wer predigt, steht als Interpret am Gottesdienst) und **Player** (Predigt-Player mit Sprüngen, Tempo
+  und Weiterhören oder Musik-Player). Die Liste gilt von oben nach unten, je Wirkung entscheidet die erste passende
+  Policy. Ohne passende Policy ist ein Titel keine Predigt und bekommt ab 10 Minuten Länge den Predigt-Player.
+  Vorgegeben: „Art ist genau Gottesdienst und Inhalt ist genau Predigt“ und „Art ist genau Bibelstunde“, beide
+  Predigt mit Predigt-Player. Regelwerke von vor den Policies werden beim Laden umgerechnet.
+- **Policy je Titel ansehen und korrigieren**: Im Album-Editor zeigt jeder Titel seinen Player samt Quelle
+  (Policy, von Hand oder nach Länge). Beim Bearbeiten eines Titels lassen sich „gilt als Predigt“ und Player von Hand
+  setzen; „Automatisch“ zeigt, was die Policies ergeben. Korrekturen überstehen neue Scans und gehen den Policies vor.
 - **Trennzeichen aus der Datei**: Enthält ein Dateiname „ - “, wird nur dort getrennt; `Text_Richter 7,1-4` oder
   `Matthäus 7,7-14` bleiben ein Teil. „Text_“ vor einer Bibelstelle wird lesbar („Einleitung: Richter 7,1-4“,
   „Predigt: Bergpredigt (Matthäus 7,7-14)“), übrige Unterstriche werden Leerzeichen.

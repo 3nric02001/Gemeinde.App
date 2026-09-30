@@ -3202,3 +3202,51 @@ button.more-link {
     display: none;
   }
 }
+
+/* ---------- Verwaltung: Arten erkennen und Policies ---------- */
+
+.structure-match,
+.structure-policy h3 {
+  margin-bottom: 12px;
+}
+
+.structure-match h3,
+.structure-policy h3 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 12px 0 8px;
+}
+
+.structure-policy {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.structure-policy.is-disabled > :not(.section-head):not(.admin-check) {
+  opacity: 0.55;
+}
+
+.structure-policy-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.structure-policy-name input {
+  width: 100%;
+  font-weight: 600;
+}
+
+.structure-policy .structure-grid select {
+  width: 100%;
+}
+
+.admin-kind {
+  margin-top: 16px;
+}
+
+.admin-kind select {
+  max-width: 360px;
+}

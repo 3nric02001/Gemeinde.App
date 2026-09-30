@@ -55,7 +55,7 @@ export interface AlbumFilter {
 
 const TRACK_COLUMNS = `
   t.id, coalesce((SELECT title FROM track_overrides WHERE path = t.path), t.display_title, t.title) AS title, coalesce(t.display_artist, t.artist) AS artist, t.album_artist AS albumArtist,
-  t.content,
+  t.content, t.playback AS player,
   coalesce((SELECT title FROM albums WHERE id = t.album_id), t.album) AS album, t.album_id AS albumId,
   t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType,
   (SELECT date FROM albums WHERE id = t.album_id) AS albumDate,

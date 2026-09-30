@@ -132,6 +132,50 @@ describe('Album-Editor', () => {
     expect(screen.getByText('Pastorin Schulz')).toBeTruthy();
   });
 
+  it('zeigt je Titel die greifende Policy und korrigiert Predigt und Player', async () => {
+    await signedInAs('manager');
+    const recording = {
+      ...service,
+      recording: 'Gottesdienst',
+      tracks: [{ ...track, player: 'sermon' }],
+      trackEdits: [
+        {
+          id: 11, fileTitle: 'Predigt_final2', title: null, speaker: null, fileSpeaker: null, sermon: null, player: null,
+          auto: { sermon: true, sermonBy: 'Predigt im Gottesdienst', player: 'sermon', playerBy: 'Predigt im Gottesdienst' },
+        },
+      ],
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input) === '/api/admin/structure'
+        ? json({ structure: { kinds: [{ name: 'Bibelstunde' }, { name: 'Gottesdienst' }] } })
+        : json(recording),
+    );
+    render(<Admin location={at('/admin/album/7')} />);
+    expect((await screen.findByText('Predigt-Player', { selector: '.badge' })).getAttribute('title')).toBe('Policy „Predigt im Gottesdienst“');
+    fireEvent.click(screen.getByLabelText('Predigt_final2 bearbeiten'));
+    const form = screen.getByText('Die Korrektur bleibt auch nach neuen Scans erhalten', { exact: false }).closest('form')!;
+    const player = within(form).getByLabelText('Player') as HTMLSelectElement;
+    expect(player.options[0]!.textContent).toBe('Automatisch (Predigt-Player, Policy „Predigt im Gottesdienst“)');
+    fireEvent.change(player, { target: { value: 'music' } });
+    fireEvent.change(within(form).getByLabelText('Gilt als Predigt'), { target: { value: 'no' } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => i?.method === 'PATCH')).toBe(true));
+    const [url, init] = fetchMock.mock.calls.find(([, i]) => i?.method === 'PATCH')!;
+    expect(url).toBe('/api/admin/albums/7/tracks/11');
+    expect(JSON.parse(init!.body as string)).toEqual({ sermon: false, player: 'music' });
+
+    // Die Art des Albums lässt sich von Hand setzen
+    const kind = (await screen.findByLabelText('Art')) as HTMLSelectElement;
+    await waitFor(() => expect(kind.disabled).toBe(false));
+    expect([...kind.options].map((o) => o.textContent)).toEqual(['Automatisch (Gottesdienst)', 'Bibelstunde', 'Gottesdienst', 'Keine Art (Musik)']);
+    fireEvent.change(kind, { target: { value: 'Bibelstunde' } });
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([, i]) => i?.method === 'PATCH').map(([, i]) => JSON.parse(i!.body as string))).toContainEqual({
+        recording: 'Bibelstunde',
+      }),
+    );
+  });
+
   it('lädt ein eigenes Titelbild hoch', async () => {
     await signedInAs('manager');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) =>
