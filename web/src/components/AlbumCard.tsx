@@ -18,7 +18,7 @@ export async function playAlbum(albumId: number, options: { shuffle?: boolean; s
 
 /**
  * Karte eines Albums. `extra` erscheint nur in der Listenansicht (Datum auf dem Handy) hinter dem Untertitel,
- * z. B. Sprecher und Länge.
+ * z. B. die Länge.
  */
 export function AlbumCard({ album, subtitle, extra, state }: { album: Album; subtitle?: string; extra?: string; state?: DatedState }) {
   const title = albumTitle(album.title, album.date, kindLabel(album));
@@ -58,7 +58,7 @@ export function AlbumCard({ album, subtitle, extra, state }: { album: Album; sub
   );
 }
 
-/** Raster aus Karten; `list` macht daraus auf dem Handy eine kompakte Liste mit Sprecher und Länge. */
+/** Raster aus Karten; `list` macht daraus auf dem Handy eine kompakte Liste mit der Länge (kein Sprecher: oft sind es mehrere). */
 export function AlbumGrid({ albums, list = false, states }: { albums: Album[]; list?: boolean; states?: Map<number, DatedState> }) {
   return (
     <div class={list ? 'grid grid-list' : 'grid'}>
@@ -67,7 +67,7 @@ export function AlbumGrid({ albums, list = false, states }: { albums: Album[]; l
           key={album.id}
           album={album}
           state={states?.get(album.id)}
-          extra={list ? [album.speaker, album.duration ? formatDuration(album.duration) : undefined].filter(Boolean).join(' · ') : undefined}
+          extra={list && album.duration ? formatDuration(album.duration) : undefined}
         />
       ))}
     </div>

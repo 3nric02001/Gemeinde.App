@@ -12,7 +12,6 @@ interface AlbumRef {
 
 interface QualityReport {
   withoutCover: { total: number; items: AlbumRef[] };
-  servicesWithoutSpeaker: { total: number; items: AlbumRef[] };
 }
 
 function AlbumLinks({ albums }: { albums: AlbumRef[] }) {
@@ -69,14 +68,6 @@ export function QualityPanel() {
         Hinweise, wo Ordner- oder Dateinamen nicht alles liefern. Am besten benennt man die Dateien in der Nextcloud um; der
         nächste Scan übernimmt das. Alternativ lässt sich jedes Album in der Verwaltung korrigieren.
       </p>
-
-      <Section
-        title="Gottesdienste ohne Sprecher"
-        count={report.servicesWithoutSpeaker.total}
-        hint="Der Sprecher kommt aus dem Dateinamen der Predigt („Predigt - Titel - Name“, Muster unter Verwaltung → Zuordnung) oder aus der Verwaltung am einzelnen Titel."
-      >
-        <AlbumLinks albums={report.servicesWithoutSpeaker.items} />
-      </Section>
 
       <Section
         title="Musikalben ohne Bild"

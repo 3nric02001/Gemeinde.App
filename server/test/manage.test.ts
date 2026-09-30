@@ -65,17 +65,13 @@ afterEach(async () => {
 });
 
 describe('Filter der Albumliste', () => {
-  it('findet Gottesdienste ohne Sprecher, Musik und ausgeblendete Alben', async () => {
+  it('findet Musik und ausgeblendete Alben', async () => {
     const titles = async (query: string) => (await get(`/api/admin/albums?${query}`)).items.map((a: any) => a.date ?? a.title);
-    expect(await titles('noSpeaker=true')).toEqual(['2026-09-27', '2026-08-30']);
     expect(await titles('dated=false')).toEqual(['Let There Be Light']);
     expect(await titles('hidden=true')).toEqual([]);
 
     await send('PATCH', `/api/admin/albums/${albumId('Let There Be Light')}`, { hidden: true });
     expect(await titles('hidden=true')).toEqual(['Let There Be Light']);
-    // Sprecher nachgetragen: fällt aus dem Filter
-    await send('PATCH', `/api/admin/albums/${albumId('2026-08-30 Jugendgottesdienst')}`, { speaker: 'Jugendteam' });
-    expect(await titles('noSpeaker=true')).toEqual(['2026-09-27']);
   });
 });
 

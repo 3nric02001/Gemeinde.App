@@ -40,8 +40,6 @@ export interface AlbumFilter {
   dated?: boolean;
   /** Verwaltung: nur ausgeblendete Alben */
   hidden?: boolean;
-  /** Verwaltung: nur Gottesdienste, bei denen noch kein Sprecher eingetragen ist */
-  noSpeaker?: boolean;
   /** Nur Aufnahmen einer Art aus dem Regelwerk ("Gottesdienst", "Bibelstunde") */
   recording?: string;
   /** Nur Aufnahmen (irgendeiner Art), Musik oder Sonstiges (automatische Alben ohne Zuordnung) */
@@ -201,7 +199,6 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
   }
   if (filter.dated !== undefined) where.clauses.push(filter.dated ? 'a.date IS NOT NULL' : 'a.date IS NULL');
   if (filter.hidden) where.clauses.push('a.hidden = 1');
-  if (filter.noSpeaker) where.clauses.push('a.date IS NOT NULL AND a.speaker IS NULL');
   if (filter.recording) {
     where.clauses.push('a.recording = @recording COLLATE NOCASE');
     where.params.recording = filter.recording;

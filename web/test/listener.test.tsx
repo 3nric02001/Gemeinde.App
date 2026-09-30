@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Album, Track } from '../src/api';
-import { AlbumCard } from '../src/components/AlbumCard';
+import { AlbumCard, AlbumGrid } from '../src/components/AlbumCard';
 import { Controls } from '../src/components/Controls';
 import { FavoriteButton } from '../src/components/FavoriteButton';
 import { TrackList } from '../src/components/TrackList';
@@ -51,6 +51,16 @@ describe('Gottesdienste in Listen', () => {
     expect(screen.getByText('Erntedank, So., 27.09.2026')).toBeTruthy();
     // Ohne Bild ein Kalenderblatt statt "20"
     expect([...container.querySelectorAll('.cover-cal')].map((el) => el.textContent)).toEqual(['Sep20', 'Sep27']);
+  });
+
+  it('Listenansicht der Alben zeigt die Länge, aber keinen Sprecher', () => {
+    const album: Album = {
+      id: 3, title: '2026-09-27 Erntedank', year: 2026, trackCount: 3, duration: 900, hasCover: false, date: '2026-09-27',
+      speaker: 'Pastor Meier',
+    };
+    const { container } = render(<AlbumGrid albums={[album]} list />);
+    expect(container.textContent).toContain('15 Min.');
+    expect(container.textContent).not.toContain('Pastor Meier');
   });
 
   it('Albumkarten heißen nach dem Anlass', () => {

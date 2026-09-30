@@ -180,14 +180,13 @@ describe('Regeln', () => {
 });
 
 describe('Hinweise zur Datenqualität', () => {
-  it('zeigt fehlende Cover und Gottesdienste ohne Sprecher', async () => {
+  it('zeigt fehlende Cover, aber keine Gottesdienste ohne Sprecher mehr', async () => {
     cloud.put('Downloads/Oceans.mp3', mp3({}));
     cloud.put('GD/2026-09-27/Predigt - Psalm 23.mp3', mp3({}));
     cloud.put('GD/2026-10-04/Predigt - Psalm 24 - Anna Schulz.mp3', mp3({}));
     await ctx.scanner.scan();
     const report = await get('/api/admin/quality');
-    expect(Object.keys(report).sort()).toEqual(['servicesWithoutSpeaker', 'withoutCover']);
+    expect(Object.keys(report).sort()).toEqual(['withoutCover']);
     expect(report.withoutCover.items.map((a: any) => a.title)).toEqual(['Downloads']);
-    expect(report.servicesWithoutSpeaker.items.map((a: any) => a.date)).toEqual(['2026-09-27']);
   });
 });

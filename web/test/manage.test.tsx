@@ -191,7 +191,7 @@ describe('Album-Editor', () => {
 });
 
 describe('Albumliste', () => {
-  it('filtert nach Aufgaben und kennzeichnet Gottesdienste ohne Sprecher', async () => {
+  it('filtert nach Aufgaben, ohne Sprecher am Album', async () => {
     await signedInAs('manager');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -200,11 +200,12 @@ describe('Albumliste', () => {
       }
       return json({ items: [{ ...service, tracks: undefined }], total: 1, limit: 100, offset: 0 });
     });
-    render(<Admin location={at('/admin', 'filter=ohne-sprecher')} />);
+    render(<Admin location={at('/admin', 'filter=gottesdienste')} />);
     await waitFor(() => expect(screen.getByText('Erntedank')).toBeTruthy());
-    expect(screen.getByText('Sprecher fehlt', { selector: '.badge' })).toBeTruthy();
-    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain('/api/admin/albums?noSpeaker=true&sort=date&limit=100&offset=0');
-    expect(screen.getByText('Sprecher fehlt', { selector: '.chip' }).getAttribute('aria-current')).toBe('true');
+    // Sprecher gibt es nur je Titel: kein Filter und kein Hinweis "Sprecher fehlt"
+    expect(screen.queryByText('Sprecher fehlt')).toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain('/api/admin/albums?dated=true&sort=date&limit=100&offset=0');
+    expect(screen.getByText('Gottesdienste', { selector: '.chip' }).getAttribute('aria-current')).toBe('true');
     // Der Scan braucht ohne Probleme nur eine Zeile
     expect(screen.queryByText('Abgleich mit der Nextcloud')).toBeNull();
     expect(screen.getByText('Jetzt scannen')).toBeTruthy();
