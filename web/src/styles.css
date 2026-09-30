@@ -2010,6 +2010,30 @@ button.more-link {
   text-align: left;
 }
 
+/* Zu lange Titel laufen langsam hin und zurück, statt abgeschnitten zu werden */
+.marquee {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.marquee-text {
+  display: inline-block;
+}
+
+.marquee.is-running {
+  text-overflow: clip;
+}
+
+/* Bewegung reduzieren: nichts läuft, der Titel bricht in mehrere Zeilen um */
+@media (prefers-reduced-motion: reduce) {
+  .marquee,
+  .now-meta > .now-title {
+    white-space: normal;
+  }
+}
+
 .now-playing .seek,
 .now-playing .volume {
   max-width: 420px;

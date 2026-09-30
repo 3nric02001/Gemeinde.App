@@ -7,6 +7,7 @@ import { Controls, RateButton, Volume } from './Controls';
 import { Cover } from './Cover';
 import { FavoriteButton } from './FavoriteButton';
 import { Icon } from './Icon';
+import { Marquee } from './Marquee';
 import { Seek } from './Seek';
 import { PassageLink } from './SermonInfo';
 import { splitPassages } from '../bible';
@@ -84,7 +85,7 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
               const href = currentHref(track, from);
               if (href) go(href);
             }}>
-            {track.title}
+            <Marquee text={track.title} />
           </button>
           {track.speaker && <span class="now-artist">{track.speaker}</span>}
           {/* Zum Mitlesen: die Bibelstelle öffnet den Text in einem neuen Tab */}
