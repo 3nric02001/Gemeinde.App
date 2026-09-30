@@ -5,6 +5,7 @@ import { formatCompactDate, plural } from '../format';
 import { ErrorNote, Loading } from '../pages/common';
 import { adminRequest } from './api';
 import { setLeaveGuard } from '../router';
+import { Switch } from './Switch';
 import { asGroup, ConditionGroup, describeCondition, isComplete, type Condition, type Leaf } from './Conditions';
 
 export interface RecordingKind {
@@ -193,29 +194,46 @@ function RuleCard({
   const label = name || `Regel ${index + 1}`;
   const [open, setOpen] = useState(() => !isComplete(when));
   const sentence = isComplete(when) ? `Wenn ${describeCondition(when, { fields, ops: { ...TEXT_OPS, ...DURATION_OPS } })} → ${then}` : 'Bedingung unvollständig';
+  // Aktiv und Reihenfolge stehen neben der Zusammenfassung, damit sie auch eingeklappt erreichbar sind
   return (
-    <details
-      class={`structure-policy structure-rule${enabled ? '' : ' is-disabled'}`}
-      open={open}
-      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
-    >
-      <summary>
-        <span class="structure-rule-name">
-          {label}
-          {!enabled && <span class="badge badge-muted">inaktiv</span>}
-        </span>
-        <span class="structure-rule-sentence">{sentence}</span>
-      </summary>
-      <div class="section-head">
-        <label class="field structure-policy-name">
-          <span class="visually-hidden">Name der Regel</span>
-          <input
-            value={name}
-            maxLength={80}
-            placeholder={`Regel ${index + 1}`}
-            onInput={(e) => onChange({ name: (e.target as HTMLInputElement).value })}
-          />
-        </label>
+    <div class={`structure-policy structure-rule-wrap${enabled ? '' : ' is-disabled'}`}>
+      <details class="structure-rule" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary>
+          <span class="structure-rule-name">
+            {label}
+            {!enabled && <span class="badge badge-muted">inaktiv</span>}
+          </span>
+          <span class="structure-rule-sentence">{sentence}</span>
+        </summary>
+        <div class="structure-rule-body">
+          <label class="field structure-rule-line">
+            <span>Name der Regel</span>
+            <input
+              value={name}
+              maxLength={80}
+              placeholder={`Regel ${index + 1}`}
+              onInput={(e) => onChange({ name: (e.target as HTMLInputElement).value })}
+            />
+          </label>
+          <div class="structure-rule-block">
+            <h3>Wenn</h3>
+            <ConditionGroup
+              group={asGroup(when)}
+              fields={fields}
+              ops={opsFor}
+              newLeaf={newLeaf}
+              placeholder={placeholderFor}
+              onChange={(next) => onChange({ when: next })}
+            />
+          </div>
+          <div class="structure-rule-block">
+            <h3>Dann</h3>
+            {children}
+          </div>
+        </div>
+      </details>
+      <div class="structure-rule-actions">
+        <Switch checked={enabled} label="Aktiv" onChange={(checked) => onChange({ enabled: checked })} />
         <span class="admin-track-actions">
           <button type="button" class="icon-button" aria-label={`${label} nach oben`} disabled={index === 0} onClick={() => onMove(-1)}>
             <Icon name="down" size={18} class="flip" />
@@ -228,22 +246,7 @@ function RuleCard({
           </button>
         </span>
       </div>
-      <label class="admin-check">
-        <input type="checkbox" checked={enabled} onChange={(e) => onChange({ enabled: (e.target as HTMLInputElement).checked })} />
-        Aktiv
-      </label>
-      <h3>Wenn</h3>
-      <ConditionGroup
-        group={asGroup(when)}
-        fields={fields}
-        ops={opsFor}
-        newLeaf={newLeaf}
-        placeholder={placeholderFor}
-        onChange={(next) => onChange({ when: next })}
-      />
-      <h3>Dann</h3>
-      {children}
-    </details>
+    </div>
   );
 }
 
@@ -370,7 +373,14 @@ export function StructurePanel() {
         void run('save');
       }}
     >
-      <h1 class="page-title">Zuordnung von Aufnahmen</h1>
+      <div class="page-head structure-head">
+        <h1 class="page-title">Zuordnung von Aufnahmen</h1>
+        {defaults && (
+          <button type="button" class="button-secondary" onClick={() => change(structuredClone(defaults))}>
+            Vorgabe laden
+          </button>
+        )}
+      </div>
       <p class="admin-hint">
         Das Regelwerk arbeitet in drei Schritten: Zuerst bestimmt es die Art eines Albumordners (Gottesdienst, Bibelstunde oder eine
         eigene Art), dann liest es Ordner- und Dateinamen nach den Mustern dieser Art, zuletzt legen die Policies fest, was als
@@ -413,22 +423,22 @@ export function StructurePanel() {
             onMove={(delta) => change({ ...draft, kindRules: move(kindRules, index, delta) })}
             onRemove={() => change({ ...draft, kindRules: kindRules.filter((_, i) => i !== index) })}
           >
-            <div class="structure-grid">
+            <div class="structure-grid structure-rule-line">
               <label class="field">
                 <span>Art</span>
                 <select value={rule.kind || 'Musik'} onChange={(e) => updateKindRule(index, { kind: (e.target as HTMLSelectElement).value })}>
                   {kindOptions}
                 </select>
               </label>
+              <label class="admin-check structure-grid-check">
+                <input
+                  type="checkbox"
+                  checked={rule.datedOnly}
+                  onChange={(e) => updateKindRule(index, { datedOnly: (e.target as HTMLInputElement).checked })}
+                />
+                Nur Ordner mit Datum im Namen
+              </label>
             </div>
-            <label class="admin-check">
-              <input
-                type="checkbox"
-                checked={rule.datedOnly}
-                onChange={(e) => updateKindRule(index, { datedOnly: (e.target as HTMLInputElement).checked })}
-              />
-              Nur Ordner mit Datum im Namen
-            </label>
           </RuleCard>
         ))}
         <div class="structure-policy structure-default-kind">
@@ -451,61 +461,70 @@ export function StructurePanel() {
         </div>
       </section>
 
-      <h2 class="structure-step">2. Arten: Ordner- und Dateinamen lesen</h2>
-      {draft.kinds.map((kind, index) => (
-        <section key={index} class="shelf admin-panel structure-kind">
-          <div class="section-head">
-            <h2>{kind.name || 'Neue Art'}</h2>
-            <span class="admin-track-actions">
-              <button type="button" class="icon-button" aria-label={`${kind.name} nach oben`} disabled={index === 0} onClick={() => moveKind(index, -1)}>
-                <Icon name="down" size={18} class="flip" />
-              </button>
-              <button
-                type="button"
-                class="icon-button"
-                aria-label={`${kind.name} nach unten`}
-                disabled={index === draft.kinds.length - 1}
-                onClick={() => moveKind(index, 1)}
-              >
-                <Icon name="down" size={18} />
-              </button>
-              <button
-                type="button"
-                class="icon-button"
-                aria-label={`${kind.name} entfernen`}
-                disabled={draft.kinds.length === 1}
-                onClick={() => change({ ...draft, kinds: draft.kinds.filter((_, i) => i !== index) })}
-              >
-                <Icon name="close" size={18} />
-              </button>
-            </span>
+      <section class="shelf admin-panel structure-kinds">
+        <h2>2. Arten: Ordner- und Dateinamen lesen</h2>
+        <p class="admin-hint">
+          Jede Art liest Ordner- und Dateinamen nach ihren Mustern und bildet daraus Name des Albums und Titel. Platzhalter stehen
+          oben unter „Platzhalter in Mustern und Vorlagen“.
+        </p>
+        {draft.kinds.map((kind, index) => (
+          <div key={index} class="structure-policy structure-kind">
+            <div class="structure-kind-head">
+              <h3>{kind.name || 'Neue Art'}</h3>
+              <span class="admin-track-actions">
+                <button type="button" class="icon-button" aria-label={`${kind.name} nach oben`} disabled={index === 0} onClick={() => moveKind(index, -1)}>
+                  <Icon name="down" size={18} class="flip" />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  aria-label={`${kind.name} nach unten`}
+                  disabled={index === draft.kinds.length - 1}
+                  onClick={() => moveKind(index, 1)}
+                >
+                  <Icon name="down" size={18} />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  aria-label={`${kind.name} entfernen`}
+                  disabled={draft.kinds.length === 1}
+                  onClick={() => change({ ...draft, kinds: draft.kinds.filter((_, i) => i !== index) })}
+                >
+                  <Icon name="close" size={18} />
+                </button>
+              </span>
+            </div>
+            <div class="structure-kind-groups">
+              <h4>Bezeichnung</h4>
+              <div class="admin-fields admin-fields-2">
+                {text(index, 'name', 'Name', undefined, 'z. B. Bibelstunde')}
+                {text(index, 'plural', 'Mehrzahl', 'Für Überschriften und Filter', 'z. B. Bibelstunden')}
+              </div>
+              <h4>Muster zum Lesen</h4>
+              <div class="admin-fields admin-fields-2 structure-patterns">
+                {text(index, 'folderPattern', 'Ordnername', 'z. B. 2026_08_30_Einschulung', '{datum}_{anlass}')}
+                {text(index, 'filePattern', 'Dateiname (ohne Endung)', 'z. B. Predigt - Der gute Hirte - Pastor Meier', '{inhalt} - {titel} - {sprecher}')}
+              </div>
+              <h4>Anzeige in der App</h4>
+              <div class="admin-fields admin-fields-2 structure-patterns">
+                {text(index, 'albumTitle', 'Name des Albums', 'Leer oder ohne Wert: der Name der Art', '{anlass}')}
+                {text(index, 'trackTitle', 'Titel einer Aufnahme', 'Leere Platzhalter fallen samt Trennern weg', '{inhalt}: {titel}')}
+              </div>
+            </div>
           </div>
-          <div class="structure-grid">
-            {text(index, 'name', 'Name', undefined, 'z. B. Bibelstunde')}
-            {text(index, 'plural', 'Mehrzahl', 'Für Überschriften und Filter', 'z. B. Bibelstunden')}
-            {text(index, 'folderPattern', 'Ordnername', 'z. B. 2026_08_30_Einschulung', '{datum}_{anlass}')}
-            {text(index, 'filePattern', 'Dateiname (ohne Endung)', 'z. B. Predigt - Der gute Hirte - Pastor Meier', '{inhalt} - {titel} - {sprecher}')}
-            {text(index, 'albumTitle', 'Name des Albums', 'Leer oder ohne Wert: der Name der Art', '{anlass}')}
-            {text(index, 'trackTitle', 'Titel einer Aufnahme', 'Leere Platzhalter fallen samt Trennern weg', '{inhalt}: {titel}')}
-          </div>
-        </section>
-      ))}
-
-      <div class="actions">
-        <button
-          type="button"
-          class="button-secondary"
-          disabled={draft.kinds.length >= 10}
-          onClick={() => change({ ...draft, kinds: [...draft.kinds, { ...EMPTY_KIND }] })}
-        >
-          Art hinzufügen
-        </button>
-        {defaults && (
-          <button type="button" class="button-secondary" onClick={() => change(structuredClone(defaults))}>
-            Vorgabe laden
+        ))}
+        <div class="actions">
+          <button
+            type="button"
+            class="button-secondary"
+            disabled={draft.kinds.length >= 10}
+            onClick={() => change({ ...draft, kinds: [...draft.kinds, { ...EMPTY_KIND }] })}
+          >
+            Art hinzufügen
           </button>
-        )}
-      </div>
+        </div>
+      </section>
 
       <section class="shelf admin-panel structure-policies">
         <h2>3. Policies: Inhalt, Predigt und Player</h2>
@@ -535,7 +554,7 @@ export function StructurePanel() {
             onMove={(delta) => change({ ...draft, policies: move(policies, index, delta) })}
             onRemove={() => change({ ...draft, policies: policies.filter((_, i) => i !== index) })}
           >
-            <div class="structure-grid">
+            <div class="structure-grid structure-rule-line">
               <label class="field">
                 <span>Inhalt setzen</span>
                 <input
@@ -559,7 +578,7 @@ export function StructurePanel() {
                   }}
                 >
                   <option value="">nicht festlegen</option>
-                  <option value="yes">ja, liefert Sprecher und Bibelstelle</option>
+                  <option value="yes">ja (Sprecher, Bibelstelle)</option>
                   <option value="no">nein</option>
                 </select>
               </label>
@@ -598,38 +617,41 @@ export function StructurePanel() {
           Was am Anfang eines Dateinamens stehen kann, eine Zeile je Inhalt. Nötig vor allem für Inhalte aus mehreren Wörtern
           („Gebet und Segen“); einzelne Wörter erkennt die App auch so.
         </p>
-        <label class="field">
-          <span>Bekannte Inhalte</span>
-          <textarea
-            id="structure-contents"
-            rows={6}
-            value={draft.contents.join('\n')}
-            onInput={(e) =>
-              change({
-                ...draft,
-                contents: (e.target as HTMLTextAreaElement).value.split('\n').map((line) => line.trimStart()),
-              })
-            }
-          />
-        </label>
-        <label class="field">
-          <span>Inhalte ohne Titel</span>
-          <textarea
-            id="structure-untitled"
-            rows={5}
-            value={(draft.untitled ?? []).join('\n')}
-            onInput={(e) =>
-              change({
-                ...draft,
-                untitled: (e.target as HTMLTextAreaElement).value.split('\n').map((line) => line.trimStart()),
-              })
-            }
-          />
-          <small class="field-hint">
-            Folgt nach einem dieser Inhalte nur ein Teil, ist das der Name: „Begrüßung - Jakob Rauschenberger“ wird „Begrüßung“
-            mit Jakob Rauschenberger, bei „Lied - Großer Gott“ bleibt „Großer Gott“ der Titel.
-          </small>
-        </label>
+        <div class="admin-fields admin-fields-2">
+          <label class="field">
+            <span>Bekannte Inhalte</span>
+            <textarea
+              id="structure-contents"
+              rows={6}
+              value={draft.contents.join('\n')}
+              onInput={(e) =>
+                change({
+                  ...draft,
+                  contents: (e.target as HTMLTextAreaElement).value.split('\n').map((line) => line.trimStart()),
+                })
+              }
+            />
+            <small class="field-hint">Am Anfang des Dateinamens, z. B. „Predigt“ oder „Gebet und Segen“.</small>
+          </label>
+          <label class="field">
+            <span>Inhalte ohne Titel</span>
+            <textarea
+              id="structure-untitled"
+              rows={6}
+              value={(draft.untitled ?? []).join('\n')}
+              onInput={(e) =>
+                change({
+                  ...draft,
+                  untitled: (e.target as HTMLTextAreaElement).value.split('\n').map((line) => line.trimStart()),
+                })
+              }
+            />
+            <small class="field-hint">
+              Folgt nach einem dieser Inhalte nur ein Teil, ist das der Name: „Begrüßung - Jakob Rauschenberger“ wird „Begrüßung“
+              mit Jakob Rauschenberger, bei „Lied - Großer Gott“ bleibt „Großer Gott“ der Titel.
+            </small>
+          </label>
+        </div>
       </section>
 
       <LibrarySection library={draft.library} onChange={(library) => change({ ...draft, library })} />
@@ -733,6 +755,7 @@ function LibrarySection({ library, onChange }: { library: Library; onChange: (li
       <div class="admin-fields admin-fields-2">
         {text('albumTitle', 'Name des Albums', 'Vorgabe {ordner}; z. B. „{ordner} ({jahr})“')}
         {text('trackTitle', 'Titel', 'Vorgabe {titel}; z. B. „{nr}. {titel}“')}
+        {text('looseTitle', 'Name für Dateien direkt im Musikordner', 'Vorgabe „Einzeltitel“')}
       </div>
       <dl class="structure-placeholders">
         {LIBRARY_PLACEHOLDER_HELP.map(([name, help]) => (
@@ -744,7 +767,6 @@ function LibrarySection({ library, onChange }: { library: Library; onChange: (li
           </div>
         ))}
       </dl>
-      {text('looseTitle', 'Name für Dateien direkt im Musikordner', 'Vorgabe „Einzeltitel“')}
 
       <h3>Predigt-Player</h3>
       <label class="field structure-minutes">
