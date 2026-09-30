@@ -15,7 +15,14 @@ declare module 'fastify' {
 const OIDC_STATE_COOKIE = 'gemeinde_oidc';
 
 /** Pfade, die nur der Admin nutzen darf; alles andere unter /api/admin reicht für Manager. */
-const ADMIN_ONLY = ['/api/admin/users', '/api/admin/groups', '/api/admin/oidc', '/api/admin/branding', '/api/admin/offline'];
+const ADMIN_ONLY = [
+  '/api/admin/users',
+  '/api/admin/groups',
+  '/api/admin/oidc',
+  '/api/admin/branding',
+  '/api/admin/offline',
+  '/api/admin/changes',
+];
 
 /** Welche Rolle eine Anfrage braucht; undefined heißt öffentlich. */
 export function requiredRole(method: string, path: string): Role | undefined {

@@ -1,13 +1,13 @@
 import type { Album } from '../api';
 import { coverUrl, getJson, type AlbumDetail } from '../api';
-import { player } from '../player';
+import { albumContext, player } from '../player';
 import { albumSubtitle, albumTitle } from '../format';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
 
 export async function playAlbum(albumId: number, options: { shuffle?: boolean; start?: number } = {}) {
   const album = await getJson<AlbumDetail>(`/api/albums/${albumId}`);
-  player.playList(album.tracks, options.start ?? 0, { shuffle: options.shuffle ?? false });
+  player.playList(album.tracks, options.start ?? 0, { shuffle: options.shuffle ?? false, from: albumContext(album) });
 }
 
 export function AlbumCard({ album, subtitle }: { album: Album; subtitle?: string }) {

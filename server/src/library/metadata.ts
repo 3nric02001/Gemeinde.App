@@ -52,6 +52,17 @@ export function searchExtra(tags: Array<[string, string]>): string | null {
   const values = tags.filter(([tag]) => !CORE_TAGS.has(tag)).map(([, value]) => value);
   return values.length ? values.join(' ') : null;
 }
+
+/** Titelname und Sprecher aus der Verwaltung sollen in der Suche genauso zählen wie die aus den Tags. */
+export function withOverride(
+  extra: string | null,
+  override: { title?: string | null; speaker?: string | null } | undefined,
+): string | null {
+  const added = [override?.title, override?.speaker].filter(Boolean).join(' ');
+  if (!added) return extra;
+  return extra ? `${extra} ${added}` : added;
+}
+
 const MAX_TAGS = 60;
 
 /** Mehrfachwerte ("Lobpreis; Chor") aufteilen, leere und überlange verwerfen */
