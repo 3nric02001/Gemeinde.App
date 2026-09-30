@@ -61,8 +61,10 @@ const TRACK_COLUMNS = `
     SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
   )) AS hasCover
 `;
-/** Aufnahme, Musik oder Sonstiges; Playlists sind nichts davon */
-const SECTION_SQL = `CASE WHEN a.kind = 'manual' THEN NULL WHEN a.recording IS NOT NULL THEN 'recording' WHEN a.music = 1 THEN 'music' ELSE 'other' END`;
+/** Aufnahme, Musik oder Sonstiges; Playlists nur, wenn ihnen in der Verwaltung eine Art gegeben wurde */
+const SECTION_SQL = `CASE WHEN a.kind = 'manual' AND NOT EXISTS (
+    SELECT 1 FROM album_overrides o WHERE o.key = a.key AND o.recording IS NOT NULL
+  ) THEN NULL WHEN a.recording IS NOT NULL THEN 'recording' WHEN a.music = 1 THEN 'music' ELSE 'other' END`;
 const ALBUM_COLUMNS = `
   a.id, a.title, a.year, a.track_count AS trackCount, a.duration,
   (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover, a.kind,
@@ -341,11 +343,19 @@ export function getFacets(db: DB) {
   const recordings = getStructure(db)
     .kinds.map((kind) => ({ name: kind.name, plural: kind.plural, count: counts.get(kind.name) ?? 0 }))
     .filter((kind) => kind.count > 0);
-  // Automatische Alben, die Musik sind bzw. denen nichts eine Art gibt
+  // Alben, die Musik sind bzw. denen nichts eine Art gibt, und Playlists
   const sections = db
     .prepare(
-      `SELECT sum(music = 1) AS music, sum(music = 0 AND recording IS NULL) AS other FROM albums WHERE kind = 'auto' AND hidden = 0`,
+      `SELECT sum(section = 'music') AS music, sum(section = 'other') AS other, sum(kind = 'manual') AS playlists
+       FROM (SELECT ${SECTION_SQL} AS section, a.kind FROM albums a WHERE a.hidden = 0)`,
     )
-    .get() as { music: number | null; other: number | null };
-  return { decades, totals, recordings, music: sections.music ?? 0, other: sections.other ?? 0 };
+    .get() as { music: number | null; other: number | null; playlists: number | null };
+  return {
+    decades,
+    totals,
+    recordings,
+    music: sections.music ?? 0,
+    other: sections.other ?? 0,
+    playlists: sections.playlists ?? 0,
+  };
 }

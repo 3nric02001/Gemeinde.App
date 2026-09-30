@@ -73,7 +73,8 @@ describe('Albenseite', () => {
     expect(screen.getByRole('radio', { name: 'Gottesdienste' })).toBeTruthy();
     const url = fetch.mock.calls.map(([u]) => String(u)).find((u) => u.startsWith('/api/albums'))!;
     expect(url).toContain('recording=Bibelstunde');
-    expect(url).toContain('dated=true');
+    // Die Art grenzt ein; ohne "mit Datum", damit Playlists dieser Art mit auftauchen
+    expect(url).not.toContain('dated=');
     expect(url).toContain('sort=date');
   });
 });

@@ -83,6 +83,8 @@ export interface Facets {
   /** Automatische Alben, die Musik sind, und solche ohne Zuordnung (Sonstiges) */
   music?: number;
   other?: number;
+  /** Sichtbare Playlists (von Hand zusammengestellt), mit oder ohne Art */
+  playlists?: number;
 }
 
 export interface Page<T> {

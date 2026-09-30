@@ -13,10 +13,14 @@ const album: Album = {
   id: 3, title: 'Let There Be Light', year: 2016, trackCount: 1, duration: 240, hasCover: false, date: null,
 };
 
+const playlist: Album = { ...album, id: 9, title: 'Lieblingslieder', kind: 'manual', year: null, trackCount: 12 };
+let tracks: unknown[] = [];
+
 let counted: string[] = [];
 
 beforeEach(async () => {
   counted = [];
+  tracks = [];
   clearCache();
   clearSearches();
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -27,8 +31,12 @@ beforeEach(async () => {
       counted.push((JSON.parse(String(init?.body)) as { q: string }).q);
       return new Response(null, { status: 204 });
     }
-    if (url.startsWith('/api/albums')) return json(page(url.includes('q=') ? [album] : []));
-    if (url.startsWith('/api/tracks') || url.startsWith('/api/artists')) return json(page([]));
+    if (url.startsWith('/api/albums')) {
+      if (!url.includes('q=')) return json(page([]));
+      return json(page(url.includes('kind=manual') ? [playlist] : [album]));
+    }
+    if (url.startsWith('/api/tracks')) return json({ ...page(tracks), total: 34 });
+    if (url.startsWith('/api/artists')) return json(page([]));
     if (url === '/api/facets') return json({ genres: [], decades: [], totals: { tracks: 1, albums: 1, duration: 240 }, recordings: [] });
     if (url === '/api/categories') return json({ items: [] });
     return json({});
@@ -75,5 +83,25 @@ describe('Suchseite ohne Suchbegriff', () => {
     expect(recentSearches(7)).toEqual(['taufe', 'Erntedank']);
     fireEvent.click(screen.getByRole('button', { name: 'Verlauf löschen' }));
     expect(screen.queryByText('Zuletzt gesucht')).toBeNull();
+  });
+});
+
+describe('Suchtreffer', () => {
+  it('zeigen Playlists getrennt von Alben und zuerst nur wenige Titel', async () => {
+    tracks = Array.from({ length: 20 }, (_, i) => ({
+      id: i + 1, title: `Lied ${i + 1}`, album: 'Zion', albumId: 3, trackNo: i + 1, duration: 200, hasCover: false,
+    }));
+    render(<Search params={new URLSearchParams()} />);
+    fireEvent.input(screen.getByRole('searchbox'), { target: { value: 'Lied' } });
+    await screen.findByRole('heading', { name: 'Playlists' });
+    expect(screen.getByRole('heading', { name: 'Alben' })).toBeTruthy();
+    expect(screen.getByText('Lieblingslieder')).toBeTruthy();
+    expect(screen.getByText('Playlist · 12 Titel')).toBeTruthy();
+    expect(screen.queryByText('Lied 6')).toBeNull();
+    expect(screen.getByText('Lied 5')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Mehr anzeigen' }));
+    expect(screen.getByText('Lied 20')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mehr anzeigen' })).toBeNull();
+    expect(screen.getByRole('link', { name: '34 Titel anzeigen' })).toBeTruthy();
   });
 });

@@ -369,6 +369,11 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       tracks.map((t) => ({ ...t, speaker: speakerOverrides.get(t.path) ?? t.speaker })),
     );
 
+    const playlistSection = (key: string): { section: Section; kind: string | null; recording?: FolderResult } => {
+      const found = kindOfFolder(structure, '', [], manualKinds.get(key));
+      return { section: found.section, kind: found.kind?.kind.name ?? null };
+    };
+
     // 3. Automatische Alben aus den Gruppen, ohne herausgenommene und per Regel verschobene Titel.
     const drafts = new Map<string, AlbumDraft>();
     for (const track of tracks) {
@@ -384,7 +389,8 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
 
     const derive = (draft: AlbumDraft, cover: string | undefined, createdAt: number) => {
       const override = overrides.get(draft.key);
-      const { section, kind, recording } = sections.get(draft.key) ?? { section: 'other' as Section, kind: null };
+      // Playlists haben keinen Ordner: ihre Art kommt nur von Hand (ohne Art bleiben sie reine Playlists, siehe SECTION_SQL)
+      const { section, kind, recording } = sections.get(draft.key) ?? playlistSection(draft.key);
       // Bei Aufnahmen gilt die Vorlage aus dem Regelwerk; ohne Anlass bleibt der Ordnername (die Oberfläche zeigt dann die Art).
       const ruleTitle = recording ? recording.title || basename(draft.folder) : undefined;
       const title = override?.title ?? fix(ruleTitle ?? draft.title);

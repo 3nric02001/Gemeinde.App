@@ -230,6 +230,8 @@ export function albumDetail(db: DB, id: number) {
       : kindOfFolder(compileStructure(getStructure(db)), folder, files).source;
     // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) bekommen die Vorgabe für Ordner mit Datum
     if (recordingSource.by === 'none' && album.date) recordingSource = { by: 'default' };
+  } else if (override?.recording != null) {
+    recordingSource = { by: 'manual' };
   }
   return {
     ...album,
@@ -288,7 +290,6 @@ export function updateAlbum(db: DB, id: number, fields: AlbumFields): void {
   if (album.kind === 'manual' && fields.title !== undefined && !cleanText(fields.title)) {
     throw new CurationError(400, 'Das Album braucht einen Titel');
   }
-  if (album.kind === 'manual' && fields.recording) throw new CurationError(400, 'Playlists haben keine Art');
   writeOverride(db, album.key, fields);
   rebuildAlbums(db);
 }

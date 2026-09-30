@@ -355,6 +355,29 @@ describe('Eigene Arten', () => {
     await call('PUT', '/api/admin/structure', { ...structure, kinds: [...structure.kinds, { ...structure.kinds[0], name: 'Sonstiges' }] }, 400);
   });
 
+  it('lassen sich auch Playlists geben; ohne Art bleiben sie nur Playlists', async () => {
+    const zion = (await albums()).find((a) => a.title === 'Zion');
+    const tracks = await albumTracks(zion.id);
+    const { id } = await call('POST', '/api/admin/albums', { title: 'Lieblingslieder', trackIds: [tracks[0].id] }, 201);
+    const playlist = async () => (await get('/api/albums?kind=manual')).items[0];
+    expect(await playlist()).toMatchObject({ kind: 'manual', recording: null, section: null });
+    expect(await get('/api/facets')).toMatchObject({ music: 1, playlists: 1 });
+
+    await call('PATCH', `/api/admin/albums/${id}`, { recording: 'Musik' });
+    expect(await playlist()).toMatchObject({ kind: 'manual', recording: null, section: 'music' });
+    expect((await get('/api/albums?section=music')).items.map((a: any) => a.title).sort()).toEqual(['Lieblingslieder', 'Zion']);
+    expect(await get('/api/facets')).toMatchObject({ music: 2, playlists: 1 });
+    expect(await get(`/api/admin/albums/${id}`)).toMatchObject({ manualRecording: 'Musik', recordingSource: { by: 'manual' } });
+
+    await call('PATCH', `/api/admin/albums/${id}`, { recording: 'Bibelstunde' });
+    expect(await playlist()).toMatchObject({ recording: 'Bibelstunde', section: 'recording' });
+    expect((await get('/api/albums?recording=Bibelstunde')).items.map((a: any) => a.title)).toContain('Lieblingslieder');
+
+    await call('PATCH', `/api/admin/albums/${id}`, { recording: null });
+    expect(await playlist()).toMatchObject({ recording: null, section: null });
+    expect((await get('/api/albums?kind=auto')).items.map((a: any) => a.title)).not.toContain('Lieblingslieder');
+  });
+
   it('zeigen je Titel die greifende Policy und lassen sich je Titel korrigieren', async () => {
     const service = await byDate('2026-08-30');
     const [song, sermon, testimony] = await albumTracks(service.id);
