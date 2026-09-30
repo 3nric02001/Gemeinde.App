@@ -2,7 +2,7 @@ import { Fragment } from 'preact';
 import { trackCoverUrl, type Track } from '../api';
 import { albumLabel, formatTime } from '../format';
 import { isFavorite, savedProgress, toggleFavorite, useMe } from '../me';
-import { player, usePlayerSelect } from '../player';
+import { player, usePlayerSelect, type PlaybackContext } from '../player';
 import { download, getOffline, removeDownloads, useOffline } from '../offline';
 import { navigate } from '../router';
 import { Cover } from './Cover';
@@ -21,6 +21,8 @@ interface Props {
   onPlay?: (index: number) => void;
   /** Laufende Nummer statt Tracknummer, z. B. in selbst zusammengestellten Alben */
   ordinal?: boolean;
+  /** Playlist, aus der abgespielt wird; "Jetzt läuft" führt dann dorthin zurück */
+  from?: PlaybackContext;
 }
 
 export function trackMenu(track: Track) {
@@ -39,7 +41,7 @@ export function trackMenu(track: Track) {
   return items;
 }
 
-export function TrackList({ tracks, variant = 'list', albumArtist, hideArtist, onPlay, ordinal = false }: Props) {
+export function TrackList({ tracks, variant = 'list', albumArtist, hideArtist, onPlay, ordinal = false, from }: Props) {
   const currentId = usePlayerSelect((s) => s.current?.id);
   const playing = usePlayerSelect((s) => s.playing);
   useMe(); // Herzen und Fortschritt aktuell halten
@@ -49,7 +51,7 @@ export function TrackList({ tracks, variant = 'list', albumArtist, hideArtist, o
   const play = (index: number) => {
     if (tracks[index]?.id === currentId) player.toggle();
     else if (onPlay) onPlay(index);
-    else player.playList(tracks, index, { shuffle: false });
+    else player.playList(tracks, index, from ? { shuffle: false, from } : { shuffle: false });
   };
 
   return (

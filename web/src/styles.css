@@ -1450,6 +1450,35 @@ html[data-text='xlarge'] .now-playing {
   color: var(--muted);
 }
 
+/* "Aus der Playlist …": führt zurück zur Playlist, aus der die Wiedergabe läuft */
+.now-from {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  max-width: 60vw;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  text-align: center;
+}
+
+.now-from small {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.now-from span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cover-now {
   width: min(100%, 420px, 48vh);
   border-radius: var(--radius-lg);
