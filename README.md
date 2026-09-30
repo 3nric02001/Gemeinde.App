@@ -71,7 +71,7 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   Tab-Leiste, der sich zu „Jetzt läuft“ aufklappt (nach unten wischen schließt, Link zum Album;
   auf iPhone/iPad ohne Lautstärkeregler, dafür gibt es die Tasten).
 - **Predigt-Player**: Titel ab 10 Minuten (einstellbar unter Verwaltung → Zuordnung) bekommen 15 s zurück / 30 s vor statt Zufall und
-  Wiederholen, ein Tempo von 1× bis 2× und merken sich je Hörer die Stelle zum Weiterhören
+  Wiederholen, ein stufenloses Tempo von 0,5× bis 2× (Regler in 0,05er-Schritten plus Schnellwahl 1× bis 2×) und merken sich je Hörer die Stelle zum Weiterhören
   (auch geräteübergreifend, auf dem Server gespeichert).
 - **Einführung**: Beim ersten Öffnen erklärt eine kurze Einführung in vier Schritten Start, Suche und Datum, das
   Abspielen und Favoriten/Mehr. „Überspringen“ oder „Los geht’s“ merkt sie sich am Benutzer auf dem Server, sie kommt

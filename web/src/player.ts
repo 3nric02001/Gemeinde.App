@@ -49,7 +49,14 @@ export interface PlayerState {
   error: string | undefined;
 }
 
+/** Schnellwahl für das Tempo; dazwischen stufenlos per Regler */
 export const RATES = [1, 1.25, 1.5, 1.75, 2];
+export const RATE_MIN = 0.5;
+export const RATE_MAX = 2;
+export const RATE_STEP = 0.05;
+/** Auf den Bereich begrenzen und auf 0,05er-Schritte runden; Unbrauchbares wird 1× */
+export const clampRate = (rate: number): number =>
+  Number.isFinite(rate) ? Math.round(Math.min(RATE_MAX, Math.max(RATE_MIN, rate)) / RATE_STEP) / (1 / RATE_STEP) : 1;
 /** Wie oft der Hörstand langer Titel beim Server landet */
 const PROGRESS_INTERVAL_MS = 15_000;
 /** Als gehört zählt ein Titel nach so vielen Sekunden, kurze Titel schon nach der Hälfte. */
@@ -110,7 +117,7 @@ export class Player {
     }
     audio.volume = saved.volume ?? 1;
     audio.muted = saved.muted ?? false;
-    this.rate = RATES.includes(saved.rate ?? 1) ? (saved.rate ?? 1) : 1;
+    this.rate = clampRate(saved.rate ?? 1);
     this.state = this.compute();
     void offlineReady.then(() => (this.offlineChecked = true));
 
@@ -267,11 +274,18 @@ export class Player {
     this.seek(Math.min(duration - 0.5, Math.max(0, this.audio.currentTime + seconds)));
   }
 
-  /** Nächstes Tempo (1× bis 2×); gilt für lange Titel wie Predigten */
-  cycleRate(): void {
-    this.rate = RATES[(RATES.indexOf(this.rate) + 1) % RATES.length]!;
+  /** Tempo stufenlos von 0,5× bis 2× (in 0,05er-Schritten); gilt für lange Titel wie Predigten */
+  setRate(rate: number): void {
+    const next = clampRate(rate);
+    if (next === this.rate) return;
+    this.rate = next;
     this.applyRate();
     this.emit();
+  }
+
+  /** Nächstes Tempo der Schnellwahl (1× bis 2×, danach wieder 1×) */
+  cycleRate(): void {
+    this.setRate(RATES.find((rate) => rate > this.rate + 0.001) ?? RATES[0]!);
   }
 
   /** Predigten (laut Policies, sonst lange Titel) bekommen Sprünge, Tempo und Weiterhören */
