@@ -55,6 +55,22 @@ describe('Warteschlange', () => {
     expect(q.items).toHaveLength(5);
   });
 
+  it('startet gemischt ohne angeklickten Titel mit einem zufälligen', () => {
+    const firsts = new Set<number>();
+    for (const value of [0.01, 0.5, 0.99]) {
+      const q = new Queue<Item>(() => value);
+      q.set(items(5), undefined, true);
+      expect(q.index).toBe(0);
+      expect(ids(q).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+      firsts.add(q.current!.id);
+    }
+    expect(firsts.size).toBeGreaterThan(1);
+    // Ohne Zufall weiterhin ab dem ersten Titel
+    const q = new Queue<Item>();
+    q.set(items(3), undefined, false);
+    expect(q.current?.id).toBe(1);
+  });
+
   it('fügt als Nächstes und am Ende ein, auch denselben Titel mehrfach', () => {
     const q = new Queue<Item>();
     q.set(items(3), 0);

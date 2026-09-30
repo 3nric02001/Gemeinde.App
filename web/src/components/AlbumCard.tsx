@@ -10,7 +10,7 @@ import { Icon } from './Icon';
 export async function playAlbum(albumId: number, options: { shuffle?: boolean; start?: number; trackId?: number } = {}) {
   const album = await getJson<AlbumDetail>(`/api/albums/${albumId}`);
   const index = options.trackId !== undefined ? album.tracks.findIndex((track) => track.id === options.trackId) : -1;
-  const start = index >= 0 ? index : (options.start ?? 0);
+  const start = index >= 0 ? index : (options.start ?? (options.shuffle ? undefined : 0));
   player.playList(album.tracks, start, { shuffle: options.shuffle ?? false, from: albumContext(album) });
 }
 

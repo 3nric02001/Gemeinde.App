@@ -163,12 +163,17 @@ export class Player {
     return () => this.listeners.delete(listener);
   }
 
-  /** Liste abspielen, beginnend bei `start` */
-  playList(tracks: Track[], start = 0, options: { shuffle?: boolean; from?: PlaybackContext } = {}): void {
+  /** Liste abspielen, beginnend bei `start`; ohne `start` im Zufallsmodus mit einem zufälligen Titel */
+  playList(tracks: Track[], start?: number, options: { shuffle?: boolean; from?: PlaybackContext } = {}): void {
     if (!tracks.length) return;
     this.queue.set(entries(tracks, options.from), start, options.shuffle ?? this.queue.shuffle);
     this.queueDirty = true;
     this.loadCurrent(true);
+  }
+
+  /** „Zufällig“: gemischt abspielen, beginnend mit einem zufälligen Titel */
+  playShuffled(tracks: Track[], from?: PlaybackContext): void {
+    this.playList(tracks, undefined, from ? { shuffle: true, from } : { shuffle: true });
   }
 
   playNext(tracks: Track[], from?: PlaybackContext): void {
