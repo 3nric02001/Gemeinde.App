@@ -556,6 +556,19 @@ export const migrations: string[] = [
        OR lower(path) LIKE '%.mp3' OR lower(path) LIKE '%.ogg' OR lower(path) LIKE '%.oga' OR lower(path) LIKE '%.opus';
   `,
   `
+  -- Suchbegriffe, nach denen jemand einen Treffer geöffnet hat (library/searches.ts). Je Person und
+  -- Begriff eine Zeile, damit "Häufig gesucht" Personen zählt statt Anfragen; nach 90 Tagen gelöscht.
+  CREATE TABLE search_log (
+    key     TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text    TEXT NOT NULL,
+    at      INTEGER NOT NULL,
+    PRIMARY KEY (key, user_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX search_log_at ON search_log(at);
+  CREATE INDEX search_log_user ON search_log(user_id);
+  `,
+  `
   -- Ersetzungen für Tippfehler in Titeln und Albumnamen (library/replacements.ts), z. B. "Tema" → "Thema".
   CREATE TABLE title_replacements (
     id          INTEGER PRIMARY KEY,

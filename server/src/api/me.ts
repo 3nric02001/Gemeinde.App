@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import { recordPlay } from '../library/popularity.js';
+import { recordSearch } from '../library/searches.js';
 import { getOfflineSettings, offlineKey } from '../offline.js';
 import { listenerHome, listFavorites, listProgress, saveProgress, setFavorite, type FavoriteKind } from '../library/listener.js';
 
@@ -61,6 +62,20 @@ export async function registerMeRoutes(app: FastifyInstance, { db }: { db: DB })
     { schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } } } },
     async (request: FastifyRequest<{ Params: { id: number } }>, reply) => {
       if (!recordPlay(db, userId(request), request.params.id)) return reply.code(404).send({ error: 'Titel nicht gefunden' });
+      return reply.code(204).send();
+    },
+  );
+
+  // Suchbegriff, aus dem ein Treffer geöffnet wurde, für "Häufig gesucht" (nur gezählt, nie einzeln gezeigt).
+  app.post(
+    '/api/me/searches',
+    {
+      schema: {
+        body: { type: 'object', required: ['q'], properties: { q: { type: 'string', maxLength: 200 } }, additionalProperties: false },
+      },
+    },
+    async (request: FastifyRequest<{ Body: { q: string } }>, reply) => {
+      recordSearch(db, userId(request), request.body.q);
       return reply.code(204).send();
     },
   );
