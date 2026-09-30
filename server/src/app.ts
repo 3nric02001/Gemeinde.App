@@ -8,6 +8,7 @@ import { getBranding, manifest } from './branding.js';
 import { ensureLocalAdmin } from './auth/users.js';
 import type { Config } from './config.js';
 import { openDatabase, type DB } from './db.js';
+import { applyLibrarySettings } from './library/structure.js';
 import { relocateLibrary } from './library/relocate.js';
 import { registerChangeLog } from './library/changes.js';
 import { LibraryScanner } from './library/scanner.js';
@@ -30,6 +31,8 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
     trustProxy: config.trustProxy,
   });
   const db = openDatabase(config.databasePath);
+  // Albumbildung und Namen aus dem gespeicherten Regelwerk (Verwaltung → Zuordnung)
+  applyLibrarySettings(db);
   const client = new NextcloudClient(config.nextcloud, options.fetch, options.requestTimeoutMs);
   relocateLibrary(db, client.base, config.nextcloud.musicPaths, app.log);
   const scanner = new LibraryScanner(db, client, app.log, config.scanConcurrency);

@@ -3324,28 +3324,45 @@ button.more-link {
   font-weight: 600;
 }
 
-.structure-help dl {
+.structure-help dl,
+dl.structure-placeholders {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 8px 20px;
   margin: 14px 0 0;
 }
 
-.structure-help dl > div {
+.structure-help dl > div,
+.structure-placeholders > div {
   display: flex;
   gap: 10px;
   min-width: 0;
 }
 
-.structure-help dt {
+.structure-help dt,
+.structure-placeholders dt {
   flex: none;
   min-width: 110px;
 }
 
-.structure-help dd {
+.structure-help dd,
+.structure-placeholders dd {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
+}
+
+dl.structure-placeholders {
+  margin: 4px 0 16px;
+}
+
+.structure-library h3 {
+  margin: 24px 0 10px;
+  font-size: 16px;
+}
+
+.structure-minutes input {
+  max-width: 120px;
 }
 
 .structure-preview h3 {

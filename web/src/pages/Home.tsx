@@ -113,7 +113,8 @@ export function Home() {
 
 /** Große Karte ganz oben: der neueste Gottesdienst zum direkten Abspielen */
 function LatestService({ album, resume }: { album: DatedAlbum; resume?: Track & { position: number } }) {
-  const occasion = withoutDate(album.title) || (album.recording && album.recording !== 'Gottesdienst' ? album.recording : '');
+  // Ohne Anlass steht das Datum groß; die Art steht schon darüber
+  const occasion = withoutDate(album.title);
   return (
     <section class="latest">
       <a class="latest-link" href={`/album/${album.id}`}>

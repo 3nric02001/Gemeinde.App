@@ -44,7 +44,7 @@ export interface Album {
 
 /** Art eines Albums zum Anzeigen: die Art der Aufnahme, sonst Musik oder Sonstiges */
 export const kindLabel = (album: Pick<Album, 'recording' | 'section'>): string =>
-  album.recording || (album.section === 'music' ? 'Musik' : album.section === 'other' ? 'Sonstiges' : 'Gottesdienst');
+  album.recording || (album.section === 'music' ? 'Musik' : album.section === 'other' ? 'Sonstiges' : 'Playlist');
 
 export interface AlbumDetail extends Album {
   tracks: Track[];

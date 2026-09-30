@@ -1,5 +1,6 @@
 import type { DB } from '../db.js';
-import { findPassages, joinPassages } from './bible.js';
+import { findPassages, joinPassages, PASSAGE_SEPARATOR } from './bible.js';
+import { librarySettings } from './settings.js';
 import { evaluateRules } from './rules.js';
 import { albumFolderOf, basename, dateOfPath, dirname, fileStem, folderDate, parsePath, type PathMeta } from './pathMeta.js';
 import { compileReplacements, listReplacements } from './replacements.js';
@@ -8,8 +9,10 @@ import {
   applyToFolder,
   compileStructure,
   defaultKindOf,
-  getStructure,
+  applyLibrarySettings,
   kindOfFolder,
+  libraryAlbumTitle,
+  libraryTrackTitle,
   withManual,
   type CompiledStructure,
   type FolderResult,
@@ -18,7 +21,6 @@ import {
 import { trackFields } from './fields.js';
 import { foldValue, sortKey } from './text.js';
 
-export const LOOSE_TRACKS = 'Einzeltitel';
 
 const yearOf = (date: string | undefined) => (date ? Number(date.slice(0, 4)) : undefined);
 
@@ -112,7 +114,7 @@ export function groupTracks(tracks: Array<Pick<TrackRow, 'id' | 'path' | 'title'
   const result = new Map<number, Group>();
   for (const [folder, list] of byFolder) {
     let rest = list;
-    if (folder && !folderDate(folder)) {
+    if (librarySettings().splitByFileDate && folder && !folderDate(folder)) {
       const dated = list.filter((t) => parsed(t.path).date);
       const dates = new Set(dated.map((t) => parsed(t.path).date!));
       if (dates.size >= 2 && dated.length * 2 >= list.length) {
@@ -126,7 +128,8 @@ export function groupTracks(tracks: Array<Pick<TrackRow, 'id' | 'path' | 'title'
       }
     }
     if (!rest.length) continue;
-    const title = folder ? (parsed(rest[0]!.path).album ?? basename(folder)) : LOOSE_TRACKS;
+    // Name nach der Vorlage für Musik und Sonstiges; bei Aufnahmen gilt danach die Vorlage der Art
+    const title = libraryAlbumTitle(folder);
     for (const track of rest) result.set(track.id, { key: albumKey(folder), folder, title });
   }
   return result;
@@ -219,6 +222,9 @@ function coverFor(tracks: TrackRow[], covers: Map<string, string>, folder?: stri
  */
 export function rebuildAlbums(db: DB, now = Date.now()): void {
   db.transaction(() => {
+    // Regelwerk samt Albumbildung und Namen (Verwaltung → Zuordnung) gilt ab hier auch für die Pfad-Hilfen
+    const settings = applyLibrarySettings(db);
+    refreshPathValues(db);
     const tracks = db
       .prepare(
         `SELECT id, path, title, album, year, duration, track_no, disc_no, album_id, cover_id, album_key, added_at,
@@ -253,7 +259,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
 
     // 1b. Regelwerk für Aufnahmen (Verwaltung → Zuordnung): Art, Albumname, Titel, Inhalt und Sprecher.
     // Eine Art, die in der Verwaltung für ein Album gesetzt wurde, geht den Bedingungen der Arten vor.
-    const structure = compileStructure(getStructure(db));
+    const structure = compileStructure(settings);
     const manualKinds = new Map(
       (db.prepare('SELECT key, recording FROM album_overrides WHERE recording IS NOT NULL').all() as Array<{ key: string; recording: string }>).map(
         (row) => [row.key, row.recording],
@@ -502,7 +508,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         .filter((t): t is TrackRow => t !== undefined);
       const listed = new Set(members.map((t) => t.id));
       for (const track of rules.members.get(album.id) ?? []) if (!listed.has(track.id)) members.push(track);
-      const draft: AlbumDraft = { key: album.key, title: LOOSE_TRACKS, folder: '', tracks: members };
+      const draft: AlbumDraft = { key: album.key, title: librarySettings().looseTitle, folder: '', tracks: members };
       const values = derive(draft, coverFor(members, covers), album.createdAt as number);
       if (!unchanged(album, values)) updateManual.run({ ...values, id: album.id });
       contents.set(album.id, members);
@@ -538,6 +544,34 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
 }
 
 /**
+ * Was der Scan aus dem Pfad liest (Titel, Album, Nummer, CD, Jahr), nach den aktuellen Einstellungen neu rechnen;
+ * so wirkt eine geänderte Albumbildung (etwa andere Disc-Unterordner) ohne neuen Scan.
+ */
+function refreshPathValues(db: DB): void {
+  const rows = db.prepare('SELECT id, path, title, album, track_no, disc_no, year FROM tracks').all() as Array<{
+    id: number;
+    path: string;
+    title: string;
+    album: string | null;
+    track_no: number | null;
+    disc_no: number | null;
+    year: number | null;
+  }>;
+  const update = db.prepare(
+    `UPDATE tracks SET title = @title, album = @album, track_no = @trackNo, disc_no = @discNo, year = @year,
+       sort_title = CASE WHEN display_title IS NULL THEN sort_key(@title) ELSE sort_title END
+     WHERE id = @id`,
+  );
+  for (const row of rows) {
+    const meta = parsePath(row.path);
+    const next = { id: row.id, title: meta.title, album: meta.album ?? null, trackNo: meta.trackNo ?? null, discNo: meta.discNo ?? null, year: meta.year ?? null };
+    if (next.title !== row.title || next.album !== row.album || next.trackNo !== row.track_no || next.discNo !== row.disc_no || next.year !== row.year) {
+      update.run(next);
+    }
+  }
+}
+
+/**
  * Schreibt, was Regelwerk und Dateiname je Titel ergeben: Anzeige-Titel, Inhalt, Sprecher und die Felder für
  * Kategorien (library/fields.ts). Nur geänderte Titel werden geschrieben.
  * Die Ersetzungen für Tippfehler (fix) gelten für den Anzeige-Titel; raw_title hält ihn davor fest.
@@ -567,7 +601,9 @@ function applyRecordings(
   for (const track of tracks) {
     const recording = recordingOf(track);
     const file = recording?.files.get(track.path);
-    const raw = file?.title ?? null;
+    // Aufnahmen nach dem Muster ihrer Art, Musik und Sonstiges nach der Vorlage (Verwaltung → Zuordnung)
+    const templated = recording ? null : libraryTrackTitle(track.path);
+    const raw = file?.title ?? (templated !== null && templated !== track.title ? templated : null);
     // Ersetzungen nur speichern, wenn sie etwas ändern; sonst bleibt NULL (gescannten Titel zeigen).
     const fixed = fix(raw ?? track.title);
     const title = fixed !== (raw ?? track.title) ? fixed : raw;
@@ -603,6 +639,13 @@ function applyRecordings(
       speaker: speakerOverrides.get(track.path) ?? (file ? (file.speaker ?? null) : speaker),
       occasion: recording?.occasion ?? null,
       year,
+      passages: joinPassages([
+        file?.passage,
+        ...(file?.sermon ? [recording?.passage] : []),
+        ...findPassages(title ?? track.title),
+      ])?.split(PASSAGE_SEPARATOR) ?? [],
+      // Ordner über dem Album, ohne den Albumordner selbst
+      folders: dirname(parsed(track.path).albumFolder).split('/').filter(Boolean),
     });
     const wanted = tags.map(([tag, value]) => `${tag}\u0000${value}\u0001`).join('');
     if (wanted !== (derived.get(track.id) ?? '')) {

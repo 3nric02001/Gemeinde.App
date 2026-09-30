@@ -25,7 +25,7 @@ describe('Seite eines Gottesdienstes', () => {
   it('heißt wie überall nach dem Anlass und wiederholt ihn nicht bei jedem Titel', async () => {
     const detail: AlbumDetail = {
       id: 9, title: '2026-09-20', year: 2026, trackCount: 2, duration: 240,
-      hasCover: false, kind: 'auto', date: '2026-09-20', speaker: 'Pastor Meier', passage: 'Psalm 23; Joh 3,16', description: null,
+      hasCover: false, kind: 'auto', recording: 'Gottesdienst', section: 'recording', date: '2026-09-20', speaker: 'Pastor Meier', passage: 'Psalm 23; Joh 3,16', description: null,
       tracks: [track(1, 'Lobpreis'), track(2, 'Predigt', 'Pastor Meier')],
     };
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
