@@ -10,7 +10,6 @@ import { Empty, ErrorNote, Loading } from '../pages/common';
 import { AdminTabs, ACCESS_SECTIONS } from './Access';
 import { adminRequest, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
-import { CategoriesAdmin, CategoryEditor } from './Categories';
 import { QualityPanel } from './Quality';
 import { ScanPanel } from './Scan';
 import { StructurePanel } from './Structure';
@@ -32,7 +31,6 @@ export function Admin({ location }: { location: Location }) {
   }
 
   const album = match('/admin/album/:id', location.path);
-  const category = match('/admin/kategorie/:id', location.path);
   const admin = hasRole(user, 'admin');
   const accessSection = ACCESS_SECTIONS.find((s) => s.path === location.path);
   const section = admin ? accessSection : undefined;
@@ -45,10 +43,6 @@ export function Admin({ location }: { location: Location }) {
       </Empty>
     );
   } else if (album && /^\d+$/.test(album.id!)) content = <AlbumEditor key={album.id} id={Number(album.id)} onError={onError} />;
-  else if (category && (category.id === 'neu' || /^\d+$/.test(category.id!))) {
-    const id = category.id === 'neu' ? undefined : Number(category.id);
-    content = <CategoryEditor key={category.id} id={id} onError={onError} />;
-  } else if (location.path === '/admin/kategorien') content = <CategoriesAdmin onError={onError} />;
   else if (location.path === '/admin/pruefen') content = <QualityPanel />;
   else if (location.path === '/admin/zuordnung') content = <StructurePanel />;
   else if (section) content = <section.Component params={location.params} />;
@@ -56,7 +50,7 @@ export function Admin({ location }: { location: Location }) {
 
   return (
     <div class="page admin">
-      {!album && !category && <AdminTabs path={location.path} admin={admin} />}
+      {!album && <AdminTabs path={location.path} admin={admin} />}
       {content}
     </div>
   );

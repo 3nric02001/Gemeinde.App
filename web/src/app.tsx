@@ -8,7 +8,6 @@ import { Album } from './pages/Album';
 import { Albums } from './pages/Albums';
 import { Artist } from './pages/Artist';
 import { Artists } from './pages/Artists';
-import { Category, CategoryEntry } from './pages/Category';
 import { DateFolder } from './pages/DateFolder';
 import { Downloads } from './pages/Downloads';
 import { Dates } from './pages/Dates';
@@ -44,10 +43,6 @@ function Page({ location, offline }: { location: Location; offline: boolean }) {
   if (path === '/admin' || path.startsWith('/admin/')) return <Admin location={location} />;
   const album = match('/album/:id', path);
   if (album && /^\d+$/.test(album.id!)) return <Album id={Number(album.id)} />;
-  const category = match('/kategorie/:slug', path);
-  if (category) return <Category key={category.slug} slug={category.slug!} />;
-  const entry = match('/kategorie/:slug/:value', path);
-  if (entry) return <CategoryEntry key={path} slug={entry.slug!} value={entry.value!} />;
   const artist = match('/interpret/:name', path);
   if (artist) return <Artist key={artist.name} name={artist.name!} />;
   return (

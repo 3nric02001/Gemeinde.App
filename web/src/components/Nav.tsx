@@ -1,5 +1,3 @@
-import { categoryUrl } from '../api';
-import { useCategories } from '../hooks';
 import { hasRole, logout, ROLE_LABELS, useAuth } from '../auth';
 import { Icon, type IconName } from './Icon';
 
@@ -18,10 +16,11 @@ const items: NavItem[] = [
   dates,
   { href: '/titel', label: 'Titel', icon: 'tracks', match: (p) => p.startsWith('/titel') },
   { href: '/favoriten', label: 'Favoriten', icon: 'heart', match: (p) => p.startsWith('/favoriten') },
+  { href: '/interpreten', label: 'Interpreten', icon: 'artists', match: (p) => p.startsWith('/interpret') },
 ];
 
 /** Tab-Leiste auf dem Handy: die vier wichtigsten Ziele, der Rest unter "Mehr" */
-const MORE_PATHS = ['/mehr', '/titel', '/favoriten', '/interpret', '/kategorie', '/warteschlange', '/admin'];
+const MORE_PATHS = ['/mehr', '/titel', '/favoriten', '/interpret', '/warteschlange', '/admin'];
 const tabs: NavItem[] = [
   start,
   search,
@@ -31,8 +30,6 @@ const tabs: NavItem[] = [
 ];
 
 export function Sidebar({ path }: { path: string }) {
-  // Eigene Kategorien aus der Verwaltung stehen nach den festen Einträgen.
-  const categories = useCategories(path).filter((c) => c.inNav);
   const { user, branding } = useAuth();
   return (
     <nav class="sidebar" aria-label="Hauptnavigation">
@@ -51,18 +48,6 @@ export function Sidebar({ path }: { path: string }) {
             </a>
           </li>
         ))}
-        {categories.map((category) => {
-          const href = categoryUrl(category.slug);
-          const active = path === href || path.startsWith(`${href}/`);
-          return (
-            <li key={category.id}>
-              <a href={href} class={active ? 'is-active' : ''} aria-current={active ? 'page' : undefined}>
-                <Icon name="tag" size={22} />
-                <span>{category.name}</span>
-              </a>
-            </li>
-          );
-        })}
       </ul>
       <div class="sidebar-foot">
         {hasRole(user, 'manager') && (

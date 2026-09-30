@@ -555,6 +555,14 @@ export const migrations: string[] = [
     WHERE mime IN ('audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/opus', 'application/ogg')
        OR lower(path) LIKE '%.mp3' OR lower(path) LIKE '%.ogg' OR lower(path) LIKE '%.oga' OR lower(path) LIKE '%.opus';
   `,
+  `
+  -- Keine frei definierbaren Kategorien mehr: Alben und Inhalte kommen aus der Zuordnung (Regelwerk).
+  -- track_tags bleibt, es speist Suche, Sprecher und Regelwerk.
+  DROP TABLE category_group_values;
+  DROP TABLE category_groups;
+  DROP TABLE category_fields;
+  DROP TABLE categories;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

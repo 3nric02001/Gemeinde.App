@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 
 /**
- * Änderungsprotokoll der Verwaltung: wer hat wann welches Album, welche Kategorie, welchen
+ * Änderungsprotokoll der Verwaltung: wer hat wann welches Album, welchen
  * Benutzer oder welche Einstellung geändert. Geschrieben wird nach jeder erfolgreichen Änderung
  * unter /api/admin; Lesezugriffe, Vorschauen und Verbindungstests zählen nicht.
  */
@@ -111,14 +111,6 @@ function describe(db: DB, method: string, route: string, params: Params, body: B
       return { action: 'Regel geändert', ...album() };
     case 'DELETE /api/admin/albums/:id/rules/:ruleId':
       return { action: 'Regel gelöscht', ...album() };
-    case 'POST /api/admin/categories':
-      return { action: 'Kategorie angelegt', target: typeof body?.name === 'string' ? body.name : null };
-    case 'PATCH /api/admin/categories/:id':
-      return { action: 'Kategorie bearbeitet', target: one(db, 'SELECT name FROM categories WHERE id = ?', params.id) };
-    case 'DELETE /api/admin/categories/:id':
-      return { action: 'Kategorie gelöscht', target: one(db, 'SELECT name FROM categories WHERE id = ?', params.id) };
-    case 'PUT /api/admin/categories/order':
-      return { action: 'Kategorien umsortiert' };
     case 'PATCH /api/admin/users/:id':
       return {
         action: body?.disabled ? 'Benutzer gesperrt' : 'Benutzer entsperrt',

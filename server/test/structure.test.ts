@@ -55,6 +55,11 @@ async function call<T = any>(method: InjectOptions['method'], url: string, paylo
   return (res.body ? res.json() : undefined) as T;
 }
 const get = <T = any>(url: string) => call<T>('GET', url);
+/** Vom Regelwerk je Titel abgeleitete Tag-Werte (Inhalt, Sprecher) */
+const derivedTag = (tag: string) =>
+  (ctx.db.prepare('SELECT DISTINCT value FROM track_tags WHERE tag = ? AND derived = 1 ORDER BY value').all(tag) as Array<{ value: string }>).map(
+    (row) => row.value,
+  );
 const dated = async (query = '') => (await get(`/api/albums?dated=true&sort=date&limit=50${query}`)).items as any[];
 const albumTracks = async (id: number) => (await get(`/api/albums/${id}`)).tracks as any[];
 
@@ -123,7 +128,7 @@ describe('Aufnahmen nach dem Regelwerk', () => {
 
   it('findet Aufnahmen über Inhalt und Titel aus dem Regelwerk', async () => {
     expect((await get('/api/tracks?q=gute%20hirte')).items.map((t: any) => t.title)).toEqual(['Predigt: Der gute Hirte']);
-    expect((await get('/api/categories/inhalt/values')).items.map((v: any) => v.value)).toEqual(['Begrüßung', 'Lied', 'Predigt']);
+    expect(derivedTag('inhalt')).toEqual(['Begrüßung', 'Lied', 'Predigt']);
   });
 });
 
@@ -178,7 +183,7 @@ describe('Regelwerk in der Verwaltung', () => {
     await call('PUT', '/api/admin/structure', structure);
     const service = (await dated()).find((a) => a.date === '2026-09-13');
     expect(service).toMatchObject({ speaker: 'Meier', artist: 'Meier', passage: 'Psalm 23' });
-    expect((await get('/api/categories/sprecher/values')).items.map((v: any) => v.value)).toEqual(['Meier']);
+    expect(derivedTag('sprecher')).toEqual(['Meier']);
   });
 
   it('liest standardmäßig Inhalt - Titel - Sprecher, auch wenn die Datei Tags hat', async () => {
@@ -196,7 +201,7 @@ describe('Regelwerk in der Verwaltung', () => {
       ['Lied: Nun danket alle Gott', 'Chor'],
       ['Predigt: Dankbarkeit', 'Pastor Meier'],
     ]);
-    expect((await get('/api/categories/sprecher/values')).items.map((v: any) => v.value)).toEqual(['Pastor Meier']);
+    expect(derivedTag('sprecher')).toEqual(['Pastor Meier']);
   });
 
   it('weist ungültige Muster verständlich ab', async () => {

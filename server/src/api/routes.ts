@@ -1,7 +1,6 @@
 import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
-import { categoryFilter, categoryValues, getCategory, listCategories } from '../library/categories.js';
 import { datedAlbumForFolder, listDatedAlbums } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
 import type { CoverThumbnails } from '../library/thumbnails.js';
@@ -42,9 +41,6 @@ const filters = {
   genre: { type: 'string', maxLength: 100 },
   year: { type: 'integer', minimum: 1000, maximum: 2999 },
   decade: { type: 'integer', minimum: 1000, maximum: 2990, multipleOf: 10 },
-  // Wert einer Kategorie: category=interpreten&value=Chor
-  category: { type: 'string', maxLength: 60 },
-  value: { type: 'string', maxLength: 200 },
 } as const;
 const idParam = {
   type: 'object',
@@ -59,17 +55,6 @@ export const UPSTREAM_TIMEOUT_MS = 15_000;
 const PASS_THROUGH = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified'];
 
 type IdRequest = FastifyRequest<{ Params: { id: number } }>;
-type SlugRequest = FastifyRequest<{ Params: { slug: string }; Querystring: { q?: string } }>;
-type CategoryQuery = { category?: string; value?: string };
-
-/** category/value aus der Anfrage in einen Filter übersetzen; null heißt "kein Treffer möglich". */
-function withCategory<T extends CategoryQuery>(db: DB, query: T) {
-  const { category, value, ...rest } = query;
-  if (category === undefined && value === undefined) return rest;
-  const definition = category !== undefined ? getCategory(db, category) : undefined;
-  const filter = definition && value !== undefined ? categoryFilter(definition, value) : undefined;
-  return filter ? { ...rest, category: filter } : null;
-}
 
 async function proxyFile(
   deps: RouteDeps,
@@ -171,12 +156,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
         },
       },
     },
-    async (request) => {
-      const query = request.query as Parameters<typeof searchTracks>[1] & CategoryQuery & { limit: number; offset: number };
-      const filter = withCategory(db, query);
-      if (!filter) return { items: [], total: 0, limit: query.limit, offset: query.offset };
-      return searchTracks(db, filter as Parameters<typeof searchTracks>[1]);
-    },
+    async (request) => searchTracks(db, request.query as Parameters<typeof searchTracks>[1]),
   );
 
   app.get(
@@ -196,12 +176,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
         },
       },
     },
-    async (request) => {
-      const query = request.query as Omit<AlbumFilter, 'category'> & CategoryQuery;
-      const filter = withCategory(db, query);
-      if (!filter) return { items: [], total: 0, limit: query.limit, offset: query.offset };
-      return searchAlbums(db, filter as AlbumFilter);
-    },
+    async (request) => searchAlbums(db, request.query as AlbumFilter),
   );
 
   app.get('/api/albums/:id', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
@@ -242,26 +217,6 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   app.get('/api/facets', async () => getFacets(db));
 
-  // Frei definierbare Kategorien (in der Verwaltung angelegt)
-  app.get('/api/categories', async () => ({
-    items: listCategories(db).map(({ id, name, slug, inNav }) => ({ id, name, slug, inNav })),
-  }));
-
-  app.get(
-    '/api/categories/:slug/values',
-    {
-      schema: {
-        params: { type: 'object', required: ['slug'], properties: { slug: { type: 'string', maxLength: 60 } } },
-        querystring: { type: 'object', properties: { q: filters.q }, additionalProperties: false },
-      },
-    },
-    async (request: SlugRequest, reply) => {
-      const category = getCategory(db, request.params.slug);
-      if (!category) return reply.code(404).send({ error: 'Kategorie nicht gefunden' });
-      const { id, name, slug, inNav } = category;
-      return { category: { id, name, slug, inNav }, items: categoryValues(db, category, request.query.q) };
-    },
-  );
 
   // Alben mit Datum (Gottesdienste, Aufnahmen), neueste zuerst
   app.get(

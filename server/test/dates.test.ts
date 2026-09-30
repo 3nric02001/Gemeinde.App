@@ -156,9 +156,9 @@ describe('Gottesdienste erkennen', () => {
       { title: 'Joh 3,16', date: '2026-08-09', artist: 'Schulz', year: 2026, speaker: 'Schulz', passage: 'Joh 3,16', trackCount: 1 },
       { title: 'Psalm 23', date: '2026-08-02', artist: 'Meier', year: 2026, speaker: 'Meier', passage: 'Psalm 23', trackCount: 1 },
     ]);
-    // Der Sprecher aus dem Dateinamen ist auch eine Kategorie
-    const speakers = await get('/api/categories/sprecher/values');
-    expect(speakers.items.map((v: any) => v.value)).toEqual(['Meier', 'Schulz']);
+    // Der Sprecher aus dem Dateinamen steht auch je Titel
+    const speakers = ctx.db.prepare(`SELECT DISTINCT value FROM track_tags WHERE tag = 'sprecher' ORDER BY value`).all();
+    expect(speakers.map((row: any) => row.value)).toEqual(['Meier', 'Schulz']);
   });
 
   it('nimmt ein fehlendes Jahr aus dem Elternordner und keinen Jahresordner als Interpreten', async () => {

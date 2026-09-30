@@ -65,7 +65,7 @@ const ROLE_HINTS: Record<Role, string> = {
 /** Ausführlicher für die Erklärung unter Gruppen */
 const ROLE_DETAILS: Record<Role, string> = {
   listener: 'hören Gottesdienste und Musik, merken sich Favoriten.',
-  manager: 'pflegen zusätzlich Alben, Titel und Kategorien.',
+  manager: 'pflegen zusätzlich Alben, Titel und die Zuordnung.',
   admin: 'verwalten zusätzlich Benutzer, Gruppen und die Anmeldung und sehen das Änderungsprotokoll.',
 };
 
@@ -84,7 +84,6 @@ export const ACCESS_SECTIONS: Array<{ path: string; label: string; Component: Fu
 export function AdminTabs({ path, admin }: { path: string; admin: boolean }) {
   const tabs = [
     { path: '/admin', label: 'Alben' },
-    { path: '/admin/kategorien', label: 'Kategorien' },
     { path: '/admin/zuordnung', label: 'Zuordnung' },
     { path: '/admin/pruefen', label: 'Prüfen' },
     ...(admin ? ACCESS_SECTIONS : []),

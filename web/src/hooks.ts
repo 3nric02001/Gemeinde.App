@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { getJson, peekJson, type CategoryInfo, type Page } from './api';
+import { getJson, peekJson, type Page } from './api';
 
 export interface Loaded<T> {
   data: T | undefined;
@@ -91,29 +91,6 @@ export function useDebounced<T>(value: T, ms: number): T {
     return () => clearTimeout(timer);
   }, [value, ms]);
   return debounced;
-}
-
-/** Die Verwaltung meldet damit geänderte Kategorien, damit das Menü sofort nachzieht. */
-export const CATEGORIES_CHANGED = 'gemeinde:categories';
-
-/** Kategorien fürs Menü; lädt beim Seitenwechsel (Cache 60 s) und nach Änderungen in der Verwaltung neu. */
-export function useCategories(path?: string): CategoryInfo[] {
-  const url = '/api/categories';
-  const [items, setItems] = useState<CategoryInfo[]>(() => peekJson<{ items: CategoryInfo[] }>(url)?.items ?? []);
-  const [version, setVersion] = useState(0);
-  useEffect(() => {
-    const bump = () => setVersion((v) => v + 1);
-    window.addEventListener(CATEGORIES_CHANGED, bump);
-    return () => window.removeEventListener(CATEGORIES_CHANGED, bump);
-  }, []);
-  useEffect(() => {
-    const controller = new AbortController();
-    getJson<{ items: CategoryInfo[] }>(url, controller.signal)
-      .then((data) => setItems(data.items))
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [path, version]);
-  return items;
 }
 
 /** Der Bereich, der scrollt: auf dem Handy der Inhalt (`.main`), sonst die Seite (`null`). */

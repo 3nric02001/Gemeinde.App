@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Album, Artist, Facets, Page, Track } from '../api';
-import { categoryUrl, getJson, query } from '../api';
+import { getJson, query } from '../api';
 import { AlbumGrid } from '../components/AlbumCard';
 import { TrackList } from '../components/TrackList';
 import { plural } from '../format';
-import { useApi, useCategories, useDebounced } from '../hooks';
+import { useApi, useDebounced } from '../hooks';
 import { player } from '../player';
 import { navigate } from '../router';
 import { Icon } from '../components/Icon';
@@ -101,29 +101,10 @@ function Results({ q }: { q: string }) {
   );
 }
 
-/** Ohne Suchbegriff: Stöbern nach Kategorie und Genre, wie die Kacheln bei Spotify */
+/** Ohne Suchbegriff: Stöbern nach Genre, wie die Kacheln bei Spotify */
 function Browse() {
   const { data } = useApi<Facets>('/api/facets');
-  const categories = useCategories().filter((c) => c.inNav);
-  return (
-    <>
-      {categories.length > 0 && (
-        <section class="shelf">
-          <div class="section-head">
-            <h2>Kategorien</h2>
-          </div>
-          <div class="chips-row">
-            {categories.map((category) => (
-              <a key={category.id} class="chip" href={categoryUrl(category.slug)}>
-                {category.name}
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
-      {data && data.genres.length > 0 && <Genres facets={data} />}
-    </>
-  );
+  return data && data.genres.length > 0 ? <Genres facets={data} /> : null;
 }
 
 function Genres({ facets: data }: { facets: Facets }) {

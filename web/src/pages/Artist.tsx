@@ -9,7 +9,7 @@ import { player } from '../player';
 import { ErrorNote, Loading } from './common';
 
 /**
- * Alben und Titel zu einem Wert, z. B. ein Interpret oder "Musik" aus einer eigenen Kategorie.
+ * Alben und Titel zu einem Wert, z. B. einem Interpreten.
  * `filter` sind die Query-Parameter für /api/albums und /api/tracks.
  */
 export function Collection({ eyebrow, name, filter }: { eyebrow: string; name: string; filter: Record<string, string> }) {

@@ -24,7 +24,7 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   dort auch eine Beschreibung für Hörer. Fehlen die Tags, liest die App den Sprecher aus Dateinamen wie
   `2026-09-27 Meier - Psalm 23.mp3` und die Bibelstelle aus Titel oder Dateiname („Psalm 23“, „Joh 3,16“,
   „1. Kor 13,1-13“). Wer predigt, steht als Interpret am Gottesdienst („Mehr von Meier“), das Jahr kommt
-  aus dem Datum. Die Kategorie „Sprecher“ ist vorgegeben (im Menü, sobald es Sprecher gibt)
+  aus dem Datum.
 - **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer
 - **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; findet auch eigene
   Tag-Felder wie den Sprecher, Predigten neueste zuerst; ohne Suchbegriff Stöbern nach Genre. Treffer im
@@ -65,7 +65,7 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - **Predigt-Player**: Titel ab 10 Minuten bekommen 15 s zurück / 30 s vor statt Zufall und
   Wiederholen, ein Tempo von 1× bis 2× und merken sich je Hörer die Stelle zum Weiterhören
   (auch geräteübergreifend, auf dem Server gespeichert).
-- **Mehr** (Handy-Tab bzw. Name unten in der Seitenleiste): Profil, Favoriten, Kategorien,
+- **Mehr** (Handy-Tab bzw. Name unten in der Seitenleiste): Profil, Favoriten, Interpreten,
   Textgröße (Normal, Groß, Sehr groß), Installationshinweis, Verwaltung und Abmelden
 - **Als App installieren**: Web-App-Manifest und Icons; Android/Chrome bieten die Installation an,
   für iPhone steht die Anleitung auf der Startseite und unter „Mehr“.
@@ -172,36 +172,12 @@ Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
   `Begrüßung - Jakob Rauschenberger` wird „Begrüßung“ mit Jakob Rauschenberger; bei `Lied - Großer Gott` bleibt
   „Großer Gott“ der Titel.
 - **Inhalte**: Liste, was am Anfang eines Dateinamens stehen kann; nötig für Inhalte aus mehreren Wörtern.
-  Der Inhalt jeder Aufnahme steht in der Kategorie „Inhalt“ (vorgegeben, zunächst nicht im Menü) und in der Suche.
+  Der Inhalt jeder Aufnahme ist über die Suche zu finden.
 - **Tags**: Standardmäßig gilt der Dateiname, auch wenn die Datei Tags hat. Je Art lässt sich einstellen, dass
   vorhandene Tags (Titel, Album, Interpret) Vorrang haben. Ohne Namen im Dateinamen und ohne Interpret-Tag steht
   bei einer Aufnahme der Sprecher, sonst die Art („Gottesdienst“); die Art erscheint nicht in der Interpretenliste.
 - **Vorschau** zeigt vor dem Speichern je Art die Anzahl, die neuesten Beispiele und Dateien, die nicht zum
   Muster passen. **Speichern und anwenden** bildet die Alben sofort neu, ohne neuen Scan.
-
-## Verwaltung: Kategorien
-
-Unter **Verwaltung → Kategorien** legt man eigene Kategorien an, benennt sie um, ordnet sie oder löscht sie.
-Jede Kategorie mit „Im Menü anzeigen“ steht in der Seitenleiste und unter Suche, mit einer Seite aller Werte
-(`/kategorie/<name>`) und je Wert einer Seite mit Alben und Titeln zum Abspielen.
-
-- **Tag-Felder**: Eine Kategorie nimmt ihre Werte aus einem oder mehreren Feldern der Musikdateien, z. B.
-  „Interpreten“ aus Interpret und Album-Interpret. Zur Auswahl stehen alle Felder, die in der Bibliothek vorkommen,
-  auch eigene ID3-Felder (TXXX, etwa „Kategorie“ oder „Sprecher“) und eigene Vorbis-Kommentare in FLAC/Ogg.
-  Mehrere Werte in einem Feld („Chor; Gemeinde“) werden einzeln geführt. Zusätzlich gibt es das Feld „Dateiname“
-  (ohne Endung). „Inhalt anzeigen“ listet alle aktuell gescannten Werte eines Felds mit Anzahl Titel und Filter;
-  ein Klick auf einen Wert übernimmt ihn in die letzte Zusammenfassung.
-- **Werte zusammenfassen**: Mehrere Tag-Werte erscheinen unter einem Namen, z. B. „Musik“ aus Musik, Lied.
-  Groß-/Kleinschreibung und Akzente spielen dabei keine Rolle. Wahlweise zeigt die Kategorie nur die
-  zusammengefassten Werte.
-- **Vorschau**: Beim Einrichten zeigt die Verwaltung sofort, welche Werte mit wie vielen Titeln entstehen.
-
-Vorgegeben sind „Interpreten“ (im Menü), „Genre“ (nicht im Menü), „Sprecher“ aus den Predigt-Feldern
-(im Menü, wenn es beim Update schon Sprecher gab) und „Inhalt“ aus der Zuordnung von Aufnahmen (nicht im Menü). Die Filter nach Genre und Jahrzehnt
-sowie der Reiter „Datum“ bleiben davon unberührt. Beim ersten Start mit dieser Version liest der Scan alle
-Dateien einmal neu, um auch die übrigen Tag-Felder zu erfassen.
-
-![Kategorie in der Verwaltung](docs/screenshots/admin-categories.png)
 
 ## Anmeldung, Benutzer und Rollen
 
@@ -379,8 +355,6 @@ sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 | `GET /api/albums/:id/cover` | Albumcover (Bild im Ordner, sonst eingebettet) |
 | `GET /api/tracks/:id/cover` | Bild des Titels, sonst Albumcover |
 | `GET /api/tracks?q=&artist=&genre=&year=&decade=&albumId=&limit=&offset=` | Titel suchen und filtern |
-| `GET /api/categories` | Kategorien in der eingestellten Reihenfolge (`{ id, name, slug, inNav }`) |
-| `GET /api/categories/:slug/values?q=` | Werte einer Kategorie mit Anzahl Titel |
 | `GET /api/tracks/:id/stream` | Audio streamen (unterstützt `Range`) |
 | `GET /api/artists?q=` | Interpreten mit Anzahl Alben und Titel |
 | `GET /api/dates?limit=&offset=&recording=` | Alben mit Datum (Gottesdienste), neueste zuerst; wie `/api/albums?dated=true&sort=date`; `recording` filtert nach Art |
@@ -391,7 +365,6 @@ sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 | `GET /api/health` | Healthcheck |
 
 Alle Listen liefern `{ items, total, limit, offset }`. Alben haben `kind: "auto" | "manual"`.
-`/api/albums` und `/api/tracks` filtern mit `category=<slug>&value=<Wert>` nach dem Wert einer Kategorie.
 
 Verwaltung (Manager und Admins):
 
@@ -414,14 +387,6 @@ Verwaltung (Manager und Admins):
 | `DELETE /api/admin/albums/:id/rules/:ruleId` | Regel löschen |
 | `POST /api/admin/rules/preview` | `{ condition }`: wie viele und welche Titel eine Regel treffen würde |
 | `GET /api/admin/track-albums?ids=1,2` | In welchen Alben die Titel stehen |
-| `GET /api/admin/categories` | Alle Kategorien mit Tag-Feldern und zusammengefassten Werten |
-| `POST /api/admin/categories` | Kategorie anlegen: `{ name, fields, groups?, inNav?, groupedOnly? }` |
-| `PATCH /api/admin/categories/:id` | Umbenennen oder Zuordnung ändern, gleiche Felder, alle optional |
-| `DELETE /api/admin/categories/:id` | Kategorie löschen |
-| `PUT /api/admin/categories/order` | Reihenfolge: `{ ids }` |
-| `POST /api/admin/categories/preview` | `{ fields, groups?, groupedOnly? }`: welche Werte entstehen würden |
-| `GET /api/admin/tag-fields` | Alle Tag-Felder der Bibliothek mit Anzahl Titel und Beispielwerten |
-| `GET /api/admin/tag-fields/:tag/values?q=&limit=` | Aktueller Inhalt eines Tag-Felds, häufigste Werte zuerst |
 | `GET /api/admin/quality` | Hinweise zur Datenqualität (aufgeteilte Ordner, fehlende Sprecher und Cover, auffällige Interpreten) |
 | `GET /api/admin/structure` | Regelwerk für Aufnahmen, Vorgabe und Platzhalter |
 | `PUT /api/admin/structure` | Regelwerk speichern `{ kinds, contents }` und Alben neu bilden |
@@ -443,8 +408,6 @@ Persönliches des angemeldeten Hörers:
 Eine `condition` ist entweder eine Bedingung `{ field: title|artist|album|genre|path, op: contains|not_contains|starts|equals, value }`
 oder eine Gruppe `{ match: "all" | "any", conditions: [...] }` (UND bzw. ODER, beliebig verschachtelt, bis zu 4 Ebenen
 und 30 Bedingungen). Statt `condition` geht für eine einzelne Bedingung auch `{ field, op, value }` direkt.
-
-`groups` einer Kategorie ist eine Liste `{ label, values }`, z. B. `{ "label": "Musik", "values": ["Musik", "Lied"] }`.
 
 Anmeldung und Benutzer:
 

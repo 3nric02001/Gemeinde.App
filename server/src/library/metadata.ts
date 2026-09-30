@@ -14,7 +14,7 @@ export interface TrackMeta {
   compilation: boolean;
   /** Eingebettetes Cover, falls vorhanden */
   picture: Picture | undefined;
-  /** Alle Text-Tags als [Name, Wert], Name klein geschrieben; Grundlage für frei definierbare Kategorien */
+  /** Alle Text-Tags als [Name, Wert], Name klein geschrieben; Grundlage für Suche, Sprecher und Zuordnung */
   tags: Array<[string, string]>;
   /** Sortier-Tags der Datei (TSOT, TSOP, TSOA, TSO2 bzw. TITLESORT …), falls gesetzt */
   sort: { title?: string; artist?: string; album?: string; albumArtist?: string };
@@ -26,7 +26,7 @@ export interface TrackMeta {
 
 /** Standardfelder, die immer mit den aufbereiteten Werten (inkl. Pfad-Fallback) belegt werden */
 const CORE_TAGS = new Set(['title', 'artist', 'albumartist', 'album', 'genre', 'year']);
-/** Keine Kategorie-Kandidaten: technische, sehr lange oder je Titel eindeutige Felder */
+/** Nicht merken: technische, sehr lange oder je Titel eindeutige Felder */
 const SKIPPED_TAGS = new Set([
   'title', 'artists', 'picture', 'track', 'disk', 'lyrics', 'comment', 'description', 'encodedby', 'encodersettings', 'encoder', 'isrc',
   'barcode', 'catalognumber', 'musicbrainz_recordingid', 'musicbrainz_trackid', 'musicbrainz_albumid',
@@ -243,7 +243,7 @@ export async function extractMetadata(path: string, head: Buffer, mimeType?: str
     { artist, albumartist: albumArtist, album, year, filename: fileStem(path) },
   );
   // Sprecher aus dem Dateinamen ("2026-09-27 Meier - Psalm 23.mp3"), wenn kein Tag-Feld ihn nennt;
-  // so erscheint er auch in der Suche und in der Kategorie "Sprecher".
+  // so erscheint er auch in der Suche.
   if (fromPath.speaker && !tags.some(([tag]) => SPEAKER_TAGS.includes(tag))) tags.push(['sprecher', fromPath.speaker]);
   return {
     title,

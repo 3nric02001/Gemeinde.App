@@ -1795,12 +1795,6 @@ html[data-text='xlarge'] .now-playing {
   margin-top: 0;
 }
 
-.admin-category {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
 .admin-row-plain {
   grid-template-columns: minmax(0, 1fr) auto;
 }
@@ -1827,73 +1821,6 @@ html[data-text='xlarge'] .now-playing {
   margin-top: 0;
 }
 
-.tag-fields {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 0 18px;
-}
-
-.tag-field {
-  margin: 8px 0;
-  align-items: flex-start;
-}
-
-.tag-field input {
-  margin-top: 2px;
-  flex: none;
-}
-
-.tag-name {
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 12px;
-}
-
-.category-group {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
-  align-items: end;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.category-preview {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.category-preview li {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--bg);
-  font-size: 13px;
-}
-
-.category-preview li.is-grouped {
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 700;
-}
-
-.category-preview small {
-  opacity: 0.7;
-}
-
-.tag-fields li {
-  padding-bottom: 6px;
-}
-
 .link-button {
   margin-left: 28px;
   padding: 0;
@@ -1904,59 +1831,6 @@ html[data-text='xlarge'] .now-playing {
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
-}
-
-.tag-content {
-  margin-top: 14px;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: var(--bg);
-}
-
-.tag-content-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.tag-content h3 {
-  margin: 0;
-  font-size: 15px;
-}
-
-.tag-content .search-box {
-  background: var(--surface);
-}
-
-.tag-content .category-preview li {
-  background: var(--surface);
-}
-
-.tag-content .category-preview .is-more {
-  background: none;
-}
-
-.value-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.category-preview li:has(.value-chip):hover {
-  background: var(--surface-2);
-}
-
-.category-preview .is-more {
-  background: none;
-  color: var(--muted);
 }
 
 .admin-more {
@@ -2236,17 +2110,6 @@ html[data-text='xlarge'] .now-playing {
 }
 
 /* ---------- Handy ---------- */
-
-@media (max-width: 760px) {
-  .category-group {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .category-group .field:nth-child(2) {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-}
 
 @media (max-width: 760px) {
   :root {
