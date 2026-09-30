@@ -6,7 +6,7 @@ import { formatDuration, formatTime, plural } from '../format';
 import { useDebounced } from '../hooks';
 import { navigate } from '../router';
 import { ErrorNote, Loading } from '../pages/common';
-import { adminRequest, type AdminAlbum, type AdminAlbumDetail, type AlbumFields } from './api';
+import { adminRequest, type AdminAlbum, type AdminAlbumDetail, type AlbumFields, type TrackOverride } from './api';
 import { Rules } from './Rules';
 
 interface Props {
@@ -20,6 +20,8 @@ export function AlbumEditor({ id, onError }: Props) {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [picking, setPicking] = useState(false);
+  /** Titel, dessen Inhalt, Titel und Name gerade korrigiert werden */
+  const [correcting, setCorrecting] = useState<number | undefined>();
 
   /** Führt eine Änderung aus; der Server antwortet mit dem neuen Stand des Albums. */
   const run = async (action: () => Promise<AdminAlbumDetail | void>) => {
@@ -117,10 +119,14 @@ export function AlbumEditor({ id, onError }: Props) {
                 />
                 <span class="track-no">{index + 1}</span>
                 <span class="track-main">
-                  <span class="track-title">{track.title}</span>
+                  <span class="track-title">
+                    {track.title}
+                    {album.trackFiles?.[track.id]?.override && <span class="badge badge-muted">korrigiert</span>}
+                  </span>
                   <span class="track-sub">
                     {track.artist}
                     {track.album && track.album !== album.title ? ` · ${track.album}` : ''}
+                    {album.trackFiles?.[track.id] && <span class="admin-file"> · {album.trackFiles[track.id]!.file}</span>}
                   </span>
                 </span>
                 <span class="track-time">
@@ -147,6 +153,17 @@ export function AlbumEditor({ id, onError }: Props) {
                   <button
                     type="button"
                     class="icon-button"
+                    aria-label={`${track.title} korrigieren`}
+                    title="Inhalt, Titel und Name korrigieren"
+                    aria-expanded={correcting === track.id}
+                    disabled={busy}
+                    onClick={() => setCorrecting(correcting === track.id ? undefined : track.id)}
+                  >
+                    <Icon name="more" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-button"
                     aria-label={manual ? `${track.title} entfernen` : `${track.title} aus dem Album nehmen`}
                     title={manual ? 'Entfernen' : 'Aus dem Album nehmen'}
                     disabled={busy}
@@ -155,6 +172,21 @@ export function AlbumEditor({ id, onError }: Props) {
                     <Icon name="close" size={18} />
                   </button>
                 </span>
+                {correcting === track.id && (
+                  <TrackCorrection
+                    track={track}
+                    override={album.trackFiles?.[track.id]?.override ?? null}
+                    busy={busy}
+                    onCancel={() => setCorrecting(undefined)}
+                    onSave={(fields) =>
+                      void run(async () => {
+                        const next = await adminRequest<AdminAlbumDetail>('PATCH', `${base}/tracks/${track.id}`, fields);
+                        setCorrecting(undefined);
+                        return next;
+                      })
+                    }
+                  />
+                )}
               </li>
             ))}
           </ol>
@@ -578,5 +610,63 @@ function AddToAlbum({
         </div>
       </form>
     </div>
+  );
+}
+
+/**
+ * Korrektur einer Aufnahme, deren Dateiname nicht zum Regelwerk passt: Inhalt, Titel und Name
+ * (bei der Predigt der Sprecher). Leere Felder nehmen wieder, was im Dateinamen steht.
+ */
+function TrackCorrection({
+  track,
+  override,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  track: Track;
+  override: TrackOverride | null;
+  busy: boolean;
+  onSave: (fields: TrackOverride) => void;
+  onCancel: () => void;
+}) {
+  const [content, setContent] = useState(override?.content ?? '');
+  const [title, setTitle] = useState(override?.title ?? '');
+  const [name, setName] = useState(override?.name ?? '');
+  const value = (text: string) => (text.trim() ? text.trim() : null);
+  const field = (id: string, label: string, text: string, set: (v: string) => void, placeholder: string) => (
+    <label class="field">
+      <span>{label}</span>
+      <input id={`${id}-${track.id}`} value={text} placeholder={placeholder} maxLength={200} onInput={(e) => set((e.target as HTMLInputElement).value)} />
+    </label>
+  );
+  return (
+    <form
+      class="admin-panel track-correction"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ content: value(content), title: value(title), name: value(name) });
+      }}
+    >
+      <p class="admin-hint">Leere Felder nehmen, was im Dateinamen steht. Die Korrektur bleibt bei jedem Scan und beim Umbenennen erhalten.</p>
+      <div class="structure-grid">
+        {field('correct-content', 'Inhalt', content, setContent, track.content ?? 'z. B. Lied')}
+        {field('correct-title', 'Titel', title, setTitle, 'aus dem Dateinamen')}
+        {field('correct-name', 'Name (Sprecher oder Interpret)', name, setName, track.artist)}
+      </div>
+      <div class="actions">
+        <button type="submit" class="button-primary" disabled={busy}>
+          Speichern
+        </button>
+        {override && (
+          <button type="button" class="button-secondary" disabled={busy} onClick={() => onSave({ content: null, title: null, name: null })}>
+            Zurücksetzen
+          </button>
+        )}
+        <button type="button" class="button-secondary" onClick={onCancel}>
+          Abbrechen
+        </button>
+      </div>
+    </form>
   );
 }

@@ -16,9 +16,18 @@ export interface AlbumFields {
   description: string | null;
 }
 
+/** Von Hand korrigierte Teile einer Aufnahme; null: aus dem Dateinamen */
+export interface TrackOverride {
+  content: string | null;
+  title: string | null;
+  name: string | null;
+}
+
 export interface AdminAlbumDetail extends AlbumDetail {
   kind: 'auto' | 'manual';
   hidden: boolean;
+  /** Dateiname und Korrektur je Titel */
+  trackFiles?: Record<number, { file: string; override: TrackOverride | null }>;
   /** Vom Admin festgelegte Werte; null heißt automatisch */
   overrides: AlbumFields;
   /** Aus einem automatischen Album herausgenommene Titel */

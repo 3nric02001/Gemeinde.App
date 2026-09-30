@@ -15,8 +15,10 @@ import {
   type RuleInput,
   removeTrack,
   restoreTrack,
+  setTrackOverride,
   setTracks,
   updateAlbum,
+  type TrackFields,
   type AlbumFields,
 } from '../library/curation.js';
 import {
@@ -217,6 +219,25 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
       },
       async (request: IdRequest) => {
         setTracks(db, request.params.id, (request.body as { trackIds: number[] }).trackIds);
+        return albumDetail(db, request.params.id);
+      },
+    );
+
+    // Inhalt, Titel und Name einer Aufnahme korrigieren, wenn der Dateiname nicht zum Regelwerk passt
+    admin.patch(
+      '/api/admin/albums/:id/tracks/:trackId',
+      {
+        schema: {
+          params: trackParam,
+          body: {
+            type: 'object',
+            properties: { content: nullableText(100), title: nullableText(200), name: nullableText(200) },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request: TrackRequest) => {
+        setTrackOverride(db, request.params.trackId, request.body as TrackFields);
         return albumDetail(db, request.params.id);
       },
     );

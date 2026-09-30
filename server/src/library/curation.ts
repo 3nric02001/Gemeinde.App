@@ -169,8 +169,22 @@ export function albumDetail(db: DB, id: number) {
     }>).map((r) => [r.id, r.path]),
   );
   const ruleTrackIds = row.kind === 'manual' ? [...paths].filter(([, path]) => !explicit.has(path)).map(([trackId]) => trackId) : [];
+  // Dateiname und Korrekturen je Titel, damit die Verwaltung zeigt, woraus ein Titel entstanden ist
+  const trackFiles: Record<number, { file: string; override: { content: string | null; title: string | null; name: string | null } | null }> = {};
+  for (const row of db
+    .prepare(
+      `SELECT t.id, t.path, o.content, o.title, o.name, o.path IS NOT NULL AS corrected FROM album_tracks at
+       JOIN tracks t ON t.id = at.track_id LEFT JOIN track_overrides o ON o.path = t.path WHERE at.album_id = ?`,
+    )
+    .all(id) as Array<{ id: number; path: string; content: string | null; title: string | null; name: string | null; corrected: number }>) {
+    trackFiles[row.id] = {
+      file: row.path.slice(row.path.lastIndexOf('/') + 1),
+      override: row.corrected ? { content: row.content, title: row.title, name: row.name } : null,
+    };
+  }
   return {
     ...album,
+    trackFiles,
     rules: listRules(db, id),
     ruleTrackIds,
     movedByRule: row.kind === 'auto' ? movedByRule(db, row.key) : [],
@@ -375,6 +389,37 @@ export function restoreTrack(db: DB, id: number, trackId: number): void {
   if (album.kind !== 'auto') throw new CurationError(409, 'Nur bei automatischen Alben möglich');
   const [track] = trackPaths(db, [trackId]);
   db.prepare('DELETE FROM track_exclusions WHERE path = ? AND album_key = ?').run(track!.path, album.key);
+  rebuildAlbums(db);
+}
+
+export interface TrackFields {
+  content?: string | null;
+  title?: string | null;
+  name?: string | null;
+}
+
+/**
+ * Korrigiert, was die App aus dem Dateinamen einer Aufnahme liest: Inhalt, Titel und Name (Sprecher bzw.
+ * Interpret). null setzt auf automatisch zurück. Gespeichert nach Pfad, übersteht also jeden Scan.
+ */
+export function setTrackOverride(db: DB, trackId: number, fields: TrackFields): void {
+  const [track] = trackPaths(db, [trackId]);
+  const current = (db.prepare('SELECT content, title, name FROM track_overrides WHERE path = ?').get(track!.path) as
+    | { content: string | null; title: string | null; name: string | null }
+    | undefined) ?? { content: null, title: null, name: null };
+  const next = {
+    content: fields.content !== undefined ? (cleanText(fields.content) ?? null) : current.content,
+    title: fields.title !== undefined ? (cleanText(fields.title) ?? null) : current.title,
+    name: fields.name !== undefined ? (cleanText(fields.name) ?? null) : current.name,
+  };
+  if (next.content === null && next.title === null && next.name === null) {
+    db.prepare('DELETE FROM track_overrides WHERE path = ?').run(track!.path);
+  } else {
+    db.prepare(
+      `INSERT INTO track_overrides (path, content, title, name) VALUES (@path, @content, @title, @name)
+       ON CONFLICT(path) DO UPDATE SET content = excluded.content, title = excluded.title, name = excluded.name`,
+    ).run({ path: track!.path, ...next });
+  }
   rebuildAlbums(db);
 }
 

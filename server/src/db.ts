@@ -527,6 +527,15 @@ export const migrations: string[] = [
   -- "Lied - Großer Gott" in einem Gottesdienst-Ordner ergab bisher den Interpreten "Lied"; einmal neu lesen.
   UPDATE tracks SET etag = '';
   `,
+  // Korrekturen einzelner Aufnahmen aus der Verwaltung (Inhalt, Titel, Name), nach Dateipfad; überstehen jeden Scan.
+  `
+  CREATE TABLE track_overrides (
+    path    TEXT PRIMARY KEY,
+    content TEXT,
+    title   TEXT,
+    name    TEXT
+  ) WITHOUT ROWID;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

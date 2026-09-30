@@ -2820,3 +2820,18 @@ html[data-text='xlarge'] .now-playing {
     display: none;
   }
 }
+
+.admin-track .track-correction {
+  grid-column: 1 / -1;
+  margin: 8px 0 12px;
+}
+
+.admin-file {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.track-title .badge {
+  margin-left: 8px;
+  vertical-align: middle;
+}

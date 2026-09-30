@@ -48,6 +48,11 @@ export interface Structure {
   kinds: RecordingKind[];
   /** Bekannte Inhalte am Anfang von Dateinamen ("Lied", "Predigt" …); auch mehrere Wörter möglich */
   contents: string[];
+  /**
+   * Inhalte ohne eigenen Titel: Folgt nur ein Teil ("Begrüßung - Jakob Rauschenberger"), ist das der Name
+   * ({sprecher}), nicht der Titel.
+   */
+  untitled: string[];
 }
 
 export const DEFAULT_STRUCTURE: Structure = {
@@ -77,8 +82,10 @@ export const DEFAULT_STRUCTURE: Structure = {
   ],
   contents: [
     'Lied', 'Predigt', 'Lesung', 'Schriftlesung', 'Gebet', 'Begrüßung', 'Abkündigungen', 'Segen', 'Musik', 'Vorspiel',
-    'Nachspiel', 'Chor', 'Zeugnis', 'Kinderpredigt', 'Taufe', 'Abendmahl', 'Grußwort', 'Bericht',
+    'Nachspiel', 'Chor', 'Zeugnis', 'Kinderpredigt', 'Taufe', 'Abendmahl', 'Grußwort', 'Bericht', 'Einleitung', 'Beitrag',
+    'Gedicht', 'Ansage', 'Schlusswort',
   ],
+  untitled: ['Begrüßung', 'Abkündigungen', 'Gebet', 'Segen', 'Grußwort', 'Ansage', 'Schlusswort', 'Bericht', 'Zeugnis'],
 };
 
 const META_KEY = 'structure';
@@ -139,16 +146,25 @@ export function parseStructure(input: unknown): Structure {
     checkPattern(kind.trackTitle, `${name}, Titel`);
     return kind;
   });
-  const contents = Array.isArray(body.contents) ? body.contents.map((c) => text(c, 'Inhalt', 60)).filter(Boolean) : [];
-  if (contents.length > MAX_CONTENTS) throw new StructureError(`Höchstens ${MAX_CONTENTS} Inhalte`);
-  return { kinds, contents: [...new Map(contents.map((c) => [foldValue(c), c])).values()] };
+  const list = (value: unknown, label: string) => {
+    const items = Array.isArray(value) ? value.map((c) => text(c, label, 60)).filter(Boolean) : [];
+    if (items.length > MAX_CONTENTS) throw new StructureError(`Höchstens ${MAX_CONTENTS} Einträge in „${label}“`);
+    return [...new Map(items.map((c) => [foldValue(c), c])).values()];
+  };
+  const untitled = list((body as { untitled?: unknown }).untitled, 'Inhalte ohne Titel');
+  // Inhalte ohne Titel sind auch Inhalte
+  const contents = list([...(Array.isArray(body.contents) ? body.contents : []), ...untitled], 'Inhalte');
+  return { kinds, contents, untitled };
 }
 
 export function getStructure(db: DB): Structure {
   const stored = getMeta(db, META_KEY);
   if (!stored) return DEFAULT_STRUCTURE;
   try {
-    return parseStructure(JSON.parse(stored));
+    const raw = JSON.parse(stored) as Record<string, unknown>;
+    // Gespeichert, bevor es "Inhalte ohne Titel" gab: Vorgabe übernehmen
+    if (!('untitled' in raw)) raw.untitled = DEFAULT_STRUCTURE.untitled;
+    return parseStructure(raw);
   } catch {
     return DEFAULT_STRUCTURE;
   }
@@ -185,6 +201,24 @@ function literal(value: string, strict = false): string {
     .join('');
 }
 
+/**
+ * Wie literal(), aber für Dateinamen, die " - " als Trenner verwenden: Dann trennt nur ein Bindestrich mit
+ * Leerzeichen, und "Text_Richter 7,1-4" oder "Matthäus 7,7-14" bleiben ein Teil.
+ */
+function dashLiteral(value: string): string {
+  return value
+    .split(new RegExp(`([${SEP_CHARS}]+)`))
+    .filter(Boolean)
+    .map((part) => {
+      if (!new RegExp(`^[${SEP_CHARS}]+$`).test(part)) return escape(part);
+      return /[_\-–.:]/.test(part) ? String.raw`\s+[-–]\s+` : String.raw`\s+`;
+    })
+    .join('');
+}
+
+/** "01 - Lied - …", "Predigt - …": Der Name verwendet " - " als Trenner. */
+const usesDash = (name: string) => /\s[-–]\s/.test(name);
+
 export interface CompiledPattern {
   regex: RegExp;
   placeholders: Placeholder[];
@@ -195,7 +229,11 @@ export interface CompiledPattern {
  * Platzhalter ist optional, damit "{datum}_{anlass}" auch auf einen Ordner ohne Anlass passt.
  * Dateimuster, die nicht mit einer Nummer oder einem Datum beginnen, dürfen eine Tracknummer voranstellen.
  */
-export function compilePattern(pattern: string, contents: string[] = [], options: { leadingNumber?: boolean } = {}): CompiledPattern | undefined {
+export function compilePattern(
+  pattern: string,
+  contents: string[] = [],
+  options: { leadingNumber?: boolean; dashOnly?: boolean } = {},
+): CompiledPattern | undefined {
   const parts = pattern.split(/(\{[^}]*\})/).filter((part) => part !== '');
   const placeholders: Placeholder[] = [];
   const known = [...contents].sort((a, b) => b.length - a.length).map((c) => literal(c)).join('|');
@@ -218,13 +256,14 @@ export function compilePattern(pattern: string, contents: string[] = [], options
     const group = `(?<${name}>${body})`;
     const previous = placeholders[placeholders.length - 1];
     const strict = previous !== undefined && !BOUNDED.has(previous) && !BOUNDED.has(name);
-    if (!placeholders.length) source += `${literal(pendingLiteral)}${group}`;
-    else source += `(?:${literal(pendingLiteral, strict)}${group})?`;
+    const sep = (value: string) => (options.dashOnly ? dashLiteral(value) : literal(value, strict));
+    if (!placeholders.length) source += `${sep(pendingLiteral)}${group}`;
+    else source += `(?:${sep(pendingLiteral)}${group})?`;
     placeholders.push(name);
     pendingLiteral = '';
   }
   if (!placeholders.length) return undefined;
-  source += pendingLiteral ? `(?:${literal(pendingLiteral)})?` : '';
+  source += pendingLiteral ? `(?:${options.dashOnly ? dashLiteral(pendingLiteral) : literal(pendingLiteral)})?` : '';
   const lead = options.leadingNumber && placeholders[0] !== 'nr' && placeholders[0] !== 'datum' ? `(?:(?<lead>\\d{1,3})${SEP})?` : '';
   return { regex: new RegExp(`^${lead}${source}[${SEP_CHARS}]*$`, 'iu'), placeholders };
 }
@@ -261,6 +300,10 @@ export interface CompiledKind {
   folderKey: string;
   folder?: CompiledPattern;
   file?: CompiledPattern;
+  /** Dasselbe Dateimuster für Namen mit " - " als Trenner */
+  fileDash?: CompiledPattern;
+  /** Inhalte ohne Titel, als Vergleichsschlüssel */
+  untitled: Set<string>;
 }
 
 export interface CompiledStructure {
@@ -276,6 +319,8 @@ export function compileStructure(structure: Structure): CompiledStructure {
       folderKey: foldValue(kind.folder),
       folder: compilePattern(kind.folderPattern),
       file: compilePattern(kind.filePattern, structure.contents, { leadingNumber: true }),
+      fileDash: compilePattern(kind.filePattern, structure.contents, { leadingNumber: true, dashOnly: true }),
+      untitled: new Set(structure.untitled.map(foldValue)),
     })),
   };
 }
@@ -296,6 +341,15 @@ export interface FileInfo {
   /** Titel steht in einem Tag (nicht aus dem Dateinamen abgeleitet) */
   titleTagged: boolean;
   duration: number | null;
+  /** Korrektur aus der Verwaltung; ersetzt, was aus dem Dateinamen gelesen wurde */
+  override?: TrackOverride;
+}
+
+/** Von Hand gesetzte Werte einer Aufnahme; null: aus dem Dateinamen */
+export interface TrackOverride {
+  content: string | null;
+  title: string | null;
+  name: string | null;
 }
 
 export interface FileResult {
@@ -326,12 +380,19 @@ export interface FolderResult {
 export function applyToFolder(compiled: CompiledKind, folder: string, files: FileInfo[]): FolderResult {
   const { kind } = compiled;
   const folderValues = matchPattern(compiled.folder, basename(folder)) ?? {};
+  if (folderValues.anlass) folderValues.anlass = tidy(folderValues.anlass);
   const results = new Map<string, FileResult>();
   const sermonKey = foldValue(kind.sermon);
   // Sprecher nur von der Predigt; "Lied - Befiehl du deine Wege" nennt keinen Sprecher
   const isSermon = (values: Values | undefined) => !sermonKey || (values?.inhalt !== undefined && foldValue(values.inhalt) === sermonKey);
   const parsed = files.map((file) => {
-    const values = matchPattern(compiled.file, fileStem(file.path));
+    let values = readFileName(compiled, fileStem(file.path));
+    if (file.override) {
+      values = { ...values };
+      if (file.override.content !== null) values.inhalt = file.override.content;
+      if (file.override.title !== null) values.titel = file.override.title;
+      if (file.override.name !== null) values.sprecher = file.override.name;
+    }
     const nr = values?.nr ?? values?.lead;
     return { file, values, nr: nr !== undefined ? Number(nr) : undefined };
   });
@@ -342,7 +403,7 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
     }
     const all: Values = { ...folderValues, ...values, nr: nr !== undefined ? String(nr) : undefined };
     if (all.datum) all.datum = findDate(all.datum, folderYear(dirname(file.path)))?.date ?? all.datum;
-    const title = kind.preferTags && file.titleTagged ? undefined : fillTemplate(kind.trackTitle || '{titel}', all) || undefined;
+    const title = kind.preferTags && file.titleTagged && file.override?.title == null ? undefined : fillTemplate(kind.trackTitle || '{titel}', all) || undefined;
     results.set(file.path, {
       matched: true,
       title,
@@ -371,6 +432,41 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
     speaker: speaker ?? undefined,
     files: results,
   };
+}
+
+/**
+ * Lesbarer Titel aus einem Teil des Dateinamens: "Text_Richter 7,1-4" -> "Richter 7,1-4",
+ * "Bergpredigt Text_Matthäus 7,7-14" -> "Bergpredigt (Matthäus 7,7-14)"; übrige Unterstriche werden Leerzeichen.
+ */
+export function tidy(value: string): string {
+  return value
+    .replace(/^\s*(?:Text|Predigttext|Bibeltext)_\s*/i, '')
+    .replace(/^(.+?)\s+(?:Text|Predigttext|Bibeltext)_\s*(.+)$/i, '$1 ($2)')
+    .replace(/_+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Liest einen Dateinamen nach dem Muster der Art. Verwendet der Name " - " als Trenner, wird nur dort getrennt.
+ * Bei Inhalten ohne Titel ist ein einzelner Teil nach dem Inhalt der Name, nicht der Titel.
+ */
+export function readFileName(compiled: CompiledKind, stem: string): Values | undefined {
+  const values = (usesDash(stem) && matchPattern(compiled.fileDash, stem)) || matchPattern(compiled.file, stem);
+  if (!values) return undefined;
+  const placeholders = compiled.file?.placeholders ?? [];
+  if (
+    values.inhalt &&
+    compiled.untitled.has(foldValue(values.inhalt)) &&
+    values.titel &&
+    !values.sprecher &&
+    placeholders.includes('sprecher')
+  ) {
+    values.sprecher = values.titel;
+    delete values.titel;
+  }
+  for (const key of ['titel', 'anlass', 'sprecher'] as const) if (values[key]) values[key] = tidy(values[key]!);
+  return values;
 }
 
 // ---------- Vorschau ----------

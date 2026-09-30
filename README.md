@@ -165,6 +165,16 @@ Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
 - **Vorlagen** für den Namen des Albums und den Titel einer Aufnahme; leere Platzhalter fallen samt Trennern weg.
 - **Inhalt der Predigt** (z. B. „Predigt“): Diese Aufnahme liefert Sprecher (`{sprecher}`) und Bibelstelle
   (`{bibelstelle}`, sonst aus ihrem Titel erkannt). Wer predigt, steht als Interpret am Gottesdienst.
+- **Trennzeichen aus der Datei**: Enthält ein Dateiname „ - “, wird nur dort getrennt; `Text_Richter 7,1-4` oder
+  `Matthäus 7,7-14` bleiben ein Teil. „Text_“ vor einer Bibelstelle wird lesbar („Einleitung: Richter 7,1-4“,
+  „Predigt: Bergpredigt (Matthäus 7,7-14)“), übrige Unterstriche werden Leerzeichen.
+- **Inhalte ohne Titel** (Begrüßung, Gebet, Abkündigungen, Segen …): Folgt nur ein Teil, ist das der Name.
+  `Begrüßung - Jakob Rauschenberger` wird „Begrüßung“ mit Jakob Rauschenberger; bei `Lied - Großer Gott` bleibt
+  „Großer Gott“ der Titel.
+- **Einzelne Aufnahmen korrigieren**: Passt ein Dateiname gar nicht, lassen sich Inhalt, Titel und Name in der
+  Verwaltung am Album je Titel setzen (Knopf „…“ neben dem Titel, dort steht auch der Dateiname). Die Korrektur
+  gilt nach Dateipfad, übersteht jeden Scan und folgt der Datei beim Umbenennen; leere Felder nehmen wieder den
+  Dateinamen.
 - **Inhalte**: Liste, was am Anfang eines Dateinamens stehen kann; nötig für Inhalte aus mehreren Wörtern.
   Der Inhalt jeder Aufnahme steht in der Kategorie „Inhalt“ (vorgegeben, zunächst nicht im Menü) und in der Suche.
 - **Tags**: Standardmäßig gilt der Dateiname, auch wenn die Datei Tags hat. Je Art lässt sich einstellen, dass
@@ -398,6 +408,7 @@ Verwaltung (Manager und Admins):
 | `DELETE /api/admin/albums/:id` | Eigenes Album löschen (die Titel bleiben) |
 | `POST /api/admin/albums/:id/tracks` | Titel anhängen: `{ trackIds, move? }`; `move` nimmt sie aus ihrem automatischen Album |
 | `PUT /api/admin/albums/:id/tracks` | Inhalt und Reihenfolge eines eigenen Albums setzen: `{ trackIds }` |
+| `PATCH /api/admin/albums/:id/tracks/:trackId` | Aufnahme korrigieren: `{ content?, title?, name? }`, `null` nimmt wieder den Dateinamen |
 | `DELETE /api/admin/albums/:id/tracks/:trackId` | Titel entfernen (bei automatischen Alben: herausnehmen) |
 | `POST /api/admin/albums/:id/tracks/:trackId/restore` | Herausgenommenen Titel zurückholen |
 | `POST /api/admin/albums/:id/rules` | Regel anlegen: `{ condition, move? }` (siehe unten) |

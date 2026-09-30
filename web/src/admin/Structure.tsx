@@ -19,6 +19,8 @@ export interface RecordingKind {
 export interface Structure {
   kinds: RecordingKind[];
   contents: string[];
+  /** Inhalte ohne Titel: ein einzelner Teil danach ist der Name ("Begrüßung - Jakob Rauschenberger") */
+  untitled: string[];
 }
 
 interface Preview {
@@ -241,6 +243,24 @@ export function StructurePanel() {
               })
             }
           />
+        </label>
+        <label class="field">
+          <span>Inhalte ohne Titel</span>
+          <textarea
+            id="structure-untitled"
+            rows={5}
+            value={(draft.untitled ?? []).join('\n')}
+            onInput={(e) =>
+              change({
+                ...draft,
+                untitled: (e.target as HTMLTextAreaElement).value.split('\n').map((line) => line.trimStart()),
+              })
+            }
+          />
+          <small class="field-hint">
+            Folgt nach einem dieser Inhalte nur ein Teil, ist das der Name: „Begrüßung - Jakob Rauschenberger“ wird „Begrüßung“
+            mit Jakob Rauschenberger, bei „Lied - Großer Gott“ bleibt „Großer Gott“ der Titel.
+          </small>
         </label>
       </section>
 
