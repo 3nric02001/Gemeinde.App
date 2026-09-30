@@ -9,7 +9,7 @@ import { FavoriteButton } from '../components/FavoriteButton';
 import { SermonInfo } from '../components/SermonInfo';
 import { albumTitle, formatLongDate, formatDuration, plural, serviceEyebrow } from '../format';
 import { useApi } from '../hooks';
-import { player } from '../player';
+import { albumContext, player } from '../player';
 import { coverUrl, query, type Album as AlbumType, type Page } from '../api';
 import { ErrorNote, Loading } from './common';
 
@@ -21,13 +21,16 @@ export function Album({ id }: { id: number }) {
 
   const others = (more.data?.items ?? []).filter((a) => a.id !== album.id).slice(0, 12);
   const artistHref = `/interpret/${encodeURIComponent(album.artist)}`;
+  const from = albumContext(album);
   return (
     <div class="page">
       <header class="hero">
         <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-hero" eager />
         <div class="hero-text">
           <span class="eyebrow">
-            {album.date ? (
+            {from ? (
+              'Playlist'
+            ) : album.date ? (
               <a href={`/datum${query({ art: album.recording ?? undefined })}`}>
                 {serviceEyebrow(albumTitle(album.title, album.date, album.recording), album.recording)}
               </a>
@@ -54,10 +57,10 @@ export function Album({ id }: { id: number }) {
       </header>
 
       <div class="actions">
-        <button type="button" class="button-primary" onClick={() => player.playList(album.tracks, 0, { shuffle: false })}>
+        <button type="button" class="button-primary" onClick={() => player.playList(album.tracks, 0, { shuffle: false, from })}>
           <Icon name="play" size={20} /> Abspielen
         </button>
-        <button type="button" class="button-secondary" aria-label="Zufällig abspielen" onClick={() => player.playList(album.tracks, 0, { shuffle: true })}>
+        <button type="button" class="button-secondary" aria-label="Zufällig abspielen" onClick={() => player.playList(album.tracks, 0, { shuffle: true, from })}>
           <Icon name="shuffle" size={18} /> <span class="button-label">Zufällig</span>
         </button>
         <FavoriteButton kind="album" item={album} />
@@ -65,8 +68,8 @@ export function Album({ id }: { id: number }) {
         <Menu
           label="Weitere Aktionen für das Album"
           items={[
-            { label: 'Als Nächstes spielen', onSelect: () => player.playNext(album.tracks) },
-            { label: 'Zur Warteschlange hinzufügen', onSelect: () => player.append(album.tracks) },
+            { label: 'Als Nächstes spielen', onSelect: () => player.playNext(album.tracks, from) },
+            { label: 'Zur Warteschlange hinzufügen', onSelect: () => player.append(album.tracks, from) },
           ]}
         />
       </div>
@@ -78,7 +81,8 @@ export function Album({ id }: { id: number }) {
         variant="album"
         albumArtist={album.artist}
         hideArtist={album.recording ?? undefined}
-        ordinal={album.kind === 'manual'}
+        ordinal={!!from}
+        from={from}
       />
 
       {others.length > 0 && (
