@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/pr
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Album, Track } from '../src/api';
 import { AlbumCard, AlbumGrid } from '../src/components/AlbumCard';
-import { Controls } from '../src/components/Controls';
+import { Controls, RateButton } from '../src/components/Controls';
 import { FavoriteButton } from '../src/components/FavoriteButton';
 import { TrackList } from '../src/components/TrackList';
 import { getMe, loadMe, resetMe } from '../src/me';
@@ -119,6 +119,29 @@ describe('Predigt-Player', () => {
     await waitFor(() => expect(screen.getByLabelText('Zufallswiedergabe')).toBeTruthy());
     // Zurück auf 1× für die nächsten Tests
     while (player.getState().rate !== 1) player.cycleRate();
+  });
+
+  it('stellt das Tempo stufenlos per Regler ein, mit Schnellwahl', async () => {
+    mockServer();
+    vi.spyOn(player.audio, 'play').mockResolvedValue(undefined);
+    player.playList([sermon], 0, { shuffle: false });
+    render(<RateButton />);
+    fireEvent.click(screen.getByLabelText('Tempo 1×, antippen zum Ändern'));
+    const slider = screen.getByRole('slider', { name: 'Tempo' }) as HTMLInputElement;
+    expect(slider.min).toBe('0.5');
+    expect(slider.max).toBe('2');
+    fireEvent.input(slider, { target: { value: '1.35' } });
+    expect(player.getState().rate).toBe(1.35);
+    expect(player.audio.playbackRate).toBe(1.35);
+    await waitFor(() => expect(screen.getByText('1,35×', { selector: 'output' })).toBeTruthy());
+    // Werte außerhalb werden begrenzt und auf 0,05 gerundet
+    player.setRate(0.2);
+    expect(player.getState().rate).toBe(0.5);
+    player.setRate(1.123);
+    expect(player.getState().rate).toBe(1.1);
+    fireEvent.click(screen.getByRole('button', { name: '1,5×' }));
+    expect(player.audio.playbackRate).toBe(1.5);
+    player.setRate(1);
   });
 });
 

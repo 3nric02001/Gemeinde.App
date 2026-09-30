@@ -1,5 +1,7 @@
 import { usesSermonPlayer } from '../me';
-import { player, usePlayerSelect } from '../player';
+import { createPortal } from 'preact/compat';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { player, RATE_MAX, RATE_MIN, RATE_STEP, RATES, usePlayerSelect } from '../player';
 import { Icon, SkipIcon } from './Icon';
 
 /** Predigten (laut Policies, sonst lange Titel) zeigen statt Zufall und Wiederholen die Sprungknöpfe */
@@ -71,21 +73,101 @@ export function Controls({ large = false }: { large?: boolean }) {
   );
 }
 
-/** Tempo für Predigten: 1×, 1,25× … 2× */
+const rateLabel = (rate: number) => `${rate.toLocaleString('de-DE', { maximumFractionDigits: 2 })}×`;
+/** Auf dem Handy öffnet sich das Tempo als Blatt von unten, wie das Menü */
+const SHEET = '(max-width: 760px)';
+const asSheet = () => typeof window.matchMedia === 'function' && window.matchMedia(SHEET).matches;
+
+/** Tempo für Predigten: Knopf zeigt das Tempo, darunter Regler 0,5× bis 2× und Schnellwahl */
 export function RateButton() {
   const rate = usePlayerSelect((s) => s.rate);
   const long = useLongTrack();
+  const [open, setOpen] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: Event) => {
+      const target = event.target as Node;
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !ref.current?.contains(target) && !panelRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [open]);
+
   if (!long) return null;
-  const label = `${rate.toLocaleString('de-DE')}×`;
+  const label = rateLabel(rate);
+  const fill = ((rate - RATE_MIN) / (RATE_MAX - RATE_MIN)) * 100;
+  const panel = (
+    <div class={`rate-panel${sheet ? ' rate-sheet' : ''}`} role="dialog" aria-label="Tempo" ref={panelRef}>
+      <div class="rate-head">
+        <span>Tempo</span>
+        <output class="rate-value" aria-live="polite">
+          {label}
+        </output>
+      </div>
+      <input
+        type="range"
+        class="range rate-range"
+        min={RATE_MIN}
+        max={RATE_MAX}
+        step={RATE_STEP}
+        value={rate}
+        aria-label="Tempo"
+        aria-valuetext={label}
+        style={{ '--fill': `${fill}%` }}
+        onInput={(event) => player.setRate(Number((event.target as HTMLInputElement).value))}
+      />
+      <div class="rate-scale" aria-hidden="true">
+        <span>{rateLabel(RATE_MIN)}</span>
+        <span>{rateLabel(RATE_MAX)}</span>
+      </div>
+      <div class="rate-presets">
+        {RATES.map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            class={`rate-preset${Math.abs(preset - rate) < 0.001 ? ' is-on' : ''}`}
+            aria-pressed={Math.abs(preset - rate) < 0.001}
+            onClick={() => player.setRate(preset)}
+          >
+            {rateLabel(preset)}
+          </button>
+        ))}
+      </div>
+      {sheet && (
+        <button type="button" class="rate-done" onClick={() => setOpen(false)}>
+          Fertig
+        </button>
+      )}
+    </div>
+  );
   return (
-    <button
-      type="button"
-      class={`rate-button${rate !== 1 ? ' is-on' : ''}`}
-      aria-label={`Tempo ${label}, antippen zum Ändern`}
-      onClick={() => player.cycleRate()}
-    >
-      {label}
-    </button>
+    <div class="rate" ref={ref}>
+      <button
+        type="button"
+        class={`rate-button${rate !== 1 ? ' is-on' : ''}`}
+        aria-label={`Tempo ${label}, antippen zum Ändern`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => {
+          setSheet(asSheet());
+          setOpen(!open);
+        }}
+      >
+        {label}
+      </button>
+      {open && !sheet && panel}
+      {open && sheet && createPortal(<div class="menu-backdrop">{panel}</div>, document.body)}
+    </div>
   );
 }
 
