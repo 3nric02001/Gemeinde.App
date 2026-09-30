@@ -28,6 +28,11 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 - **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer. Die Titel mit Herz sind dort eine
   Playlist (Abspielen, Zufällig, „Jetzt läuft“ führt zurück) und lassen sich mit dem Pfeil offline halten: Neue
   Favoriten kommen dann von selbst aufs Gerät, und unter „Heruntergeladen“ stehen sie auch ohne Netz als eigene Liste.
+- **Eigene Playlists**: Jeder Hörer stellt sich unter „Meine Playlists“ eigene Playlists zusammen („Zur Playlist
+  hinzufügen …“ im Menü eines Titels, eines Albums oder der Favoriten, „Als Playlist speichern“ in der Warteschlange)
+  und kann sie mit ausgewählten anderen Benutzern der App teilen. Die finden sie unter „Geteilt mit mir“ und auf der
+  Startseite, hören sie an und können sie aus ihrer Liste entfernen; ändern kann sie nur, wer sie angelegt hat.
+  Das ist etwas anderes als die Playlists der Verwaltung, die alle sehen.
 - **Suche**: Treffer beim Tippen, gruppiert nach Titeln und Alben; findet Titel, Albumnamen, Inhalt und Sprecher
   aus den Dateinamen, Predigten neueste zuerst; ohne Suchbegriff Vorschläge und Stöbern nach Art (Gottesdienste,
   Bibelstunden …). Treffer im Titel stehen vorn: bei Alben genauer Titel, dann Titelanfang, dann Sprecher, dann Alben,

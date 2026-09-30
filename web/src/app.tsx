@@ -5,6 +5,7 @@ import { NowPlaying } from './components/NowPlaying';
 import { Onboarding } from './components/Onboarding';
 import { Sidebar, TabBar } from './components/Nav';
 import { PlayerBar } from './components/PlayerBar';
+import { PlaylistPicker } from './components/PlaylistPicker';
 import { Album } from './pages/Album';
 import { BibleBook, BibleBooks, SpeakerPage, Speakers } from './pages/Browse';
 import { Albums } from './pages/Albums';
@@ -18,6 +19,8 @@ import { More } from './pages/More';
 import { loadMe, resetMe } from './me';
 import { Home } from './pages/Home';
 import { Live } from './pages/Live';
+import { Playlists } from './pages/Playlists';
+import { UserPlaylist } from './pages/UserPlaylist';
 import { Login } from './pages/Login';
 import { QueuePage } from './pages/Queue';
 import { Search } from './pages/Search';
@@ -42,6 +45,9 @@ function Page({ location, offline }: { location: Location; offline: boolean }) {
   if (path === '/warteschlange') return <QueuePage />;
   if (path === '/mehr') return <More />;
   if (path === '/favoriten') return <Favorites />;
+  if (path === '/playlists') return <Playlists />;
+  const playlist = match('/playlist/:id', path);
+  if (playlist && /^\d+$/.test(playlist.id!)) return <UserPlaylist key={path} id={Number(playlist.id)} />;
   if (path === '/admin' || path.startsWith('/admin/')) return <Admin location={location} />;
   const album = match('/album/:id', path);
   if (album && /^\d+$/.test(album.id!)) return <Album id={Number(album.id)} track={Number(params.get('titel')) || undefined} />;
@@ -121,6 +127,7 @@ function Shell() {
       <PlayerBar onExpand={() => setExpanded(true)} />
       <TabBar path={location.path} />
       {expanded && <NowPlaying onClose={() => setExpanded(false)} />}
+      <PlaylistPicker />
       {user?.onboarded === false && !offline && <Onboarding />}
     </div>
   );

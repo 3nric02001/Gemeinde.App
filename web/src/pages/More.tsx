@@ -44,6 +44,7 @@ export function More() {
       <ul class="more-list">
         {livestream && <Row href="/live" icon="live" label={livestream.title} />}
         <Row href="/favoriten" icon="heart" label="Favoriten" />
+        <Row href="/playlists" icon="playlist" label="Meine Playlists" />
         {(offline.enabled || offline.items.length > 0) && <Row href="/heruntergeladen" icon="download" label="Heruntergeladen" />}
         <Row href="/titel" icon="tracks" label="Alle Titel" />
         {categories.map((category) => (
