@@ -54,7 +54,7 @@ export function Rules({
         <h2>Regeln</h2>
       </div>
       <p class="admin-hint">
-        Alle Titel, auf die eine Regel passt, kommen automatisch in dieses Album, auch solche, die später in die Nextcloud
+        Alle Titel, auf die eine Regel passt, kommen automatisch in diese Playlist, auch solche, die später in die Nextcloud
         kommen. Bedingungen lassen sich in Gruppen mit UND/ODER verschachteln. Groß- und Kleinschreibung und Umlaute spielen
         keine Rolle. Mehrere Regeln gelten mit ODER.
       </p>

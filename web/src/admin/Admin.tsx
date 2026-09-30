@@ -67,14 +67,14 @@ const FILTERS = [
   { value: '', label: 'Alle', query: {} },
   { value: 'gottesdienste', label: 'Gottesdienste', query: { dated: 'true' } },
   { value: 'musik', label: 'Musik', query: { dated: 'false' } },
-  { value: 'eigene', label: 'Eigene Alben', query: { kind: 'manual' } },
+  { value: 'eigene', label: 'Playlists', query: { kind: 'manual' } },
   { value: 'ausgeblendet', label: 'Ausgeblendet', query: { hidden: 'true' } },
   { value: 'ohne-sprecher', label: 'Sprecher fehlt', query: { noSpeaker: 'true' } },
 ] as const;
 const EMPTY: Record<string, string> = {
   gottesdienste: 'Keine Gottesdienste gefunden',
   musik: 'Keine Musik gefunden',
-  eigene: 'Noch keine eigenen Alben',
+  eigene: 'Noch keine Playlists',
   ausgeblendet: 'Keine ausgeblendeten Alben',
   'ohne-sprecher': 'Alle Gottesdienste haben einen Sprecher',
 };
@@ -115,7 +115,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
         <h1 class="page-title">Alben verwalten</h1>
         <div class="actions">
           <button type="button" class="button-primary" onClick={() => setCreating(true)}>
-            Neues Album
+            Neue Playlist
           </button>
         </div>
       </div>
@@ -177,7 +177,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
                     </span>
                   </span>
                   <span class="admin-badges">
-                    {album.kind === 'manual' && <span class="badge">Eigenes</span>}
+                    {album.kind === 'manual' && <span class="badge">Playlist</span>}
                     {album.date && !album.speaker && <span class="badge badge-attention">Sprecher fehlt</span>}
                     {album.hidden && <span class="badge badge-muted">Ausgeblendet</span>}
                   </span>
@@ -197,8 +197,8 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
         <summary>Wie funktionieren Alben?</summary>
         <p class="admin-hint">
           Automatische Alben entstehen beim Abgleich aus Ordnern und Tags in der Nextcloud; Gottesdienste erkennt die App am Datum
-          im Ordnernamen. Du kannst sie umbenennen, ergänzen, ausblenden oder um einzelne Titel kürzen. Eigene Alben stellst du
-          aus beliebigen Titeln zusammen; ein Titel kann in mehreren Alben stehen. Alle Änderungen bleiben bei neuen Scans
+          im Ordnernamen. Du kannst sie umbenennen, ergänzen, ausblenden oder um einzelne Titel kürzen. Playlists stellst du
+          aus beliebigen Titeln zusammen; ein Titel kann in mehreren Playlists stehen. Alle Änderungen bleiben bei neuen Scans
           erhalten.
         </p>
       </details>
@@ -222,7 +222,7 @@ function NewAlbum({ onCancel, onError }: { onCancel: () => void; onError: (e: Er
   return (
     <form class="admin-panel" onSubmit={submit}>
       <label class="field">
-        <span>Titel des neuen Albums</span>
+        <span>Name der neuen Playlist</span>
         <input
           value={title}
           placeholder="z. B. Predigten 2024"

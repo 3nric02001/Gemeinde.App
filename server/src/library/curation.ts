@@ -66,7 +66,7 @@ function findAlbum(db: DB, id: number): AlbumRow {
 
 function requireManual(album: AlbumRow): void {
   if (album.kind !== 'manual') {
-    throw new CurationError(409, 'Nur bei eigenen Alben möglich; automatische Alben lassen sich ausblenden oder korrigieren');
+    throw new CurationError(409, 'Nur bei Playlists möglich; automatische Alben lassen sich ausblenden oder korrigieren');
   }
 }
 
