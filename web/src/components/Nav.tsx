@@ -21,7 +21,7 @@ const items: NavItem[] = [
 ];
 
 /** Tab-Leiste auf dem Handy: die vier wichtigsten Ziele, der Rest unter "Mehr" */
-const MORE_PATHS = ['/mehr', '/titel', '/favoriten', '/interpret', '/kategorie', '/warteschlange', '/admin'];
+const MORE_PATHS = ['/mehr', '/titel', '/favoriten', '/kategorie', '/warteschlange', '/admin'];
 const tabs: NavItem[] = [
   start,
   search,

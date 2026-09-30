@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { Album, Artist, Facets, Page, Track } from '../api';
+import type { Album, Facets, Page, Track } from '../api';
 import { categoryUrl, getJson, query } from '../api';
 import { AlbumGrid, Shelf } from '../components/AlbumCard';
 import { TrackList } from '../components/TrackList';
@@ -11,7 +11,6 @@ import { player } from '../player';
 import { navigate } from '../router';
 import { Icon } from '../components/Icon';
 import { rememberSearch, clearSearches, useRecentSearches } from '../searchHistory';
-import { ArtistList } from './Artists';
 import { Empty } from './common';
 
 export function Search({ params }: { params: URLSearchParams }) {
@@ -32,7 +31,7 @@ export function Search({ params }: { params: URLSearchParams }) {
           ref={input}
           type="search"
           value={text}
-          placeholder="Titel, Alben, Interpreten, Sprecher"
+          placeholder="Titel, Alben, Sprecher, Bibelstellen"
           aria-label="Suche"
           enterKeyHint="search"
           autocomplete="off"
@@ -71,11 +70,9 @@ function Results({ q, user }: { q: string; user: number | undefined }) {
   };
   const tracks = useApi<Page<Track>>(`/api/tracks${query({ q, limit: 20 })}`);
   const albums = useApi<Page<Album>>(`/api/albums${query({ q, limit: 12, sort: 'date' })}`);
-  const artists = useApi<Page<Artist>>(`/api/artists${query({ q, limit: 6 })}`);
 
-  const done = !tracks.loading && !albums.loading && !artists.loading;
-  const nothing =
-    done && !tracks.data?.total && !albums.data?.total && !artists.data?.total;
+  const done = !tracks.loading && !albums.loading;
+  const nothing = done && !tracks.data?.total && !albums.data?.total;
   if (nothing) return <Empty title={`Keine Treffer für „${q}“`}>Prüfe die Schreibweise oder versuche weniger Wörter.</Empty>;
 
   const playAll = async (index: number) => {
@@ -86,14 +83,6 @@ function Results({ q, user }: { q: string; user: number | undefined }) {
 
   return (
     <div onClickCapture={found}>
-      {artists.data && artists.data.items.length > 0 && (
-        <section class="shelf">
-          <div class="section-head">
-            <h2>Interpreten</h2>
-          </div>
-          <ArtistList artists={artists.data.items} />
-        </section>
-      )}
       {tracks.data && tracks.data.items.length > 0 && (
         <section class="shelf">
           <div class="section-head">
@@ -131,7 +120,7 @@ interface Suggestions {
 
 /**
  * Ohne Suchbegriff: eigene letzte Suchen, was mehrere andere gesucht haben, oft Gehörtes und
- * Stöbern nach Kategorie und Genre, wie die Kacheln bei Spotify.
+ * Stöbern nach Kategorie und Art der Aufnahme, wie die Kacheln bei Spotify.
  */
 function Browse({ user, onPick }: { user: number | undefined; onPick: (value: string) => void }) {
   const { data } = useApi<Facets>('/api/facets');
@@ -174,7 +163,7 @@ function Browse({ user, onPick }: { user: number | undefined; onPick: (value: st
           </div>
         </section>
       )}
-      {data && data.genres.length > 0 && <Genres facets={data} />}
+      {data?.recordings && data.recordings.length > 0 && <Kinds facets={data} />}
     </>
   );
 }
@@ -192,17 +181,18 @@ function SearchChips({ items, onPick }: { items: string[]; onPick: (value: strin
   );
 }
 
-function Genres({ facets: data }: { facets: Facets }) {
+/** Gottesdienste, Bibelstunden … aus der Zuordnung, jeweils nach Datum */
+function Kinds({ facets: data }: { facets: Facets }) {
   return (
     <section class="shelf">
       <div class="section-head">
         <h2>Stöbern</h2>
       </div>
       <div class="browse">
-        {data.genres.slice(0, 24).map((genre) => (
-          <a key={genre.value} class="browse-tile" href={`/alben${query({ genre: genre.value })}`}>
-            <span>{genre.value}</span>
-            <small>{plural(genre.count, 'Titel', 'Titel')}</small>
+        {data.recordings!.map((kind) => (
+          <a key={kind.name} class="browse-tile" href={`/datum${query({ art: kind.name })}`}>
+            <span>{kind.plural}</span>
+            <small>{plural(kind.count, 'Aufnahme', 'Aufnahmen')}</small>
           </a>
         ))}
       </div>

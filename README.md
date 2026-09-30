@@ -1,7 +1,8 @@
 # Gemeinde.App
 
 Minimalistischer Musikplayer für die Gemeinde, der seine Musik direkt aus einer Nextcloud liest.
-Alben und Suchfilter entstehen automatisch aus Tags und Ordnerstruktur.
+Alben, Titel, Sprecher und Kategorien entstehen automatisch aus Ordnerstruktur und Dateinamen; Tags in den
+Dateien (Titel, Interpret, Album, Genre) zählen nicht. Interpreten gibt es in der App nicht, nur Sprecher.
 
 Dieser Stand enthält die **Musikbibliothek** (Backend), die **Weboberfläche** zum Hören, eine
 **Verwaltung** für Alben und die **Anmeldung** über einen lokalen Admin oder OIDC mit den Rollen
@@ -16,40 +17,36 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
 
 - **Start**: Begrüßung mit Vornamen, der neueste Gottesdienst groß oben, „Weiterhören“ (angefangene
   Predigten mit Fortschritt), „Zuletzt gehört“, weitere Gottesdienste, „Neue Musik“ (ohne Gottesdienste), eigene
-  Favoriten, Genres als Kacheln und Jahrzehnte
+  Favoriten und Jahrzehnte
 - **Gottesdienste**: Alben mit Datum heißen nach dem Anlass mit Wochentag und Datum
   („Erntedank, So., 27.09.2026“) und bekommen ohne eigenes Bild ein Kalenderblatt als Cover.
-  Sprecher und Bibelstelle kommen aus den Tags `Sprecher`/`Speaker`/`Prediger`/`Referent` bzw.
-  `Bibelstelle`/`Bibeltext`/`Predigttext`/`Scripture` oder werden in der Verwaltung am Album gesetzt,
-  dort auch eine Beschreibung für Hörer. Fehlen die Tags, liest die App den Sprecher aus Dateinamen wie
-  `2026-09-27 Meier - Psalm 23.mp3` und die Bibelstelle aus Titel oder Dateiname („Psalm 23“, „Joh 3,16“,
-  „1. Kor 13,1-13“). Wer predigt, steht als Interpret am Gottesdienst („Mehr von Meier“), das Jahr kommt
-  aus dem Datum. Die Kategorie „Sprecher“ ist vorgegeben (im Menü, sobald es Sprecher gibt)
+  Sprecher und Bibelstelle kommen aus den Dateinamen (`Predigt - Der gute Hirte - Pastor Meier.mp3`,
+  `2026-09-27 Meier - Psalm 23.mp3`, Bibelstellen wie „Psalm 23“, „Joh 3,16“, „1. Kor 13,1-13“ in Titel oder
+  Ordnername) oder werden in der Verwaltung am Album bzw. Titel gesetzt, dort auch eine Beschreibung für Hörer.
+  Der Sprecher steht unter dem Albumtitel und bei jedem Titel, das Jahr kommt aus dem Datum. Die Kategorie
+  „Sprecher“ ist vorgegeben
 - **Favoriten**: Herz an Titeln und Alben, eigene Seite „Favoriten“ je Hörer
-- **Suche**: Treffer beim Tippen, gruppiert nach Interpreten, Titeln und Alben; findet auch eigene
-  Tag-Felder wie den Sprecher, Predigten neueste zuerst; ohne Suchbegriff Vorschläge und Stöbern nach Genre. Treffer im
-  Titel stehen vorn: bei Alben genauer Titel, dann Titelanfang, dann Interpret, dann Alben, in denen nur
-  ein Titel passt; bei Titeln zuerst die, die mit dem Suchbegriff beginnen
+- **Suche**: Treffer beim Tippen, gruppiert nach Titeln und Alben; findet Titel, Albumnamen, Inhalt und Sprecher
+  aus den Dateinamen, Predigten neueste zuerst; ohne Suchbegriff Vorschläge und Stöbern nach Art (Gottesdienste,
+  Bibelstunden …). Treffer im Titel stehen vorn: bei Alben genauer Titel, dann Titelanfang, dann Sprecher, dann Alben,
+  in denen nur ein Titel passt; bei Titeln zuerst die, die mit dem Suchbegriff beginnen
 - **Suchvorschläge**: Die leere Suchseite zeigt „Zuletzt gesucht“ (nur auf diesem Gerät, beim Abmelden
   gelöscht), „Häufig gesucht“ und „Oft gehört“ (Alben mit Wiedergaben laut verdecktem Scoring). Ein
   Suchbegriff zählt erst, wenn aus seinen Treffern etwas geöffnet wird, und nur, wenn er in der Bibliothek
   etwas findet; angezeigt wird er erst, wenn ihn mindestens 3 verschiedene Personen verwendet haben. Wer was
   gesucht hat, zeigt weder Oberfläche noch API; Einträge verschwinden nach 90 Tagen und mit dem Benutzer.
-- **Interpreten**: Schreibweisen werden zusammengefasst („Hillsong United“ = „Hillsong UNITED“), Gäste
-  aus „feat.“/„ft.“ stehen als eigene Interpreten in der Liste und finden den Titel
-- **Verdecktes Scoring**: Titel, die oft gehört werden, stehen in der Suche und im Genre-Vorschlag auf
-  der Startseite weiter oben. Gezählt wird eine Wiedergabe nach 30 Sekunden tatsächlich gehörter Zeit
+- **Verdecktes Scoring**: Titel, die oft gehört werden, stehen in der Suche und in „Oft gehört“ auf
+  der Suchseite weiter oben. Gezählt wird eine Wiedergabe nach 30 Sekunden tatsächlich gehörter Zeit
   (kurze Titel nach der Hälfte), je Person und Titel höchstens einmal in 6 Stunden, über alle Hörer
   zusammen. Ältere Wiedergaben verlieren mit einer Halbwertszeit von 90 Tagen an Gewicht. Innerhalb
   ähnlicher Beliebtheit bleibt die gewohnte Reihenfolge (neueste Gottesdienste zuerst). Zahlen werden
   nirgends angezeigt; „Letzter Gottesdienst“, „Neu hinzugefügt“ und bewusst gewählte Sortierungen
   (Titel, Jahr, Neu hinzugefügt) bleiben unberührt
-- **Alben, Titel**: Sortierung und Filter-Chips für Genre und Jahrzehnt, lädt beim Scrollen nach. Alben
-  zeigt zuerst nur Musik; Umschalter „Musik / je Art (Gottesdienste, Bibelstunden …) / Alle“ (über Suche, Genre oder Jahrzehnt
-  kommend: Alle). Sortiert wird wie im Telefonbuch: Umlaute bei ihrem Grundbuchstaben („Ärger“ bei A),
-  Zahlen nach Wert („2 Lieder“ vor „10 Gebote“), ein englisches „The“ am Anfang zählt nicht; Sortier-Tags
-  der Dateien (`ALBUMSORT`, `TSOA` …) haben Vorrang. „Neu hinzugefügt“ richtet sich danach, wann die
-  Dateien in die Nextcloud kamen (Upload-Zeit, sonst Änderungsdatum)
+- **Alben, Titel**: Sortierung (Titel, Jahr, Datum, Neu hinzugefügt) und Filter-Chips für das Jahrzehnt, lädt beim
+  Scrollen nach. Alben zeigt zuerst nur Musik; Umschalter „Musik / je Art (Gottesdienste, Bibelstunden …) / Alle“ (über
+  Suche oder Jahrzehnt kommend: Alle). Sortiert wird wie im Telefonbuch: Umlaute bei ihrem Grundbuchstaben („Ärger“
+  bei A), Zahlen nach Wert („2 Lieder“ vor „10 Gebote“), ein englisches „The“ am Anfang zählt nicht. „Neu
+  hinzugefügt“ richtet sich danach, wann die Dateien in die Nextcloud kamen (Upload-Zeit, sonst Änderungsdatum)
 - **Datum**: Jedes Album mit Datum erscheint hier mit Wochentag und Datum, neueste zuerst und nach
   Monaten gruppiert, dieselben Einträge wie unter Alben → Gottesdienste. Erkannt werden z. B.
   `2026-09-27 Gottesdienst`, `20260927`, `27.09.2026`, `27.9.26` und `27. September 2026`; fehlt das Jahr
@@ -57,12 +54,11 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   aus dem Albumordner, aus einem übergeordneten Ordner (`2026-09-27/Predigt` und `2026-09-27/Lobpreis`
   sind ein Gottesdienst) oder aus den Dateinamen: Tragen in einem Ordner ohne Datum die meisten Dateien
   eines im Namen (`Predigten 2026/2026-09-27 Meier - Psalm 23.mp3`), wird jedes Datum ein eigener
-  Gottesdienst. Disc-Unterordner (`CD 1`, `CD 2`) zählen zum Elternordner. Interpreten sind weiter über
-  Suche und Links erreichbar. Gibt es mehrere Arten von Aufnahmen (Gottesdienste, Bibelstunden), filtern
+  Gottesdienst. Disc-Unterordner (`CD 1`, `CD 2`) zählen zum Elternordner. Gibt es mehrere Arten von Aufnahmen (Gottesdienste, Bibelstunden), filtern
   Chips nach Art; die Startseite zeigt je Art eine Reihe, die Albenseite hat je Art ein eigenes Feld im
   Umschalter (Musik / Gottesdienste / Bibelstunden / Alle). Wie Aufnahmen erkannt und benannt werden, steht in
   der Verwaltung unter „Zuordnung“ (siehe unten).
-- **Album- und Interpretenseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), „Mehr von …“
+- **Albumseite**: Abspielen, Zufällig, Titelliste (Doppel-CDs getrennt), bei Aufnahmen „Weitere Aufnahmen“ derselben Art
 - **Player**: Leiste unten mit Zufall, Wiederholen (alle/einen), Spulen und Lautstärke; Warteschlange
   mit „Als Nächstes spielen“ und „Zur Warteschlange hinzufügen“. Auf dem Handy Mini-Player über der
   Tab-Leiste, der sich zu „Jetzt läuft“ aufklappt (nach unten wischen schließt, Link zum Album;
@@ -107,26 +103,10 @@ Leiste zum Wischen:
 
 | Gruppe | Bereiche | Wer |
 | --- | --- | --- |
-| Inhalte | Alben, Interpreten, Kategorien | Manager, Admins |
+| Inhalte | Alben, Kategorien | Manager, Admins |
 | Automatik | Zuordnung, Schreibweisen, Prüfen | Manager, Admins |
 | Zugang | Benutzer, Gruppen, Anmeldung | Admins |
 | Verlauf | Änderungen | Admins |
-
-## Verwaltung: Interpreten
-
-Unter **Verwaltung → Interpreten** (Manager und Admins) stehen alle Namen, wie sie aus Tags, Dateinamen und Regelwerk
-kommen, mit Anzahl Titel. Hat die Erkennung denselben Interpreten oder Sprecher unterschiedlich geschrieben, führt man
-die Namen zusammen, etwa „J. Rauschenberger“ und „Jakob Rauschenbeger“ unter „Jakob Rauschenberger“; einen einzelnen
-Namen auswählen heißt umbenennen.
-
-- Das gilt überall: Interpret und Sprecher der Titel, Interpret und Sprecher der Alben, Interpretenliste, Filter auf
-  der Interpretenseite und Kategorien aus Interpreten- oder Sprecher-Feldern (dort als zusammengefasster Wert).
-  Die Dateien in der Nextcloud bleiben unverändert; neue Dateien mit dem alten Namen folgen automatisch.
-- **Vorschläge** zeigen Namen, die vermutlich dasselbe meinen: gleicher Nachname mit Vorname oder Initiale,
-  gleiche Buchstaben ohne Leerzeichen („Kinder Chor“, „Kinderchor“) oder Tippfehler bei längeren Namen.
-  Ein Klick auf einen Namen wählt ihn als gemeinsamen Namen.
-- Zusammengeführte Namen lassen sich einzeln wieder trennen. Wird ein Zielname selbst zusammengeführt, folgen die
-  ihm zugeordneten Namen (keine Ketten). Jede Änderung steht unter Verlauf → Änderungen.
 
 ## Verwaltung: Alben zusammenstellen und korrigieren
 
@@ -134,16 +114,16 @@ Unter `/admin` (Link „Verwaltung“ in der Seitenleiste bzw. unter „Mehr“)
 von Hand pflegen. Die Verwaltung sehen nur Manager und Admins.
 
 - **Eigene Alben**, z. B. „Predigten 2024“: Titel über die Suche hinzufügen, per Pfeil umsortieren,
-  entfernen. Ein Titel kann in beliebig vielen Alben stehen. Interpret, Jahr, Genre und Cover
+  entfernen. Ein Titel kann in beliebig vielen Alben stehen. Jahr und Cover
   ergeben sich aus den Titeln, lassen sich aber überschreiben.
-- **Automatische Alben korrigieren**: Titel, Interpret, Jahr und Genre ändern (und wieder auf
+- **Automatische Alben korrigieren**: Titel, Jahr, Bibelstellen und Beschreibung ändern (und wieder auf
   „automatisch“ zurücksetzen), einzelne Titel herausnehmen und zurückholen oder das ganze Album
   für Hörer ausblenden.
 - **Regeln** füllen eigene Alben automatisch, z. B. „Titel enthält Predigt“ oder „Ordner/Dateiname
-  enthält Gottesdienste/2024“. Möglich sind Titel, Interpret, Album, Genre und Ordner/Dateiname mit
+  enthält Gottesdienste/2024“. Möglich sind Titel, Album (Ordner), Inhalt, Sprecher und Ordner/Dateiname mit
   „enthält“, „enthält nicht“, „beginnt mit“ oder „ist genau“; Groß-/Kleinschreibung und Umlaute
   spielen keine Rolle. Bedingungen lassen sich in Gruppen mit UND/ODER verschachteln (bis zu 4 Ebenen),
-  z. B. „Titel enthält Predigt UND (Interpret ist Meier ODER Interpret ist Schulz)“. Mehrere Regeln
+  z. B. „Inhalt ist Predigt UND (Sprecher ist Meier ODER Sprecher ist Schulz)“. Mehrere Regeln
   eines Albums gelten mit ODER; bestehende Regeln lassen sich bearbeiten. Neue passende Titel kommen beim nächsten Scan von
   selbst dazu, neueste zuerst (nach Datum im Ordnernamen). Vor dem Speichern zeigt eine Vorschau, wie
   viele Titel die Regel trifft. Einen Titel, den man aus so einem Album entfernt, fügt die Regel nicht
@@ -158,14 +138,12 @@ Alle Eingriffe werden getrennt von den gescannten Daten gespeichert (nach Dateip
 bei jedem Scan wieder angewendet. Fehlt eine Datei eines eigenen Albums zeitweise in der Nextcloud,
 erscheint sie nach dem nächsten Scan wieder an ihrem Platz. Wird eine Datei in der Nextcloud umbenannt
 oder verschoben, erkennt der Scan sie an ihrer Datei-ID wieder: Sie behält ihren Platz in eigenen Alben,
-Favoriten, Weiterhören-Stellen und Beliebtheit. Ändert sich ein Album-Tag oder Ordnername, lebt das
+Favoriten, Weiterhören-Stellen und Beliebtheit. Ändert sich ein Ordnername, lebt das
 Album mit derselben ID weiter, wenn die meisten Titel dorthin gewandert sind; Favoriten, Korrekturen
 und herausgenommene Titel bleiben erhalten.
 
-**Prüfen** (Verwaltung → Prüfen) zeigt, wo die automatische Zuordnung vermutlich nicht passt: Ordner,
-die wegen unterschiedlicher Album-Tags in mehrere Alben zerfallen, Gottesdienste ohne Sprecher,
-Interpreten, die wie ein Datum oder Jahr aussehen oder fehlen, Interpreten in mehreren Schreibweisen
-und Musikalben ohne Bild.
+**Prüfen** (Verwaltung → Prüfen) zeigt, wo die automatische Zuordnung vermutlich nicht alles liefert:
+Gottesdienste ohne Sprecher (die Predigt nennt keinen Namen im Dateinamen) und Musikalben ohne Bild.
 
 ## Verwaltung: Zuordnung von Aufnahmen
 
@@ -188,12 +166,12 @@ lesen**, **3. Policies** für Inhalt, Predigt und Player.
 | Gottesdienst | Vorgabe für übrige Ordner mit Datum | `{datum}_{anlass}` | `{inhalt} - {titel} - {sprecher}` | `{anlass}` | `{inhalt}: {titel}` |
 
 Daraus werden „Einschulung“ mit „Predigt: Der gute Hirte“ und die Bibelstunde „Matthäus 9, 27-38“ mit
-„Teil 1“. Aus `Predigt - Der gute Hirte - Pastor Meier.mp3` wird Pastor Meier Sprecher und Interpret des
-Gottesdienstes; bei `Lied - Nun danket alle Gott - Chor.mp3` ist der Chor Interpret des Liedes, aber nicht
-Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
+„Teil 1“. Aus `Predigt - Der gute Hirte - Pastor Meier.mp3` wird Pastor Meier Sprecher des Gottesdienstes;
+bei `Lied - Nun danket alle Gott - Chor.mp3` steht der Chor beim Lied, ist aber nicht Sprecher des Gottesdienstes.
+Fehlt der Name am Ende, bleibt es beim Titel.
 
 - **Art bestimmen**: eine geordnete Liste „Wenn … dann Art …“ je Albumordner. Bedingungen auf Ordner im Pfad, Pfad und
-  die Tags der Dateien (Genre, Album, Interpret, Titel), verschachtelbar mit UND/ODER; eine Regel passt, wenn der
+  Dateiname, verschachtelbar mit UND/ODER; eine Regel passt, wenn der
   Ordner oder eine Datei darin passt. Die erste passende Regel gilt, auch „Keine Art (Musik)“ ist möglich. Regeln
   gelten standardmäßig nur für Ordner mit Datum, auf Wunsch auch für andere. Passt keine Regel, bekommen Ordner mit
   Datum die Vorgabe („Sonst, bei Ordnern mit Datum“, vorgegeben Gottesdienst, auch „keine“ möglich).
@@ -208,9 +186,9 @@ Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
   eine vorangestellte Tracknummer (`03 Lied - …`) wird erkannt.
 - **Vorlagen** für den Namen des Albums und den Titel einer Aufnahme; leere Platzhalter fallen samt Trennern weg.
 - **Policies** („Wenn … dann …“) legen fest, welchen Inhalt ein Titel hat, was als Predigt gilt und welcher Player läuft. Bedingungen auf Art,
-  Inhalt, Titel, Interpret, Album, Genre, Ordner, Pfad und Dauer (Minuten) lassen sich mit UND/ODER verschachteln.
-  Wirkungen: **gilt als Predigt** (liefert Sprecher `{sprecher}` und Bibelstelle `{bibelstelle}`, sonst aus ihrem
-  Titel erkannt; wer predigt, steht als Interpret am Gottesdienst) und **Player** (Predigt-Player mit Sprüngen, Tempo
+  Inhalt, Titel, Ordner, Pfad und Dauer (Minuten) lassen sich mit UND/ODER verschachteln.
+  Wirkungen: **gilt als Predigt** (liefert Sprecher `{sprecher}` und Bibelstelle `{bibelstelle}` des Gottesdienstes,
+  sonst aus ihrem Titel erkannt) und **Player** (Predigt-Player mit Sprüngen, Tempo
   und Weiterhören oder Musik-Player) sowie **Inhalt setzen** (etwa „Wenn Pfad enthält Andacht, dann Inhalt Andacht“;
   geht dem Inhalt aus dem Dateinamen vor, gilt auch für Titel ohne Art und wird zuerst entschieden, sodass Bedingungen
   auf den Inhalt in anderen Policies schon den gesetzten Inhalt sehen). Die Liste gilt von oben nach unten, je Wirkung entscheidet die erste passende
@@ -228,9 +206,8 @@ Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
   „Großer Gott“ der Titel.
 - **Inhalte**: Liste, was am Anfang eines Dateinamens stehen kann; nötig für Inhalte aus mehreren Wörtern.
   Der Inhalt jeder Aufnahme steht in der Kategorie „Inhalt“ (vorgegeben, zunächst nicht im Menü) und in der Suche.
-- **Tags**: Standardmäßig gilt der Dateiname, auch wenn die Datei Tags hat. Je Art lässt sich einstellen, dass
-  vorhandene Tags (Titel, Album, Interpret) Vorrang haben. Ohne Namen im Dateinamen und ohne Interpret-Tag steht
-  bei einer Aufnahme der Sprecher, sonst die Art („Gottesdienst“); die Art erscheint nicht in der Interpretenliste.
+- **Keine Tags**: Es gilt immer der Dateiname, auch wenn die Datei Tags hat. Gespeicherte Bedingungen auf Tags
+  (Interpret, Album, Genre) aus älteren Versionen entfallen beim Laden; der Rest des Regelwerks bleibt.
 - **Vorschau** zeigt vor dem Speichern je Art die Anzahl, die neuesten Beispiele und Dateien, die nicht zum
   Muster passen. **Speichern und anwenden** bildet die Alben sofort neu, ohne neuen Scan.
 
@@ -252,21 +229,19 @@ Unter **Verwaltung → Kategorien** legt man eigene Kategorien an, benennt sie u
 Jede Kategorie mit „Im Menü anzeigen“ steht in der Seitenleiste und unter Suche, mit einer Seite aller Werte
 (`/kategorie/<name>`) und je Wert einer Seite mit Alben und Titeln zum Abspielen.
 
-- **Tag-Felder**: Eine Kategorie nimmt ihre Werte aus einem oder mehreren Feldern der Musikdateien, z. B.
-  „Interpreten“ aus Interpret und Album-Interpret. Zur Auswahl stehen alle Felder, die in der Bibliothek vorkommen,
-  auch eigene ID3-Felder (TXXX, etwa „Kategorie“ oder „Sprecher“) und eigene Vorbis-Kommentare in FLAC/Ogg.
-  Mehrere Werte in einem Feld („Chor; Gemeinde“) werden einzeln geführt. Zusätzlich gibt es das Feld „Dateiname“
-  (ohne Endung). „Inhalt anzeigen“ listet alle aktuell gescannten Werte eines Felds mit Anzahl Titel und Filter;
-  ein Klick auf einen Wert übernimmt ihn in die letzte Zusammenfassung.
-- **Werte zusammenfassen**: Mehrere Tag-Werte erscheinen unter einem Namen, z. B. „Musik“ aus Musik, Lied.
+- **Felder**: Eine Kategorie nimmt ihre Werte aus einem oder mehreren Feldern, die die Zuordnung aus Ordner- und
+  Dateinamen liest: **Art** (Gottesdienst, Bibelstunde …), **Inhalt** (Lied, Predigt …), **Sprecher** (wer predigt),
+  **Anlass** (Zusatz im Ordnernamen, z. B. „Einschulung“) und **Jahr** (aus dem Datum). Tags in den Dateien zählen
+  nicht. „Inhalt anzeigen“ listet alle aktuellen Werte eines Felds mit Anzahl Titel und Filter; ein Klick auf einen
+  Wert übernimmt ihn in die letzte Zusammenfassung.
+- **Werte zusammenfassen**: Mehrere Werte erscheinen unter einem Namen, z. B. „Musik“ aus Lied, Chor.
   Groß-/Kleinschreibung und Akzente spielen dabei keine Rolle. Wahlweise zeigt die Kategorie nur die
   zusammengefassten Werte.
 - **Vorschau**: Beim Einrichten zeigt die Verwaltung sofort, welche Werte mit wie vielen Titeln entstehen.
 
-Vorgegeben sind „Interpreten“ (im Menü), „Genre“ (nicht im Menü), „Sprecher“ aus den Predigt-Feldern
-(im Menü, wenn es beim Update schon Sprecher gab) und „Inhalt“ aus der Zuordnung von Aufnahmen (nicht im Menü). Die Filter nach Genre und Jahrzehnt
-sowie der Reiter „Datum“ bleiben davon unberührt. Beim ersten Start mit dieser Version liest der Scan alle
-Dateien einmal neu, um auch die übrigen Tag-Felder zu erfassen.
+Vorgegeben sind „Sprecher“ und „Inhalt“ (beide zunächst nicht im Menü). Der Filter nach Jahrzehnt und der Reiter
+„Datum“ bleiben davon unberührt. Beim Update auf die Version ohne Tags entfallen Kategorien, die nur Tag-Felder
+lasen (etwa „Interpreten“ und „Genre“); „Sprecher“ liest dann nur noch den Namen aus dem Dateinamen.
 
 ![Kategorie in der Verwaltung](docs/screenshots/admin-categories.png)
 
@@ -333,8 +308,8 @@ kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
   angegeben werden. Nutzer brauchen keinen Nextcloud-Zugang. Den genauen Pfad zeigt die
   Nextcloud-Weboberfläche des Service-Accounts in der Brotkrumen-Navigation.
 - Der **Scan** läuft beim Start und danach im eingestellten Intervall. Er ist inkrementell:
-  Nur neue Dateien und solche mit geändertem ETag werden gelesen, und davon nur der Anfang mit den
-  Tags (256 KB, bei großen eingebetteten Covern etwas mehr). Nach dem Update auf diese Version
+  Nur neue Dateien und solche mit geändertem ETag werden gelesen, und davon nur der Anfang für Dauer und
+  eingebettetes Bild (256 KB, bei großen eingebetteten Covern etwas mehr). Nach dem Update auf diese Version
   liest der erste Scan alle Dateien einmal neu, um die Cover zu übernehmen. Gelöschte Dateien verschwinden aus der Bibliothek; Ordner, die gerade nicht lesbar
   sind, bleiben unangetastet. Ist ein ganzer Musikordner plötzlich leer oder fehlen auf einmal mehr als
   20 Titel und mehr als ein Fünftel der Bibliothek (etwa weil ein Speicher nicht eingehängt ist), entfernt
@@ -343,15 +318,14 @@ kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
   **Alben** („Abgleich mit der Nextcloud“), dort startet „Jetzt scannen“ einen Scan sofort.
   Antwortet die Nextcloud auf eine Anfrage 60 Sekunden lang nicht, wird sie abgebrochen, damit ein
   einzelner hängender Download den Scan nicht aufhält.
-- **Metadaten** kommen aus den Tags (MP3, FLAC, Ogg, Opus, …). Fehlt etwas, wird es aus dem Pfad
-  abgeleitet, z. B. `Interpret/Album (2021)/CD 2/03 - Titel.mp3`. Ordner, die nur ein Jahr oder ein Datum
-  sind, und der Ordner über einem Gottesdienst („Gottesdienste“) werden dabei nicht zum Interpreten.
-  Nach dem Update auf die Version mit Sortier-Tags und Datei-IDs liest der erste Scan alle Dateien einmal neu.
-- **Alben** werden pro Albumordner und Albumname gebildet. Disc-Ordner (`CD 1`, `Disc 2`) werden
-  zusammengefasst, Sampler mit vielen Interpreten bleiben ein Album („Verschiedene Interpreten“),
-  Sammelordner mit Titeln aus mehreren Alben werden aufgeteilt. Titel ohne eigenen Album-Tag, Zusätze
-  wie „(Remastered)“ oder „[Deluxe]“ und einzelne Abweichler in einem Ordner, in dem ein Album klar
-  überwiegt (mindestens drei Titel und mehr als die Hälfte), zählen zu diesem Album. Als Albumcover dient `cover.jpg`,
+- **Metadaten** kommen nur aus Ordner und Dateiname, z. B. `Chorlieder (2021)/CD 2/03 - Titel.mp3` ergibt Album
+  „Chorlieder“, Jahr 2021, CD 2, Nr. 3 und den Titel; Aufnahmen liest das Regelwerk (Verwaltung → Zuordnung).
+  Tags in den Dateien (Titel, Interpret, Album, Genre, Sortier-Tags) zählen nicht; aus der Datei kommen nur Dauer
+  und eingebettetes Bild. Beim Update auf diese Version rechnet die App Titel und Alben einmal aus den Pfaden neu,
+  ohne die Dateien erneut zu lesen.
+- **Alben**: ein Album je Albumordner. Disc-Ordner (`CD 1`, `Disc 2`) und Unterordner eines Gottesdienstes werden
+  zusammengefasst; ein Ordner ohne Datum, in dem die meisten Dateien ein Datum im Namen tragen, wird je Datum ein
+  Album. Als Albumcover dient `cover.jpg`,
   `folder.jpg`, `front.jpg` o. ä. im Albumordner, sonst das in die Dateien eingebettete Bild.
 - **Titelbilder**: In MP3 (ID3) und FLAC eingebettete Cover werden beim Scan gelesen und in der
   Datenbank abgelegt (gleiche Bilder nur einmal). Jeder Titel zeigt sein eigenes Bild, ohne eigenes
@@ -361,8 +335,8 @@ kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
   höchstens 640 px als WebP herunter und legt sie in der Datenbank ab; danach fragt eine
   Albenübersicht die Nextcloud nicht mehr. Ändert sich ein Bild, entsteht nach dem nächsten Scan eine
   neue Vorschau. Lässt sich ein Bild nicht verkleinern, wird das Original gezeigt.
-- **Suche und Filter**: Volltextsuche mit Präfix und ohne Rücksicht auf Umlaute/Akzente (SQLite FTS5),
-  Filter nach Interpret, Genre, Jahr und Jahrzehnt.
+- **Suche und Filter**: Volltextsuche mit Präfix und ohne Rücksicht auf Umlaute/Akzente (SQLite FTS5) über
+  Titel, Albumnamen, Inhalt und Sprecher; Filter nach Jahr und Jahrzehnt.
 - **Streaming** läuft über den Server mit Range-Unterstützung (Spulen im Browser), die
   Nextcloud-Zugangsdaten verlassen den Server nie.
 
@@ -441,18 +415,17 @@ sonst antworten sie mit 401; fehlt die Rolle, mit 403.
 
 | Methode und Pfad | Zweck |
 | --- | --- |
-| `GET /api/albums?q=&artist=&genre=&year=&decade=&dated=&sort=artist\|title\|year\|recent\|date\|popular&limit=&offset=` | Alben suchen und filtern; `dated=true` nur Gottesdienste (Datum im Ordnernamen), `dated=false` nur Musik; `recording=Bibelstunde` nur eine Art aus der Zuordnung |
+| `GET /api/albums?q=&year=&decade=&dated=&sort=title\|year\|recent\|date\|popular&limit=&offset=` | Alben suchen und filtern; `dated=true` nur Gottesdienste (Datum im Ordnernamen), `dated=false` nur Musik; `recording=Bibelstunde` nur eine Art aus der Zuordnung |
 | `GET /api/albums/:id` | Album mit Titelliste |
 | `GET /api/albums/:id/cover` | Albumcover (Bild im Ordner, sonst eingebettet) |
 | `GET /api/tracks/:id/cover` | Bild des Titels, sonst Albumcover |
-| `GET /api/tracks?q=&artist=&genre=&year=&decade=&albumId=&limit=&offset=` | Titel suchen und filtern |
+| `GET /api/tracks?q=&year=&decade=&albumId=&limit=&offset=` | Titel suchen und filtern |
 | `GET /api/categories` | Kategorien in der eingestellten Reihenfolge (`{ id, name, slug, inNav }`) |
 | `GET /api/categories/:slug/values?q=` | Werte einer Kategorie mit Anzahl Titel |
 | `GET /api/tracks/:id/stream` | Audio streamen (unterstützt `Range`) |
-| `GET /api/artists?q=` | Interpreten mit Anzahl Alben und Titel |
 | `GET /api/dates?limit=&offset=&recording=` | Alben mit Datum (Gottesdienste), neueste zuerst; wie `/api/albums?dated=true&sort=date`; `recording` filtert nach Art |
 | `GET /api/dates/folder?path=` | Album zu einem Ordnerpfad (für ältere Links auf `/datum/ordner`) samt Titeln |
-| `GET /api/facets` | Genres, Jahrzehnte und Gesamtzahlen für die Filterleiste |
+| `GET /api/facets` | Jahrzehnte, Arten von Aufnahmen und Gesamtzahlen für die Filterleiste |
 | `GET /api/scan` | Status des letzten Scans |
 | `POST /api/scan` | Scan starten (Manager, Admin) |
 | `GET /api/health` | Healthcheck |
@@ -465,9 +438,9 @@ Verwaltung (Manager und Admins):
 | Methode und Pfad | Zweck |
 | --- | --- |
 | `GET /api/admin/albums?q=&kind=auto\|manual&dated=&hidden=&noSpeaker=` | Alle Alben inkl. ausgeblendeter; `dated` Gottesdienste oder Musik, `hidden=true` nur ausgeblendete, `noSpeaker=true` Gottesdienste ohne Sprecher |
-| `POST /api/admin/albums` | Eigenes Album anlegen: `{ title, artist?, year?, genre?, trackIds?, move? }` |
+| `POST /api/admin/albums` | Eigenes Album anlegen: `{ title, year?, trackIds?, move? }` |
 | `GET /api/admin/albums/:id` | Album mit Korrekturen, herausgenommenen und fehlenden Titeln |
-| `PATCH /api/admin/albums/:id` | `{ title?, artist?, year?, genre?, hidden? }`; `null` setzt auf automatisch zurück |
+| `PATCH /api/admin/albums/:id` | `{ title?, year?, speaker?, passage?, description?, hidden?, recording? }`; `null` setzt auf automatisch zurück |
 | `DELETE /api/admin/albums/:id` | Eigenes Album löschen (die Titel bleiben) |
 | `POST /api/admin/albums/:id/tracks` | Titel anhängen: `{ trackIds, move? }`; `move` nimmt sie aus ihrem automatischen Album |
 | `PUT /api/admin/albums/:id/tracks` | Inhalt und Reihenfolge eines eigenen Albums setzen: `{ trackIds }` |
@@ -481,18 +454,15 @@ Verwaltung (Manager und Admins):
 | `DELETE /api/admin/albums/:id/rules/:ruleId` | Regel löschen |
 | `POST /api/admin/rules/preview` | `{ condition }`: wie viele und welche Titel eine Regel treffen würde |
 | `GET /api/admin/track-albums?ids=1,2` | In welchen Alben die Titel stehen |
-| `GET /api/admin/categories` | Alle Kategorien mit Tag-Feldern und zusammengefassten Werten |
+| `GET /api/admin/categories` | Alle Kategorien mit Feldern und zusammengefassten Werten |
 | `POST /api/admin/categories` | Kategorie anlegen: `{ name, fields, groups?, inNav?, groupedOnly? }` |
 | `PATCH /api/admin/categories/:id` | Umbenennen oder Zuordnung ändern, gleiche Felder, alle optional |
 | `DELETE /api/admin/categories/:id` | Kategorie löschen |
 | `PUT /api/admin/categories/order` | Reihenfolge: `{ ids }` |
 | `POST /api/admin/categories/preview` | `{ fields, groups?, groupedOnly? }`: welche Werte entstehen würden |
-| `GET /api/admin/tag-fields` | Alle Tag-Felder der Bibliothek mit Anzahl Titel und Beispielwerten |
-| `GET /api/admin/tag-fields/:tag/values?q=&limit=` | Aktueller Inhalt eines Tag-Felds, häufigste Werte zuerst |
-| `GET /api/admin/quality` | Hinweise zur Datenqualität (aufgeteilte Ordner, fehlende Sprecher und Cover, auffällige Interpreten) |
-| `GET /api/admin/artists` | Alle Namen mit Anzahl Titel und Zielnamen, Vorschläge und bestehende Zusammenführungen |
-| `POST /api/admin/artists/merge` | Namen zusammenführen bzw. umbenennen: `{ sources, target }` |
-| `POST /api/admin/artists/unmerge` | Zusammenführung eines Namens aufheben: `{ source }` |
+| `GET /api/admin/tag-fields` | Die Felder aus Ordner- und Dateinamen (art, inhalt, sprecher, anlass, jahr) mit Anzahl Titel und Beispielwerten |
+| `GET /api/admin/tag-fields/:tag/values?q=&limit=` | Aktueller Inhalt eines Felds, häufigste Werte zuerst |
+| `GET /api/admin/quality` | Hinweise zur Datenqualität (fehlende Sprecher und Cover) |
 | `GET /api/admin/structure` | Regelwerk für Aufnahmen, Vorgabe und Platzhalter |
 | `PUT /api/admin/structure` | Regelwerk speichern `{ kinds, contents }` und Alben neu bilden |
 | `POST /api/admin/structure/preview` | Was ein Regelwerk aus der Bibliothek machen würde, je Art mit Beispielen |
@@ -514,7 +484,7 @@ Persönliches des angemeldeten Hörers:
 | `GET /api/me/home` | „Weiterhören“ und „Zuletzt gehört“ für die Startseite |
 | `POST /api/me/plays/:id` | Wiedergabe fürs verdeckte Scoring zählen (meldet der Player nach 30 s Hören) |
 
-Eine `condition` ist entweder eine Bedingung `{ field: title|artist|album|genre|path, op: contains|not_contains|starts|equals, value }`
+Eine `condition` ist entweder eine Bedingung `{ field: title|album|content|speaker|path, op: contains|not_contains|starts|equals, value }`
 oder eine Gruppe `{ match: "all" | "any", conditions: [...] }` (UND bzw. ODER, beliebig verschachtelt, bis zu 4 Ebenen
 und 30 Bedingungen). Statt `condition` geht für eine einzelne Bedingung auch `{ field, op, value }` direkt.
 

@@ -1,15 +1,13 @@
-import { findDate, isYearOnly, yearIn } from './dateText.js';
+import { findDate, yearIn } from './dateText.js';
 
 /**
- * Leitet Metadaten aus der Ordnerstruktur ab. Das ist der Fallback für Dateien
- * ohne (vollständige) Tags und folgt den üblichen Konventionen:
- *   Interpret/Album/01 - Titel.mp3
- *   Interpret/Album (1999)/CD 2/03 Titel.flac
- *   Interpret - Album/Interpret - Titel.mp3
+ * Leitet Titel, Album, Nummer und Jahr aus Ordner und Dateiname ab (Tags in den Dateien zählen nicht):
+ *   Lieder/01 - Großer Gott.mp3            -> Album "Lieder", Nr. 1, Titel "Großer Gott"
+ *   Chorlieder (1999)/CD 2/03 Titel.flac   -> Album "Chorlieder", Jahr 1999, CD 2, Nr. 3
+ * Aufnahmen (Gottesdienste, Bibelstunden) liest danach das Regelwerk (structure.ts).
  */
 export interface PathMeta {
   title: string;
-  artist?: string;
   album?: string;
   trackNo?: number;
   discNo?: number;
@@ -112,12 +110,11 @@ export function parsePath(path: string): PathMeta {
   const dir = dirname(path);
   const albumFolder = albumFolderOf(path);
   const result: PathMeta = { title: '', albumFolder };
-  const datedFolder = folderDate(albumFolder) !== undefined;
 
   const discMatch = DISC_FOLDER.exec(basename(dir));
   if (discMatch) result.discNo = Number(discMatch[1]);
 
-  // Dateiname: [Datum] [Disc-]Track, optional "Interpret - ", Titel
+  // Dateiname: [Datum] [Disc-]Track, Titel
   let stem = clean(basename(path).replace(/\.[^.]+$/, ''));
   const dated = findDate(stem, folderYear(dir));
   if (dated) {
@@ -131,36 +128,21 @@ export function parsePath(path: string): PathMeta {
     result.trackNo = Number(numbered[2]);
     stem = numbered[3];
   }
-  // In einem Ordner mit Datum (Gottesdienst) steht vor dem Bindestrich meist der Inhalt ("Lied - …",
-  // "Predigt - …"), kein Interpret; das liest das Regelwerk der Verwaltung (structure.ts). Bei einem Datum im
-  // Dateinamen selbst ("2026-09-27 Meier - Psalm 23") steht davor, wer predigt.
-  const dash = datedFolder && !result.date ? -1 : stem.indexOf(' - ');
+  // Bei einem Datum im Dateinamen ("2026-09-27 Meier - Psalm 23") steht vor dem Bindestrich, wer predigt.
+  // Sonst liest in Ordnern mit Datum das Regelwerk den Namen (structure.ts); anderswo bleibt der ganze Name der Titel.
+  const dash = result.date ? stem.indexOf(' - ') : -1;
   if (dash > 0) {
-    result.artist = clean(stem.slice(0, dash));
+    result.speaker = clean(stem.slice(0, dash));
     stem = stem.slice(dash + 3);
-    if (result.date) result.speaker = result.artist;
   }
   result.title = clean(stem) || basename(path);
 
-  // Ordner: Interpret/Album oder "Interpret - Album"
-  const segments = albumFolder.split('/').filter(Boolean);
-  const albumSegment = segments[segments.length - 1];
-  const artistSegment = segments[segments.length - 2];
+  // Album: der Name des Albumordners, ein Jahr darin ("Chorlieder (1999)") wird zum Jahr
+  const albumSegment = basename(albumFolder);
   if (albumSegment) {
-    let albumName = albumSegment;
-    const folderDash = albumName.indexOf(' - ');
-    // "2026-09-27 - Erntedank" ist Datum und Anlass, kein Interpret
-    if (folderDash > 0 && !YEAR_PREFIX.test(albumName) && !findDate(albumName.slice(0, folderDash))) {
-      result.artist ??= clean(albumName.slice(0, folderDash));
-      albumName = albumName.slice(folderDash + 3);
-    }
-    const { name, year } = splitYear(albumName);
+    const { name, year } = splitYear(albumSegment);
     result.album = name;
     if (year) result.year = year;
-    // Der Ordner über einem Gottesdienst ("Gottesdienste", "2026") ist eine Sammlung, kein Interpret.
-    if (artistSegment && !datedFolder && !isYearOnly(artistSegment) && !findDate(artistSegment)) {
-      result.artist ??= clean(artistSegment);
-    }
   }
   return result;
 }

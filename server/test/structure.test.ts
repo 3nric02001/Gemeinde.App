@@ -98,10 +98,10 @@ describe('Aufnahmen nach dem Regelwerk', () => {
       ['Lied: Großer Gott', 'Lied'],
       ['Predigt: Der gute Hirte', 'Predigt'],
     ]);
-    // "Lied" und "Predigt" sind keine Interpreten
-    expect(tracks.map((t) => t.artist)).toEqual(['Gottesdienst', 'Gottesdienst', 'Gottesdienst']);
-    const artists = (await get('/api/artists')).items.map((a: any) => a.name);
-    expect(artists).toEqual(['Hillsong United']);
+    // Ohne Namen im Dateinamen gibt es keinen Sprecher; Interpreten gibt es nicht
+    expect(tracks.map((t) => t.speaker)).toEqual([null, null, null]);
+    expect(tracks[0]).not.toHaveProperty('artist');
+    expect((await inject({ method: 'GET', url: '/api/artists' })).statusCode).toBe(404);
   });
 
   it('nimmt die Bibelstelle aus dem Titel der Predigt', async () => {
@@ -177,22 +177,21 @@ describe('Regelwerk in der Verwaltung', () => {
     structure.kinds[1]!.filePattern = '{inhalt} - {sprecher} - {titel}';
     await call('PUT', '/api/admin/structure', structure);
     const service = (await dated()).find((a) => a.date === '2026-09-13');
-    expect(service).toMatchObject({ speaker: 'Meier', artist: 'Meier', passage: 'Psalm 23' });
+    expect(service).toMatchObject({ speaker: 'Meier', passage: 'Psalm 23' });
     expect((await get('/api/categories/sprecher/values')).items.map((v: any) => v.value)).toEqual(['Meier']);
   });
 
-  it('liest standardmäßig Inhalt - Titel - Sprecher, auch wenn die Datei Tags hat', async () => {
+  it('liest standardmäßig Inhalt - Titel - Sprecher, egal was in den Tags steht', async () => {
     const folder = 'Audio Aufnahmen/2026/2026_09_20_Erntedank';
     cloud.put(`${folder}/Predigt - Dankbarkeit - Pastor Meier.mp3`, mp3({ title: 'Aufnahme 3', artist: 'Mischpult' }, 80));
     cloud.put(`${folder}/Lied - Nun danket alle Gott - Chor.mp3`, mp3({ title: 'Aufnahme 1', artist: 'Mischpult' }, 20));
     cloud.put(`${folder}/Begrüßung.mp3`, mp3({ title: 'Aufnahme 0', artist: 'Mischpult' }, 10));
     await ctx.scanner.scan();
     const service = (await dated()).find((a) => a.date === '2026-09-20');
-    expect(service).toMatchObject({ title: 'Erntedank', speaker: 'Pastor Meier', artist: 'Pastor Meier' });
-    // Der Chor ist Interpret seines Liedes, aber nicht Sprecher des Gottesdienstes; ohne Namen im
-    // Dateinamen bleibt der Interpret aus dem Tag.
-    expect((await albumTracks(service.id)).map((t) => [t.title, t.artist])).toEqual([
-      ['Begrüßung', 'Mischpult'],
+    expect(service).toMatchObject({ title: 'Erntedank', speaker: 'Pastor Meier' });
+    // Der Chor steht beim Lied, ist aber nicht Sprecher des Gottesdienstes; ohne Namen im Dateinamen steht keiner.
+    expect((await albumTracks(service.id)).map((t) => [t.title, t.speaker])).toEqual([
+      ['Begrüßung', null],
       ['Lied: Nun danket alle Gott', 'Chor'],
       ['Predigt: Dankbarkeit', 'Pastor Meier'],
     ]);
@@ -230,14 +229,14 @@ describe('Uneinheitliche Dateinamen', () => {
   it('trennt nur an " - ", kennt Inhalte ohne Titel und liest "Text_" als Bibelstelle', async () => {
     const album = await service();
     // Alle Bibelstellen des Gottesdienstes, die der Predigt zuerst
-    expect(album).toMatchObject({ speaker: 'Jakob Rauschenberger', passage: 'Matthäus 7,7-14; Richter 7,1-4', artist: 'Jakob Rauschenberger' });
-    expect((await albumTracks(album.id)).map((t) => [t.title, t.artist, t.content])).toEqual([
+    expect(album).toMatchObject({ speaker: 'Jakob Rauschenberger', passage: 'Matthäus 7,7-14; Richter 7,1-4' });
+    expect((await albumTracks(album.id)).map((t) => [t.title, t.speaker, t.content])).toEqual([
       ['Lied: Einst scheint Ewiges Licht', 'Gemeindechor', 'Lied'],
       ['Begrüßung', 'Jakob Rauschenberger', 'Begrüßung'],
       ['Einleitung: Richter 7,1-4', 'Jonathan Dürksen', 'Einleitung'],
       ['Beitrag: Es tut mir heute noch weh', 'Irene Krahn& Fam. Dückmann', 'Beitrag'],
       ['Predigt: Bergpredigt (Matthäus 7,7-14)', 'Jakob Rauschenberger', 'Predigt'],
-      ['Schlusslied: Chor', 'Jakob Rauschenberger', 'Schlusslied'],
+      ['Schlusslied: Chor', null, 'Schlusslied'],
     ]);
   });
 

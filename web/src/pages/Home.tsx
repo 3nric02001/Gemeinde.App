@@ -12,9 +12,6 @@ import { useMe } from '../me';
 import { Empty } from './common';
 import type { DatedAlbum } from './Dates';
 
-/** Genres, die für Gottesdienste stehen; die Genre-Reihe auf Start zeigt Musik */
-const SERVICE_GENRE = /gottesdienst|predigt/i;
-
 function greeting(): string {
   const hour = new Date().getHours();
   if (hour < 11) return 'Guten Morgen';
@@ -36,11 +33,6 @@ export function Home() {
   // Gottesdienste und Musik getrennt, damit dieselben Karten nicht zweimal untereinander stehen
   const recent = useApi<Page<Album>>('/api/albums?dated=false&sort=recent&limit=12');
   const facets = useApi<Facets>('/api/facets');
-  const topGenre = facets.data?.genres.find((genre) => !SERVICE_GENRE.test(genre.value))?.value;
-  const genreAlbums = useApi<Page<Album>>(
-    // Vorschläge aus dem häufigsten Musik-Genre: oft Gehörtes zuerst
-    topGenre ? `/api/albums${query({ genre: topGenre, dated: 'false', limit: 12, sort: 'popular' })}` : undefined,
-  );
   const name = firstName(user?.name, user?.kind);
   const title = name ? `${greeting()}, ${name}` : greeting();
 
@@ -88,25 +80,7 @@ export function Home() {
         />
       ))}
       <Shelf title="Neue Musik" href="/alben?sort=recent" albums={recent.data?.items ?? []} />
-      {topGenre && (
-        <Shelf title={topGenre} href={`/alben${query({ genre: topGenre, sort: 'year' })}`} albums={genreAlbums.data?.items ?? []} />
-      )}
       <Shelf title="Deine Favoriten" href="/favoriten" albums={me.favorites?.albums.slice(0, 12) ?? []} />
-
-      {facets.data && facets.data.genres.length > 0 && (
-        <section class="shelf">
-          <div class="section-head">
-            <h2>Stöbern nach Genre</h2>
-          </div>
-          <div class="tiles">
-            {facets.data.genres.slice(0, 6).map((genre) => (
-              <a key={genre.value} class="tile" href={`/alben${query({ genre: genre.value, sort: 'year' })}`}>
-                {genre.value}
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
 
       {facets.data && facets.data.decades.length > 1 && (
         <section class="shelf">

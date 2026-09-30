@@ -1,4 +1,4 @@
-/** Bibelstellen und Beschreibung eines Gottesdienstes (aus Tags, Dateinamen oder der Verwaltung) */
+/** Bibelstellen und Beschreibung eines Gottesdienstes (aus Dateinamen oder der Verwaltung) */
 export function SermonInfo({ passage, description }: { passage?: string | null; description?: string | null }) {
   // Mehrere Bibelstellen stehen durch ";" getrennt in einem Feld.
   const passages = (passage ?? '').split(';').map((p) => p.trim()).filter(Boolean);

@@ -3,7 +3,7 @@ import { categoryUrl, type CategoryInfo, type CategoryValue } from '../api';
 import { Icon } from '../components/Icon';
 import { hashHue, initials, plural } from '../format';
 import { useApi } from '../hooks';
-import { Collection } from './Artist';
+import { Collection } from './Collection';
 import { Empty, ErrorNote, Loading } from './common';
 
 interface ValuesResponse {
@@ -14,7 +14,7 @@ interface ValuesResponse {
 /** So viele Einträge auf einmal; der Rest über das Suchfeld */
 const SHOWN = 300;
 
-/** Alle Werte einer Kategorie, z. B. alle Interpreten */
+/** Alle Werte einer Kategorie, z. B. alle Sprecher */
 export function Category({ slug }: { slug: string }) {
   const { data, error } = useApi<ValuesResponse>(`/api/categories/${encodeURIComponent(slug)}/values`);
   const [filter, setFilter] = useState('');

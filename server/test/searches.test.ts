@@ -4,7 +4,6 @@ import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
-import { preferTags } from './helpers/structure.js';
 import { sessionCookie } from './helpers/session.js';
 import { recordPlay } from '../src/library/popularity.js';
 import { MIN_SEARCHERS, RETENTION_MS, recordSearch } from '../src/library/searches.js';
@@ -29,19 +28,20 @@ function addListener(name: string): number {
   return id;
 }
 
-const trackId = (title: string) => (ctx.db.prepare('SELECT id FROM tracks WHERE title = ?').get(title) as { id: number }).id;
+const trackId = (title: string) =>
+  (ctx.db.prepare('SELECT id FROM tracks WHERE coalesce(display_title, title) = ?').get(title) as { id: number }).id;
 
 beforeEach(async () => {
   cloud = new FakeNextcloud('/Musik');
   await cloud.start();
-  const service = (folder: string, title: string, custom: Record<string, string> = {}) =>
-    cloud.put(`Gottesdienste/2026/${folder}/01 ${title}.mp3`, mp3({ title, artist: 'MBG', genre: 'Gottesdienst', custom }));
+  const service = (folder: string, file: string, custom: Record<string, string> = {}) =>
+    cloud.put(`Gottesdienste/2026/${folder}/01 ${file}.mp3`, mp3({ title: 'Tag', artist: 'MBG', custom }));
   service('2026-08-30 Jugendgottesdienst', 'Input');
-  service('2026-09-20', 'Predigt Psalm 23', { Sprecher: 'Pastor Meier', Bibelstelle: 'Psalm 23' });
-  // Datum im deutschen Format und ohne Jahr in den Tags: sortiert trotzdem richtig
+  service('2026-09-20', 'Predigt - Psalm 23 - Pastor Meier');
+  // Datum im deutschen Format: sortiert trotzdem richtig
   service('13.09.2026 Taufgottesdienst', 'Taufe');
-  service('2026-09-27 Erntedank', 'Predigt Dankbarkeit', { Sprecher: 'Anna Schulz' });
-  cloud.put('Hillsong/Let There Be Light/01 Behold.mp3', mp3({ title: 'Behold', artist: 'Hillsong', album: 'Let There Be Light', year: 2016, genre: 'Worship' }));
+  service('2026-09-27 Erntedank', 'Predigt - Dankbarkeit - Anna Schulz');
+  cloud.put('Hillsong/Let There Be Light/01 Behold.mp3', mp3({}));
   const config = loadConfig({
     NEXTCLOUD_URL: cloud.url,
     NEXTCLOUD_USER: USER,
@@ -50,7 +50,6 @@ beforeEach(async () => {
     DATABASE_PATH: ':memory:',
   });
   ctx = await buildApp(config, { logger: false });
-  preferTags(ctx.db);
   cookie = sessionCookie(ctx.db);
   await ctx.scanner.scan();
 });
@@ -90,10 +89,10 @@ describe('Vorschläge auf der Suchseite', () => {
 
   it('ordnet nach Zahl der Personen und verrät nicht, wer gesucht hat', async () => {
     const people = listeners(MIN_SEARCHERS + 1);
-    for (const person of people) await search('Hillsong', person);
+    for (const person of people) await search('Behold', person);
     for (const person of people.slice(0, MIN_SEARCHERS)) await search('Psalm 23', person);
     const body = await get('/api/search/suggestions');
-    expect(body.searches).toEqual(['Hillsong', 'Psalm 23']);
+    expect(body.searches).toEqual(['Behold', 'Psalm 23']);
     expect(JSON.stringify(body)).not.toMatch(/h0|user/);
   });
 

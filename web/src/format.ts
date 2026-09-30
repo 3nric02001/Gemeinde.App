@@ -124,8 +124,8 @@ export function albumLabel(album: string | null, date: string | null | undefined
   return rest ? `${rest}, ${formatCompactDate(date)}` : formatCompactDate(date);
 }
 
-/** Zeile unter einem Albumtitel: bei Gottesdiensten das Datum, sonst Interpret · Jahr */
-export function albumSubtitle(album: { artist: string; year: number | null; date?: string | null }): string {
+/** Zeile unter einem Albumtitel: bei Gottesdiensten das Datum, sonst Jahr und Anzahl Titel */
+export function albumSubtitle(album: { year: number | null; trackCount?: number; date?: string | null }): string {
   if (album.date) return serviceLine(album.date);
-  return [album.artist, album.year].filter(Boolean).join(' · ');
+  return [album.year, album.trackCount !== undefined ? plural(album.trackCount, 'Titel', 'Titel') : undefined].filter(Boolean).join(' · ');
 }

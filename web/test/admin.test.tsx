@@ -9,7 +9,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 const albums = {
-  items: [{ id: 5, title: 'Predigten', artist: 'Pastor Meier', trackCount: 2, kind: 'manual', hidden: false, hasCover: false }],
+  items: [{ id: 5, title: 'Predigten', trackCount: 2, kind: 'manual', hidden: false, hasCover: false }],
   total: 1,
   limit: 100,
   offset: 0,

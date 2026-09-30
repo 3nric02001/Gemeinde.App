@@ -38,7 +38,7 @@ describe('Formatierung', () => {
 
   it('zeigt unter dem Anlass nur das Datum, ohne Sprecher', () => {
     const album = {
-      id: 1, artist: '', year: 2026, genre: null, date: '2026-09-27', trackCount: 3, duration: 0, hasCover: false,
+      id: 1, year: 2026, date: '2026-09-27', trackCount: 3, duration: 0, hasCover: false,
       speaker: null, passage: null, description: null,
     };
     expect(folderSubtitle({ ...album, title: '2026-09-27 Erntedank' })).toBe('So., 27.09.2026');
@@ -54,10 +54,11 @@ describe('Formatierung', () => {
     expect(albumTitle('Adventskonzert', null)).toBe('Adventskonzert');
     expect(albumLabel('2026-09-27 Erntedank', '2026-09-27')).toBe('Erntedank, So., 27.09.2026');
     expect(albumLabel('2026-09-20', '2026-09-20')).toBe('So., 20.09.2026');
-    expect(albumSubtitle({ artist: 'MBG', year: 2026, date: '2026-09-27' })).toBe('So., 27.09.2026');
+    expect(albumSubtitle({ year: 2026, date: '2026-09-27' })).toBe('So., 27.09.2026');
     // Kein Sprecher am Album: ein Gottesdienst hat oft mehrere
-    expect(albumSubtitle({ artist: 'MBG', year: 2026, date: '2026-09-20', speaker: 'Pastor Meier' } as never)).toBe('So., 20.09.2026');
-    expect(albumSubtitle({ artist: 'Outbreakband', year: 2018 })).toBe('Outbreakband · 2018');
+    expect(albumSubtitle({ year: 2026, date: '2026-09-20', speaker: 'Pastor Meier' } as never)).toBe('So., 20.09.2026');
+    expect(albumSubtitle({ year: 2018, trackCount: 12 })).toBe('2018 · 12 Titel');
+    expect(albumSubtitle({ year: null })).toBe('');
   });
 
   it('bildet Initialen für Platzhalter', () => {

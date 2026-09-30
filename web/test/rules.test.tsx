@@ -16,11 +16,11 @@ describe('Regeln', () => {
       match: 'all',
       conditions: [
         { field: 'title', op: 'contains', value: 'Predigt' },
-        { match: 'any', conditions: [{ field: 'artist', op: 'equals', value: 'A' }, { field: 'path', op: 'not_contains', value: 'Jugend' }] },
+        { match: 'any', conditions: [{ field: 'speaker', op: 'equals', value: 'A' }, { field: 'path', op: 'not_contains', value: 'Jugend' }] },
       ],
     };
     expect(describeRule(condition)).toBe(
-      'Titel enthält „Predigt“ und (Interpret ist genau „A“ oder Ordner/Dateiname enthält nicht „Jugend“)',
+      'Titel enthält „Predigt“ und (Sprecher ist genau „A“ oder Ordner/Dateiname enthält nicht „Jugend“)',
     );
   });
 
@@ -31,7 +31,7 @@ describe('Regeln', () => {
     fireEvent.input(screen.getAllByLabelText('Suchbegriff')[0]!, { target: { value: 'Predigt' } });
     fireEvent.click(screen.getByText('+ Gruppe'));
     const inputs = screen.getAllByLabelText('Suchbegriff');
-    fireEvent.change(screen.getAllByLabelText('Feld')[1]!, { target: { value: 'artist' } });
+    fireEvent.change(screen.getAllByLabelText('Feld')[1]!, { target: { value: 'speaker' } });
     fireEvent.input(inputs[1]!, { target: { value: 'Meier' } });
     // Der Knopf der Untergruppe steht im DOM vor dem der obersten Ebene
     fireEvent.click(screen.getAllByText('+ Bedingung')[0]!);
@@ -46,7 +46,7 @@ describe('Regeln', () => {
             {
               match: 'any',
               conditions: [
-                { field: 'artist', op: 'contains', value: 'Meier' },
+                { field: 'speaker', op: 'contains', value: 'Meier' },
                 { field: 'title', op: 'contains', value: 'Schulz' },
               ],
             },

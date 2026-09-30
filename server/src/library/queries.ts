@@ -1,10 +1,8 @@
-import { getMeta, type DB } from '../db.js';
+import type { DB } from '../db.js';
 import type { CategoryFilter } from './categories.js';
-import { SPEAKER_TAGS } from './metadata.js';
 import { albumTierSql, decayFactor, trackTierSql } from './popularity.js';
-import { aliasOf, aliasVersion } from './artists.js';
 import { getStructure } from './structure.js';
-import { artistKey, artistNames, foldValue, sortKey } from './text.js';
+import { sortKey } from './text.js';
 
 export interface Page<T> {
   items: T[];
@@ -15,8 +13,6 @@ export interface Page<T> {
 
 export interface TrackFilter {
   q?: string;
-  artist?: string;
-  genre?: string;
   year?: number;
   decade?: number;
   albumId?: number;
@@ -26,13 +22,11 @@ export interface TrackFilter {
   offset: number;
 }
 
-export const ALBUM_SORTS = ['title', 'artist', 'year', 'recent', 'date', 'popular'] as const;
+export const ALBUM_SORTS = ['title', 'year', 'recent', 'date', 'popular'] as const;
 export type AlbumSort = (typeof ALBUM_SORTS)[number];
 
 export interface AlbumFilter {
   q?: string;
-  artist?: string;
-  genre?: string;
   year?: number;
   decade?: number;
   sort: AlbumSort;
@@ -55,21 +49,18 @@ export interface AlbumFilter {
 }
 
 const TRACK_COLUMNS = `
-  t.id, coalesce((SELECT title FROM track_overrides WHERE path = t.path), t.display_title, t.title) AS title, coalesce(t.display_artist, t.artist) AS artist, artist_alias(t.album_artist) AS albumArtist,
+  t.id, coalesce((SELECT title FROM track_overrides WHERE path = t.path), t.display_title, t.title) AS title,
   t.content, t.playback AS player,
   coalesce((SELECT title FROM albums WHERE id = t.album_id), t.album) AS album, t.album_id AS albumId,
-  t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType,
+  t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.duration, t.mime AS mimeType,
   (SELECT date FROM albums WHERE id = t.album_id) AS albumDate,
-  artist_alias(coalesce(
-    (SELECT speaker FROM track_overrides WHERE path = t.path),
-    (SELECT value FROM track_tags WHERE track_id = t.id AND tag IN (${SPEAKER_TAGS.map((tag) => `'${tag}'`).join(', ')}) LIMIT 1)
-  )) AS speaker,
+  coalesce((SELECT speaker FROM track_overrides WHERE path = t.path), t.speaker) AS speaker,
   (t.cover_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
   )) AS hasCover
 `;
 const ALBUM_COLUMNS = `
-  a.id, a.title, a.artist, a.year, a.genre, a.track_count AS trackCount, a.duration,
+  a.id, a.title, a.year, a.track_count AS trackCount, a.duration,
   (a.cover_path IS NOT NULL OR a.cover_id IS NOT NULL) AS hasCover, a.kind,
   a.date, a.speaker, a.passage, a.description, a.recording
 `;
@@ -92,11 +83,7 @@ interface Where {
   params: Record<string, unknown>;
 }
 
-function commonFilters(where: Where, alias: string, filter: { artist?: string; genre?: string; year?: number; decade?: number }) {
-  if (filter.genre) {
-    where.clauses.push(`${alias}.genre = @genre COLLATE NOCASE`);
-    where.params.genre = filter.genre;
-  }
+function commonFilters(where: Where, alias: string, filter: { year?: number; decade?: number }) {
   if (filter.year) {
     where.clauses.push(`${alias}.year = @year`);
     where.params.year = filter.year;
@@ -133,11 +120,6 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
     where.clauses.push('t.id IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH @fts)');
     where.params.fts = fts;
   }
-  if (filter.artist) {
-    // Auch andere Schreibweisen und Gastauftritte ("Anna feat. Ben" gehört auch zu Ben)
-    where.clauses.push('(has_artist(coalesce(t.display_artist, t.artist), @artistKey) OR has_artist(artist_alias(t.album_artist), @artistKey))');
-    where.params.artistKey = artistKey(filter.artist);
-  }
   if (filter.albumId) {
     where.clauses.push('t.id IN (SELECT track_id FROM album_tracks WHERE album_id = @albumId)');
     where.params.albumId = filter.albumId;
@@ -157,7 +139,7 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
   const items = db
     .prepare(
       `SELECT ${TRACK_COLUMNS} FROM tracks t ${sql(where)}
-       ORDER BY ${fts ? `${relevance}${trackTierSql('t')} DESC, albumDate DESC NULLS LAST, ` : ''}t.sort_artist,
+       ORDER BY ${fts ? `${relevance}${trackTierSql('t')} DESC, ` : ''}albumDate DESC NULLS LAST,
          coalesce((SELECT sort_title FROM albums WHERE id = t.album_id), ''), t.disc_no, t.track_no, t.sort_title
        LIMIT @limit OFFSET @offset`,
     )
@@ -181,38 +163,29 @@ function relevanceParams(q: string, fts: string) {
 // Sortiert wird über die Schlüssel aus text.ts sortKey (Umlaute bei ihrem Grundbuchstaben, Zahlen nach Wert).
 const ALBUM_SORT: Record<AlbumSort, string> = {
   title: 'a.sort_title, a.id',
-  artist: 'a.sort_artist, a.year, a.sort_title',
   // Innerhalb eines Jahres Gottesdienste nach Datum, neueste zuerst
   year: 'a.year IS NULL, a.year DESC, a.date DESC NULLS LAST, a.sort_title',
   recent: 'a.created_at DESC, a.date DESC NULLS LAST, a.id DESC',
-  // Alben mit Datum im Ordnernamen zuerst (neueste oben), danach der Rest nach Interpret
-  date: 'a.date DESC NULLS LAST, a.sort_artist, a.year, a.sort_title',
+  // Alben mit Datum im Ordnernamen zuerst (neueste oben), danach der Rest nach Name
+  date: 'a.date DESC NULLS LAST, a.sort_title, a.id',
   // Für Vorschläge: oft Gehörtes zuerst, sonst wie nach Datum
   popular: `${albumTierSql('a')} DESC, a.date DESC NULLS LAST, a.year DESC, a.sort_title`,
 };
 
 /** Sortierungen, bei denen eine Suche oft Gehörtes nach vorne holt; die übrigen wählt man bewusst. */
-const SEARCH_BOOSTED: ReadonlySet<AlbumSort> = new Set(['artist', 'date']);
+const SEARCH_BOOSTED: ReadonlySet<AlbumSort> = new Set(['title', 'date']);
 
 export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, unknown>> {
   const where: Where = { clauses: [], params: {} };
   const fts = filter.q ? toFtsQuery(filter.q) : undefined;
   if (filter.q && !fts) return { items: [], total: 0, limit: filter.limit, offset: filter.offset };
   if (fts) {
-    // Album trifft, wenn sein eigener Titel oder Titel, Interpret, Album oder Genre eines seiner Titel passt.
+    // Album trifft, wenn sein Titel oder Sprecher oder einer seiner Titel passt.
     where.clauses.push(
       `(a.id IN (SELECT rowid FROM albums_fts WHERE albums_fts MATCH @fts)
         OR a.id IN (SELECT album_id FROM album_tracks WHERE track_id IN (SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH @fts)))`,
     );
     where.params.fts = fts;
-  }
-  if (filter.artist) {
-    where.clauses.push(
-      `(has_artist(a.artist, @artistKey) OR a.id IN (
-        SELECT at.album_id FROM album_tracks at JOIN tracks t ON t.id = at.track_id
-        WHERE has_artist(coalesce(t.display_artist, t.artist), @artistKey)))`,
-    );
-    where.params.artistKey = artistKey(filter.artist);
   }
   if (!filter.includeHidden) where.clauses.push('a.hidden = 0');
   if (filter.ids) {
@@ -238,7 +211,7 @@ export function searchAlbums(db: DB, filter: AlbumFilter): Page<Record<string, u
   const { total } = db.prepare(`SELECT count(*) AS total FROM albums a ${sql(where)}`).get(where.params) as {
     total: number;
   };
-  // Bei einer Suche: Treffer im Albumtitel (genau, dann am Anfang), dann im Interpreten, dann nur in
+  // Bei einer Suche: Treffer im Albumtitel (genau, dann am Anfang), dann im Sprecher, dann nur in
   // enthaltenen Titeln; innerhalb davon oft Gehörtes. Bewusst gewählte Sortierungen bleiben unberührt.
   const boosted = fts !== undefined && SEARCH_BOOSTED.has(filter.sort);
   const boost = boosted
@@ -313,7 +286,7 @@ export function getAlbumCover(db: DB, id: number): CoverSource | undefined {
   return undefined;
 }
 
-/** Titelcover: eingebettetes Bild des Titels, sonst das Albumcover (wichtig für Sampler). */
+/** Titelcover: eingebettetes Bild des Titels, sonst das Albumcover. */
 export function getTrackCover(db: DB, id: number): CoverSource | undefined {
   const row = db.prepare('SELECT cover_id, album_id FROM tracks WHERE id = ?').get(id) as
     | { cover_id: number | null; album_id: number | null }
@@ -336,76 +309,8 @@ export function getCoverImage(db: DB, id: number): { hash: string; mime: string;
     | undefined;
 }
 
-interface ArtistEntry {
-  key: string;
-  name: string;
-  albumCount: number;
-  trackCount: number;
-}
-
-const artistCache = new WeakMap<DB, { version: string; artists: ArtistEntry[] }>();
-
-/**
- * Alle Interpreten aus Titel- und Album-Interpret, zusammengefasst über Schreibweisen ("Hillsong UNITED",
- * "Hillsong United") und Gastauftritte ("Anna feat. Ben" zählt bei Anna und bei Ben). Angezeigt wird
- * die häufigste Schreibweise. Wird je Bibliotheksstand einmal berechnet.
- */
-function allArtists(db: DB): ArtistEntry[] {
-  const { n, albums } = db.prepare('SELECT count(*) AS n, total(album_id) AS albums FROM tracks').get() as { n: number; albums: number };
-  // Das Regelwerk ändert Anzeige-Interpreten ohne Scan; es gehört deshalb zum Stand.
-  const version = `${getMeta(db, 'lastScanAt') ?? ''}:${n}:${albums}:${getMeta(db, 'structure') ?? ''}:${aliasVersion(db)}`;
-  const cached = artistCache.get(db);
-  if (cached?.version === version) return cached.artists;
-
-  const rows = db.prepare('SELECT id, coalesce(display_artist, artist) AS artist, album_artist, album_id FROM tracks').all() as Array<{
-    id: number;
-    artist: string;
-    album_artist: string | null;
-    album_id: number | null;
-  }>;
-  const byKey = new Map<string, { spellings: Map<string, number>; albums: Set<number>; tracks: Set<number> }>();
-  for (const row of rows) {
-    const names = new Set([...artistNames(row.artist), ...(row.album_artist ? artistNames(aliasOf(db, row.album_artist)) : [])]);
-    for (const name of names) {
-      const key = artistKey(name);
-      if (!key) continue;
-      let entry = byKey.get(key);
-      if (!entry) byKey.set(key, (entry = { spellings: new Map(), albums: new Set(), tracks: new Set() }));
-      entry.spellings.set(name, (entry.spellings.get(name) ?? 0) + 1);
-      if (row.album_id !== null) entry.albums.add(row.album_id);
-      entry.tracks.add(row.id);
-    }
-  }
-  // Der Name einer Art ("Gottesdienst") steht bei Aufnahmen ohne Sprecher als Interpret, ist aber keiner.
-  const kinds = new Set(getStructure(db).kinds.map((kind) => artistKey(kind.name)));
-  const artists = [...byKey]
-    .filter(([key]) => !kinds.has(key))
-    .map(([key, entry]) => ({
-      key,
-      name: [...entry.spellings].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]![0],
-      albumCount: entry.albums.size,
-      trackCount: entry.tracks.size,
-    }))
-    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-  artistCache.set(db, { version, artists });
-  return artists;
-}
-
-export function listArtists(db: DB, q: string | undefined, limit: number, offset: number) {
-  const needle = q ? foldValue(q) : '';
-  const matches = needle ? allArtists(db).filter((artist) => foldValue(artist.name).includes(needle)) : allArtists(db);
-  const items = matches.slice(offset, offset + limit).map(({ name, albumCount, trackCount }) => ({ name, albumCount, trackCount }));
-  return { items, total: matches.length, limit, offset };
-}
-
 /** Werte für die Filterleiste im Player, jeweils mit Anzahl Titel. */
 export function getFacets(db: DB) {
-  const genres = db
-    .prepare(
-      `SELECT genre AS value, count(*) AS count FROM tracks WHERE genre IS NOT NULL
-       GROUP BY genre COLLATE NOCASE ORDER BY count DESC, genre COLLATE NOCASE LIMIT 100`,
-    )
-    .all();
   const decades = db
     .prepare(
       `SELECT (year / 10) * 10 AS value, count(*) AS count FROM tracks WHERE year IS NOT NULL
@@ -428,5 +333,5 @@ export function getFacets(db: DB) {
   const recordings = getStructure(db)
     .kinds.map((kind) => ({ name: kind.name, plural: kind.plural, count: counts.get(kind.name) ?? 0 }))
     .filter((kind) => kind.count > 0);
-  return { genres, decades, totals, recordings };
+  return { decades, totals, recordings };
 }

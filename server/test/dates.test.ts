@@ -51,8 +51,8 @@ beforeEach(async () => {
   cloud.put('Gottesdienste/2026/2026-09-27 Erntedank/cover.jpg', Buffer.from('BILD'));
   cloud.put('Gottesdienste/2026/20.09.2026/Predigt.mp3', mp3({ title: 'Predigt 20.9.', artist: 'Pastor' }));
   // Doppelte Aufnahme in Disc-Ordnern zählt als ein Datum
-  cloud.put('Konzerte/2025-12-14 Advent/CD 1/01.mp3', mp3({ title: 'Teil 1', artist: 'Chor', track: 1, disc: 1 }));
-  cloud.put('Konzerte/2025-12-14 Advent/CD 2/01.mp3', mp3({ title: 'Teil 2', artist: 'Chor', track: 1, disc: 2 }));
+  cloud.put('Konzerte/2025-12-14 Advent/CD 1/01 Chor - Erster Teil.mp3', mp3({}));
+  cloud.put('Konzerte/2025-12-14 Advent/CD 2/01 Chor - Zweiter Teil.mp3', mp3({}));
   // Ohne Datum: taucht nicht auf
   cloud.put('Hillsong/Let There Be Light/01.mp3', mp3({ title: 'Behold', artist: 'Hillsong' }));
   const config = loadConfig({
@@ -98,7 +98,7 @@ describe('Datum-Ansicht', () => {
   it('führt ältere Ordner-Links zum Album', async () => {
     const folder = await get(`/api/dates/folder?path=${encodeURIComponent('Konzerte/2025-12-14 Advent')}`);
     expect(folder.albumId).toBe(folder.id);
-    expect(folder.tracks.map((t: any) => t.title)).toEqual(['Teil 1', 'Teil 2']);
+    expect(folder.tracks.map((t: any) => t.title)).toEqual(['Chor: Erster Teil', 'Chor: Zweiter Teil']);
     const erntedank = await get(`/api/dates/folder?path=${encodeURIComponent('Gottesdienste/2026/2026-09-27 Erntedank')}`);
     expect(erntedank.tracks.map((t: any) => t.title)).toEqual(['Predigt', 'Lied']);
     const res = await inject({ method: 'GET', url: '/api/dates/folder?path=Hillsong%2FLet%20There%20Be%20Light' });
@@ -117,7 +117,6 @@ describe('Gottesdienste erkennen', () => {
     (await get('/api/albums?dated=true&sort=date&limit=50')).items.map((a: any) => ({
       title: a.title,
       date: a.date,
-      artist: a.artist,
       year: a.year,
       speaker: a.speaker,
       passage: a.passage,
@@ -152,23 +151,22 @@ describe('Gottesdienste erkennen', () => {
     await ctx.scanner.scan();
     const august = (await albums()).filter((a: any) => a.date?.startsWith('2026-08'));
     expect(august).toEqual([
-      { title: 'Nichts kann uns trennen', date: '2026-08-16', artist: 'Meier', year: 2026, speaker: 'Meier', passage: 'Römer 8', trackCount: 1 },
-      { title: 'Joh 3,16', date: '2026-08-09', artist: 'Schulz', year: 2026, speaker: 'Schulz', passage: 'Joh 3,16', trackCount: 1 },
-      { title: 'Psalm 23', date: '2026-08-02', artist: 'Meier', year: 2026, speaker: 'Meier', passage: 'Psalm 23', trackCount: 1 },
+      { title: 'Römer 8', date: '2026-08-16', year: 2026, speaker: 'Meier', passage: 'Römer 8', trackCount: 1 },
+      { title: 'Joh 3,16', date: '2026-08-09', year: 2026, speaker: 'Schulz', passage: 'Joh 3,16', trackCount: 1 },
+      { title: 'Psalm 23', date: '2026-08-02', year: 2026, speaker: 'Meier', passage: 'Psalm 23', trackCount: 1 },
     ]);
     // Der Sprecher aus dem Dateinamen ist auch eine Kategorie
     const speakers = await get('/api/categories/sprecher/values');
     expect(speakers.items.map((v: any) => v.value)).toEqual(['Meier', 'Schulz']);
   });
 
-  it('nimmt ein fehlendes Jahr aus dem Elternordner und keinen Jahresordner als Interpreten', async () => {
-    cloud.put('Predigten/2025/30.11./Predigt.mp3', mp3({ title: 'Advent' }));
+  it('nimmt ein fehlendes Jahr aus dem Elternordner', async () => {
+    cloud.put('Predigten/2025/30.11./Predigt - Advent.mp3', mp3({}));
     await ctx.scanner.scan();
     const [album] = (await albums()).filter((a: any) => a.date === '2025-11-30');
-    expect(album).toMatchObject({ title: '30.11.', year: 2025 });
-    expect(album.artist).not.toBe('2025');
+    expect(album).toMatchObject({ title: '30.11.', year: 2025, speaker: null });
     const track = (await get('/api/tracks?q=Advent')).items.find((t: any) => t.albumDate === '2025-11-30');
-    // Ohne Interpret und Sprecher steht die Art der Aufnahme
-    expect(track.artist).toBe('Gottesdienst');
+    expect(track).toMatchObject({ title: 'Predigt: Advent', speaker: null });
+    expect(track).not.toHaveProperty('artist');
   });
 });

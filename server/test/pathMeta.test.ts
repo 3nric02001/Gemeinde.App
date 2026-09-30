@@ -2,13 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { albumFolderOf, coverRank, dateOfPath, isAudioFile, parsePath } from '../src/library/pathMeta.js';
 
 describe('parsePath', () => {
-  it('liest Interpret/Album/NN - Titel', () => {
-    expect(parsePath('Queen/A Night at the Opera/11 - Bohemian Rhapsody.mp3')).toEqual({
+  it('liest Album/NN - Titel', () => {
+    expect(parsePath('Lieder/A Night at the Opera/11 - Bohemian Rhapsody.mp3')).toEqual({
       title: 'Bohemian Rhapsody',
-      artist: 'Queen',
       album: 'A Night at the Opera',
       trackNo: 11,
-      albumFolder: 'Queen/A Night at the Opera',
+      albumFolder: 'Lieder/A Night at the Opera',
     });
   });
 
@@ -16,7 +15,6 @@ describe('parsePath', () => {
     const meta = parsePath('Bach/Weihnachtsoratorium (1998)/CD 2/03 Choral.flac');
     expect(meta).toMatchObject({
       title: 'Choral',
-      artist: 'Bach',
       album: 'Weihnachtsoratorium',
       year: 1998,
       discNo: 2,
@@ -30,32 +28,20 @@ describe('parsePath', () => {
     expect(parsePath('Chor/1999 - Konzert/01 Lied.mp3')).toMatchObject({ album: 'Konzert', year: 1999 });
   });
 
-  it('erkennt "Interpret - Album" als Ordnername und Disc-Track im Dateinamen', () => {
+  it('nimmt den ganzen Ordner- und Dateinamen, ohne Interpreten abzutrennen', () => {
     expect(parsePath('Lobpreis/Hillsong - Let There Be Light/1-04 What a Beautiful Name.mp3')).toMatchObject({
-      artist: 'Hillsong',
-      album: 'Let There Be Light',
+      album: 'Hillsong - Let There Be Light',
       discNo: 1,
       trackNo: 4,
       title: 'What a Beautiful Name',
     });
-  });
-
-  it('nimmt Interpret aus dem Dateinamen vor dem Ordner', () => {
-    expect(parsePath('Sammlung/Gemischt/Anna - Lied.mp3')).toMatchObject({ artist: 'Anna', title: 'Lied' });
-  });
-
-  it('nimmt keinen Jahres-, Datums- oder Sammelordner als Interpreten', () => {
-    expect(parsePath('Predigten/2026/2026-09-27 Erntedank/01 Predigt.mp3').artist).toBeUndefined();
-    expect(parsePath('Gottesdienste/2026-09-27 Erntedank/Predigt.mp3').artist).toBeUndefined();
-    const meta = parsePath('Gottesdienste/2026-09-27 - Erntedank/Predigt.mp3');
-    expect(meta.album).toBe('2026-09-27 - Erntedank');
-    expect(meta.artist).toBeUndefined();
+    expect(parsePath('Sammlung/Gemischt/Anna - Lied.mp3')).toMatchObject({ title: 'Anna - Lied', album: 'Gemischt' });
+    expect(parsePath('Sammlung/Gemischt/Anna - Lied.mp3').speaker).toBeUndefined();
   });
 
   it('liest Datum, Sprecher und Titel aus dem Dateinamen', () => {
     expect(parsePath('Predigten 2026/2026-09-27 Meier - Psalm 23.mp3')).toMatchObject({
       date: '2026-09-27',
-      artist: 'Meier',
       speaker: 'Meier',
       title: 'Psalm 23',
       album: 'Predigten 2026',
@@ -64,8 +50,6 @@ describe('parsePath', () => {
     const plain = parsePath('Predigten/27.09.2026 Predigt.mp3');
     expect(plain).toMatchObject({ date: '2026-09-27', title: 'Predigt' });
     expect(plain.trackNo).toBeUndefined();
-    // Ohne Datum bleibt "Interpret - Titel" ohne Sprecher
-    expect(parsePath('Sammlung/Gemischt/Anna - Lied.mp3').speaker).toBeUndefined();
   });
 
   it('kommt mit Dateien direkt im Musikordner zurecht', () => {

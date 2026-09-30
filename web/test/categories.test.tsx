@@ -24,8 +24,8 @@ async function signInAsManager() {
 
 const tagFields = {
   items: [
-    { tag: 'genre', trackCount: 3, valueCount: 3, samples: ['Lied', 'Musik', 'Predigt'] },
-    { tag: 'kategorie', trackCount: 2, valueCount: 2, samples: ['Musik'] },
+    { tag: 'inhalt', label: 'Inhalt', hint: 'Lied, Predigt … vom Anfang des Dateinamens', trackCount: 3, valueCount: 3, samples: ['Lied', 'Musik', 'Predigt'] },
+    { tag: 'sprecher', label: 'Sprecher', hint: 'wer predigt, aus dem Dateinamen', trackCount: 0, valueCount: 0, samples: [] },
   ],
 };
 
@@ -47,37 +47,38 @@ describe('Kategorien in der Verwaltung', () => {
     });
     render(<Admin location={{ path: '/admin/kategorie/neu', params: new URLSearchParams() }} />);
 
-    await waitFor(() => expect(screen.getByText('Genre')).toBeTruthy());
-    expect(screen.getByText('3 Titel · z. B. Lied, Musik, Predigt')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Inhalt')).toBeTruthy());
+    expect(screen.getByText('Lied, Predigt … vom Anfang des Dateinamens · 3 Titel, z. B. Lied, Musik, Predigt')).toBeTruthy();
+    expect(screen.getByText('wer predigt, aus dem Dateinamen · noch bei keinem Titel')).toBeTruthy();
     fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Art' } });
-    fireEvent.click(screen.getByLabelText(/Genre/));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Inhalt/ }));
     fireEvent.click(screen.getByText('+ Zusammenfassung'));
     fireEvent.input(screen.getByLabelText('Anzeigen als'), { target: { value: 'Musik' } });
-    fireEvent.input(screen.getByLabelText('Tag-Werte, mit Komma getrennt'), { target: { value: 'Musik, Lied' } });
+    fireEvent.input(screen.getByLabelText('Werte, mit Komma getrennt'), { target: { value: 'Musik, Lied' } });
 
     await waitFor(() => expect(screen.getByText('Predigt')).toBeTruthy());
     const preview = calls.filter((c) => c.url === '/api/admin/categories/preview').at(-1)!;
-    expect(preview.body).toEqual({ fields: ['genre'], groups: [{ label: 'Musik', values: ['Musik', 'Lied'] }], groupedOnly: false });
+    expect(preview.body).toEqual({ fields: ['inhalt'], groups: [{ label: 'Musik', values: ['Musik', 'Lied'] }], groupedOnly: false });
 
     fireEvent.click(screen.getByText('Kategorie anlegen'));
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/admin/categories')).toBe(true));
     expect(calls.find((c) => c.method === 'POST' && c.url === '/api/admin/categories')!.body).toEqual({
       name: 'Art',
-      fields: ['genre'],
+      fields: ['inhalt'],
       groups: [{ label: 'Musik', values: ['Musik', 'Lied'] }],
       inNav: true,
       groupedOnly: false,
     });
   });
 
-  it('zeigt den Inhalt eines Tag-Felds und übernimmt Werte in eine Zusammenfassung', async () => {
+  it('zeigt den Inhalt eines Felds und übernimmt Werte in eine Zusammenfassung', async () => {
     await signInAsManager();
     const urls: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       urls.push(url);
       if (url === '/api/admin/tag-fields') return json(tagFields);
-      if (url.startsWith('/api/admin/tag-fields/genre/values')) {
+      if (url.startsWith('/api/admin/tag-fields/inhalt/values')) {
         const all = [{ value: 'Lied', trackCount: 2 }, { value: 'Musik', trackCount: 1 }, { value: 'Predigt', trackCount: 1 }];
         const q = new URL(url, 'http://x').searchParams.get('q');
         const items = q ? all.filter((v) => v.value.toLowerCase().includes(q)) : all;
@@ -95,7 +96,7 @@ describe('Kategorien in der Verwaltung', () => {
 
     fireEvent.input(screen.getByLabelText('Werte filtern'), { target: { value: 'pre' } });
     await waitFor(() => expect(screen.queryByText('Lied')).toBeNull());
-    expect(urls).toContain('/api/admin/tag-fields/genre/values?q=pre&limit=300');
+    expect(urls).toContain('/api/admin/tag-fields/inhalt/values?q=pre&limit=300');
     fireEvent.input(screen.getByLabelText('Werte filtern'), { target: { value: '' } });
     await waitFor(() => expect(screen.getByText('Lied')).toBeTruthy());
 
@@ -105,14 +106,14 @@ describe('Kategorien in der Verwaltung', () => {
     fireEvent.click(screen.getByText('Lied'));
     fireEvent.click(screen.getByText('Musik', { selector: '.value-chip span' }));
     fireEvent.click(screen.getByText('Lied'));
-    expect((screen.getByLabelText('Tag-Werte, mit Komma getrennt') as HTMLInputElement).value).toBe('Lied, Musik');
+    expect((screen.getByLabelText('Werte, mit Komma getrennt') as HTMLInputElement).value).toBe('Lied, Musik');
   });
 
   it('ändert die Reihenfolge', async () => {
     await signInAsManager();
     const categories = [
-      { id: 1, name: 'Interpreten', slug: 'interpreten', position: 0, inNav: true, groupedOnly: false, fields: ['artist', 'albumartist'], groups: [] },
-      { id: 2, name: 'Genre', slug: 'genre', position: 1, inNav: false, groupedOnly: false, fields: ['genre'], groups: [] },
+      { id: 1, name: 'Personen', slug: 'personen', position: 0, inNav: true, groupedOnly: false, fields: ['sprecher', 'anlass'], groups: [] },
+      { id: 2, name: 'Inhalt', slug: 'inhalt', position: 1, inNav: false, groupedOnly: false, fields: ['inhalt'], groups: [] },
     ];
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (init?.method === 'PUT') return json({ items: [categories[1], categories[0]] });
@@ -120,9 +121,9 @@ describe('Kategorien in der Verwaltung', () => {
       return json({ error: 'unerwartet' }, 500);
     });
     render(<Admin location={{ path: '/admin/kategorien', params: new URLSearchParams() }} />);
-    await waitFor(() => expect(screen.getByText('Interpret, Album-Interpret')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Sprecher, Anlass')).toBeTruthy());
     expect(screen.getByText('Nicht im Menü')).toBeTruthy();
-    fireEvent.click(screen.getByLabelText('Genre nach oben'));
+    fireEvent.click(screen.getByLabelText('Inhalt nach oben'));
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true));
     const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!;
     expect(JSON.parse(String(put[1]!.body))).toEqual({ ids: [2, 1] });

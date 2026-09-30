@@ -10,11 +10,10 @@ const structure: Structure = {
     {
       name: 'Bibelstunde', plural: 'Bibelstunden',
       folderPattern: '{datum}_{bibelstelle}', filePattern: '{datum}_{nr}', albumTitle: '{bibelstelle}', trackTitle: 'Teil {nr}',
-      preferTags: true,
     },
     {
       name: 'Gottesdienst', plural: 'Gottesdienste', folderPattern: '{datum}_{anlass}',
-      filePattern: '{inhalt} - {titel}', albumTitle: '{anlass}', trackTitle: '{inhalt}: {titel}', preferTags: true,
+      filePattern: '{inhalt} - {titel}', albumTitle: '{anlass}', trackTitle: '{inhalt}: {titel}',
     },
   ],
   kindRules: [
@@ -79,7 +78,7 @@ describe('Zuordnung in der Verwaltung', () => {
     expect(JSON.parse(String(put[1]!.body)).kinds[1].trackTitle).toBe('{titel}');
   });
 
-  it('legt Policies an: z. B. Konzerte mit Inhalt „Konzert“ immer im Musik-Player', async () => {
+  it('legt Policies an: z. B. Ordner „Konzert“ mit Inhalt „Konzert“ immer im Musik-Player', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (init?.method === 'PUT') return json({ structure: JSON.parse(String(init.body)) });
       if (String(input).endsWith('/preview')) return json({ kinds: [] });
@@ -89,7 +88,7 @@ describe('Zuordnung in der Verwaltung', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Policy hinzufügen' }));
     fireEvent.input(screen.getByPlaceholderText('Regel 2'), { target: { value: 'Konzerte' } });
     const fields = screen.getAllByLabelText('Feld') as HTMLSelectElement[];
-    fireEvent.change(fields[fields.length - 1]!, { target: { value: 'genre' } });
+    fireEvent.change(fields[fields.length - 1]!, { target: { value: 'folder' } });
     const values = screen.getAllByLabelText('Suchbegriff') as HTMLInputElement[];
     fireEvent.input(values[values.length - 1]!, { target: { value: 'Konzert' } });
     const selects = screen.getAllByRole('combobox') as HTMLSelectElement[];
@@ -105,7 +104,7 @@ describe('Zuordnung in der Verwaltung', () => {
     expect(JSON.parse(String(put[1]!.body)).policies[1]).toEqual({
       name: 'Konzerte',
       enabled: true,
-      when: { match: 'all', conditions: [{ field: 'genre', op: 'equals', value: 'Konzert' }] },
+      when: { match: 'all', conditions: [{ field: 'folder', op: 'equals', value: 'Konzert' }] },
       player: 'music',
       content: 'Konzert',
     });

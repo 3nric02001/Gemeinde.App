@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getMeta, type DB } from '../db.js';
-import { categoryFilter, categoryValues, getListenerCategory, listCategories } from '../library/categories.js';
+import { categoryFilter, categoryValues, getCategory, listCategories } from '../library/categories.js';
 import { datedAlbumForFolder, listDatedAlbums } from '../library/dates.js';
 import type { LibraryScanner } from '../library/scanner.js';
 import type { CoverThumbnails } from '../library/thumbnails.js';
@@ -16,7 +16,6 @@ import {
   getFacets,
   getTrackCover,
   getTrackFile,
-  listArtists,
   searchAlbums,
   searchTracks,
   ALBUM_SORTS,
@@ -39,11 +38,9 @@ const paging = {
 } as const;
 const filters = {
   q: { type: 'string', maxLength: 200 },
-  artist: { type: 'string', maxLength: 200 },
-  genre: { type: 'string', maxLength: 100 },
   year: { type: 'integer', minimum: 1000, maximum: 2999 },
   decade: { type: 'integer', minimum: 1000, maximum: 2990, multipleOf: 10 },
-  // Wert einer Kategorie: category=interpreten&value=Chor
+  // Wert einer Kategorie: category=sprecher&value=Anna Schulz
   category: { type: 'string', maxLength: 60 },
   value: { type: 'string', maxLength: 200 },
 } as const;
@@ -67,7 +64,7 @@ type CategoryQuery = { category?: string; value?: string };
 function withCategory<T extends CategoryQuery>(db: DB, query: T) {
   const { category, value, ...rest } = query;
   if (category === undefined && value === undefined) return rest;
-  const definition = category !== undefined ? getListenerCategory(db, category) : undefined;
+  const definition = category !== undefined ? getCategory(db, category) : undefined;
   const filter = definition && value !== undefined ? categoryFilter(definition, value) : undefined;
   return filter ? { ...rest, category: filter } : null;
 }
@@ -189,7 +186,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
           properties: {
             ...filters,
             ...paging,
-            sort: { type: 'string', enum: ALBUM_SORTS, default: 'artist' },
+            sort: { type: 'string', enum: ALBUM_SORTS, default: 'title' },
             dated: { type: 'boolean' },
             recording: { type: 'string', maxLength: 60 },
           },
@@ -224,23 +221,6 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     return proxyFile(deps, request, reply, track.path, track.mime);
   });
 
-  app.get(
-    '/api/artists',
-    {
-      schema: {
-        querystring: {
-          type: 'object',
-          properties: { q: filters.q, ...paging },
-          additionalProperties: false,
-        },
-      },
-    },
-    async (request) => {
-      const { q, limit, offset } = request.query as { q?: string; limit: number; offset: number };
-      return listArtists(db, q, limit, offset);
-    },
-  );
-
   app.get('/api/facets', async () => getFacets(db));
 
   // Für die leere Suchseite: Begriffe, die mehrere gesucht haben, und oft gehörte Alben.
@@ -260,7 +240,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
       },
     },
     async (request: SlugRequest, reply) => {
-      const category = getListenerCategory(db, request.params.slug);
+      const category = getCategory(db, request.params.slug);
       if (!category) return reply.code(404).send({ error: 'Kategorie nicht gefunden' });
       const { id, name, slug, inNav } = category;
       return { category: { id, name, slug, inNav }, items: categoryValues(db, category, request.query.q) };

@@ -4,7 +4,6 @@ import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
-import { preferTags } from './helpers/structure.js';
 import { sessionCookie } from './helpers/session.js';
 import { HALF_LIFE_MS, PLAY_COOLDOWN_MS, recordPlay } from '../src/library/popularity.js';
 
@@ -28,20 +27,21 @@ function addListener(name: string): number {
   return id;
 }
 
-const trackId = (title: string) => (ctx.db.prepare('SELECT id FROM tracks WHERE title = ?').get(title) as { id: number }).id;
+const trackId = (title: string) =>
+  (ctx.db.prepare('SELECT id FROM tracks WHERE coalesce(display_title, title) = ?').get(title) as { id: number }).id;
 const albumId = (title: string) => (ctx.db.prepare('SELECT id FROM albums WHERE title = ?').get(title) as { id: number }).id;
 
 beforeEach(async () => {
   cloud = new FakeNextcloud('/Musik');
   await cloud.start();
-  const service = (folder: string, title: string, custom: Record<string, string> = {}) =>
-    cloud.put(`Gottesdienste/2026/${folder}/01 ${title}.mp3`, mp3({ title, artist: 'MBG', genre: 'Gottesdienst', custom }));
+  const service = (folder: string, file: string, custom: Record<string, string> = {}) =>
+    cloud.put(`Gottesdienste/2026/${folder}/01 ${file}.mp3`, mp3({ title: 'Tag', artist: 'MBG', custom }));
   service('2026-08-30 Jugendgottesdienst', 'Input');
-  service('2026-09-20', 'Predigt Psalm 23', { Sprecher: 'Pastor Meier', Bibelstelle: 'Psalm 23' });
-  // Datum im deutschen Format und ohne Jahr in den Tags: sortiert trotzdem richtig
+  service('2026-09-20', 'Predigt - Psalm 23 - Pastor Meier');
+  // Datum im deutschen Format: sortiert trotzdem richtig
   service('13.09.2026 Taufgottesdienst', 'Taufe');
-  service('2026-09-27 Erntedank', 'Predigt Dankbarkeit', { Sprecher: 'Anna Schulz' });
-  cloud.put('Hillsong/Let There Be Light/01 Behold.mp3', mp3({ title: 'Behold', artist: 'Hillsong', album: 'Let There Be Light', year: 2016, genre: 'Worship' }));
+  service('2026-09-27 Erntedank', 'Predigt - Dankbarkeit - Anna Schulz');
+  cloud.put('Hillsong/Let There Be Light/01 Behold.mp3', mp3({}));
   const config = loadConfig({
     NEXTCLOUD_URL: cloud.url,
     NEXTCLOUD_USER: USER,
@@ -50,7 +50,6 @@ beforeEach(async () => {
     DATABASE_PATH: ':memory:',
   });
   ctx = await buildApp(config, { logger: false });
-  preferTags(ctx.db);
   cookie = sessionCookie(ctx.db);
   await ctx.scanner.scan();
 });
@@ -72,16 +71,16 @@ describe('Verdecktes Scoring', () => {
   });
 
   it('holt oft Gehörtes in der Titelsuche nach oben, sonst bleibt das neueste vorne', async () => {
-    expect(titles((await get('/api/tracks?q=predigt')).items)).toEqual(['Predigt Dankbarkeit', 'Predigt Psalm 23']);
-    await play(trackId('Predigt Psalm 23'));
+    expect(titles((await get('/api/tracks?q=predigt')).items)).toEqual(['Predigt: Dankbarkeit', 'Predigt: Psalm 23']);
+    await play(trackId('Predigt: Psalm 23'));
     const found = await get('/api/tracks?q=predigt');
-    expect(titles(found.items)).toEqual(['Predigt Psalm 23', 'Predigt Dankbarkeit']);
+    expect(titles(found.items)).toEqual(['Predigt: Psalm 23', 'Predigt: Dankbarkeit']);
     // Die Zahl selbst bleibt verborgen
     expect(Object.keys(found.items[0])).not.toContain('score');
   });
 
   it('zählt dieselbe Person nur einmal in der Sperrfrist, andere Hörer schon', async () => {
-    const id = trackId('Predigt Psalm 23');
+    const id = trackId('Predigt: Psalm 23');
     const score = () => (ctx.db.prepare('SELECT score FROM track_popularity WHERE track_id = ?').get(id) as { score: number }).score;
     const now = Date.now();
     const user = addListener('anna');
@@ -96,20 +95,20 @@ describe('Verdecktes Scoring', () => {
   });
 
   it('lässt alte Wiedergaben verblassen', async () => {
-    recordPlay(ctx.db, addListener('anna'), trackId('Predigt Psalm 23'), Date.now() - 2 * HALF_LIFE_MS);
-    expect(titles((await get('/api/tracks?q=predigt')).items)).toEqual(['Predigt Dankbarkeit', 'Predigt Psalm 23']);
+    recordPlay(ctx.db, addListener('anna'), trackId('Predigt: Psalm 23'), Date.now() - 2 * HALF_LIFE_MS);
+    expect(titles((await get('/api/tracks?q=predigt')).items)).toEqual(['Predigt: Dankbarkeit', 'Predigt: Psalm 23']);
   });
 
   it('ordnet Alben in Suche und Vorschlägen nach Beliebtheit, bewusst gewählte Sortierung bleibt', async () => {
     const byDate = titles((await get('/api/albums?q=predigt&sort=date')).items);
     expect(byDate).toHaveLength(2);
     const older = byDate[1]!;
-    const olderTrack = older.includes('Erntedank') ? 'Predigt Dankbarkeit' : 'Predigt Psalm 23';
+    const olderTrack = older.includes('Erntedank') ? 'Predigt: Dankbarkeit' : 'Predigt: Psalm 23';
     await play(trackId(olderTrack));
     expect(titles((await get('/api/albums?q=predigt&sort=date')).items)[0]).toBe(older);
     const byTitle = titles((await get('/api/albums?q=predigt&sort=title')).items);
     expect(byTitle).toEqual([...byTitle].sort((a, b) => a.localeCompare(b)));
-    expect(titles((await get('/api/albums?genre=Gottesdienst&sort=popular')).items)[0]).toBe(older);
+    expect(titles((await get('/api/albums?dated=true&sort=popular')).items)[0]).toBe(older);
   });
 
   it('lässt die Startseite mit neuen Alben unberührt', async () => {

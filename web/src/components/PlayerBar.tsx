@@ -1,4 +1,5 @@
 import { trackCoverUrl } from '../api';
+import { albumLabel } from '../format';
 import { currentHref, player, usePlayerSelect } from '../player';
 import { Controls, RateButton, Volume } from './Controls';
 import { Cover } from './Cover';
@@ -29,10 +30,10 @@ export function PlayerBar({ onExpand }: { onExpand: () => void }) {
               </a>
               <a
                 class="player-artist"
-                href={`/interpret/${encodeURIComponent(track.artist)}`}
+                href={track.albumId ? `/album/${track.albumId}` : undefined}
                 onClick={(event) => event.stopPropagation()}
               >
-                {error ?? track.speaker ?? track.artist}
+                {error ?? track.speaker ?? albumLabel(track.album, track.albumDate)}
               </a>
             </div>
           </>

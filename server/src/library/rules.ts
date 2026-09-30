@@ -1,13 +1,16 @@
 import type { DB } from '../db.js';
 import { normalizeKey } from './albums.js';
 import { albumFolderOf, dateOfPath } from './pathMeta.js';
+import { withoutFields } from './policies.js';
 
 /**
  * Regeln füllen eigene Alben automatisch, z. B. "Titel enthält Predigt → Album Predigten".
  * Sie werden bei jedem Scan und jeder Änderung in der Verwaltung neu ausgewertet,
  * neue passende Titel landen also ohne Zutun im Album.
  */
-export const RULE_FIELDS = ['title', 'artist', 'album', 'genre', 'path'] as const;
+export const RULE_FIELDS = ['title', 'album', 'content', 'speaker', 'path'] as const;
+/** Felder aus Tags, die es nicht mehr gibt; gespeicherte Bedingungen darauf entfallen */
+const REMOVED_RULE_FIELDS = new Set(['artist', 'genre']);
 export const RULE_OPS = ['contains', 'not_contains', 'starts', 'equals'] as const;
 export const MAX_DEPTH = 4;
 export const MAX_CONDITIONS = 30;
@@ -72,10 +75,10 @@ export interface RuleTrack {
   id: number;
   path: string;
   title: string;
-  artist: string;
-  album_artist: string | null;
   album: string | null;
-  genre: string | null;
+  /** Inhalt und Sprecher aus dem Dateinamen (Regelwerk) */
+  content: string | null;
+  speaker: string | null;
   year: number | null;
   disc_no?: number | null;
   track_no?: number | null;
@@ -85,12 +88,12 @@ function fieldText(track: RuleTrack, field: RuleField): string {
   switch (field) {
     case 'title':
       return track.title;
-    case 'artist':
-      return `${track.artist} ${track.album_artist ?? ''}`;
     case 'album':
       return track.album ?? '';
-    case 'genre':
-      return track.genre ?? '';
+    case 'content':
+      return track.content ?? '';
+    case 'speaker':
+      return track.speaker ?? '';
     case 'path':
       return track.path;
   }
@@ -150,7 +153,11 @@ export function listRules(db: DB, albumId?: number): AlbumRule[] {
        ${albumId === undefined ? '' : 'WHERE album_id = ?'} ORDER BY id`,
     )
     .all(...(albumId === undefined ? [] : [albumId])) as Array<{ id: number; albumId: number; condition: string; move: number }>;
-  return rows.map((row) => ({ ...row, condition: JSON.parse(row.condition) as RuleCondition, move: Boolean(row.move) }));
+  // Bedingungen auf Interpret oder Genre (aus den früher gelesenen Tags) entfallen; Regeln ohne übrige Bedingung ruhen.
+  return rows.flatMap((row) => {
+    const condition = withoutFields(JSON.parse(row.condition) as RuleCondition, REMOVED_RULE_FIELDS);
+    return condition ? [{ ...row, condition, move: Boolean(row.move) }] : [];
+  });
 }
 
 export interface RuleResult<T extends RuleTrack> {

@@ -89,7 +89,6 @@ export const ADMIN_GROUPS: Array<{ label: string; adminOnly?: boolean; items: Ar
     label: 'Inhalte',
     items: [
       { path: '/admin', label: 'Alben' },
-      { path: '/admin/interpreten', label: 'Interpreten' },
       { path: '/admin/kategorien', label: 'Kategorien' },
     ],
   },

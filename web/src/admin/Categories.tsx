@@ -48,8 +48,8 @@ export function CategoriesAdmin({ onError }: { onError: (e: Error) => void }) {
         </div>
       </div>
       <p class="admin-hint">
-        Eine Kategorie sammelt Werte aus einem oder mehreren Tag-Feldern der Musikdateien, z. B. „Interpreten“ aus Interpret und
-        Album-Interpret. Werte lassen sich unter einem eigenen Namen zusammenfassen, etwa „Musik“ aus den Genres Musik und Lied.
+        Eine Kategorie sammelt Werte aus Feldern, die die Zuordnung aus Ordner- und Dateinamen liest: Art, Inhalt, Sprecher,
+        Anlass und Jahr. Werte lassen sich unter einem eigenen Namen zusammenfassen, etwa „Musik“ aus den Inhalten Lied und Chor.
       </p>
       {error && <ErrorNote message={error} />}
       {!items ? (
@@ -119,7 +119,7 @@ const toBody = (draft: Draft) => ({
   groupedOnly: draft.groupedOnly,
 });
 
-/** Kategorie anlegen oder bearbeiten: Name, Tag-Felder, zusammengefasste Werte */
+/** Kategorie anlegen oder bearbeiten: Name, Felder, zusammengefasste Werte */
 export function CategoryEditor({ id, onError }: { id: number | undefined; onError: (e: Error) => void }) {
   const [draft, setDraft] = useState<Draft | undefined>(
     id === undefined ? { name: '', fields: [], groups: [], inNav: true, groupedOnly: false } : undefined,
@@ -128,7 +128,7 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
   const [fields, setFields] = useState<TagField[] | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
-  /** Tag-Feld, dessen Inhalt gerade angezeigt wird */
+  /** Feld, dessen Inhalt gerade angezeigt wird */
   const [inspected, setInspected] = useState<string | undefined>();
 
   const fail = (e: Error) => {
@@ -185,12 +185,7 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
     }
   };
 
-  // Felder, die (noch) in keiner Datei vorkommen, trotzdem anzeigen, damit man sie abwählen kann.
-  const known = new Set(fields?.map((f) => f.tag));
-  const allFields: TagField[] = [
-    ...(fields ?? []),
-    ...draft.fields.filter((f) => !known.has(f)).map((tag) => ({ tag, trackCount: 0, valueCount: 0, samples: [] })),
-  ];
+  const allFields: TagField[] = fields ?? [];
 
   return (
     <form class="admin-category-editor" onSubmit={save}>
@@ -222,8 +217,11 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
       </section>
 
       <section class="shelf admin-panel">
-        <h2>Tag-Felder</h2>
-        <p class="admin-hint">Aus welchen Feldern der Musikdateien kommen die Werte? Mehrere Felder werden zusammengelegt.</p>
+        <h2>Felder</h2>
+        <p class="admin-hint">
+          Aus welchen Feldern kommen die Werte? Sie stammen aus Ordner- und Dateinamen nach der{' '}
+          <a href="/admin/zuordnung">Zuordnung</a>; Tags in den Dateien zählen nicht. Mehrere Felder werden zusammengelegt.
+        </p>
         {!fields ? (
           <Loading />
         ) : (
@@ -237,14 +235,12 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
                     onChange={(e) => toggleField(field.tag, (e.target as HTMLInputElement).checked)}
                   />
                   <span class="track-main">
-                    <span class="track-title">
-                      {tagLabel(field.tag)}
-                      {tagLabel(field.tag) !== field.tag && <span class="tag-name"> {field.tag}</span>}
-                    </span>
+                    <span class="track-title">{field.label}</span>
                     <span class="track-sub">
+                      {field.hint}
                       {field.trackCount
-                        ? `${plural(field.trackCount, 'Titel', 'Titel')} · z. B. ${field.samples.join(', ')}`
-                        : 'In keiner Datei vorhanden'}
+                        ? ` · ${plural(field.trackCount, 'Titel', 'Titel')}, z. B. ${field.samples.join(', ')}`
+                        : ' · noch bei keinem Titel'}
                     </span>
                   </span>
                 </label>
@@ -286,17 +282,17 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
       <section class="shelf admin-panel">
         <h2>Werte zusammenfassen</h2>
         <p class="admin-hint">
-          Mehrere Tag-Werte unter einem Namen zeigen, z. B. „Musik“ aus Musik, Lied. Groß- und Kleinschreibung spielen keine Rolle.
+          Mehrere Werte unter einem Namen zeigen, z. B. „Musik“ aus Lied, Chor. Groß- und Kleinschreibung spielen keine Rolle.
         </p>
         {draft.groups.map((group, index) => (
           <div class="category-group" key={index}>
             <label class="field">
               <span>Anzeigen als</span>
-              <input value={group.label} maxLength={100} placeholder="Musik" onInput={(e) => setGroup(index, { label: (e.target as HTMLInputElement).value })} />
+              <input value={group.label} maxLength={100} placeholder="z. B. Musik" onInput={(e) => setGroup(index, { label: (e.target as HTMLInputElement).value })} />
             </label>
             <label class="field">
-              <span>Tag-Werte, mit Komma getrennt</span>
-              <input value={group.values} placeholder="Musik, Lied" onInput={(e) => setGroup(index, { values: (e.target as HTMLInputElement).value })} />
+              <span>Werte, mit Komma getrennt</span>
+              <input value={group.values} placeholder="Lied, Chor" onInput={(e) => setGroup(index, { values: (e.target as HTMLInputElement).value })} />
             </label>
             <button
               type="button"
@@ -344,8 +340,8 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
 }
 
 /**
- * Aktueller Inhalt eines gescannten Tag-Felds, häufigste Werte zuerst. Mit einer Zusammenfassung
- * lässt sich ein Wert per Klick in deren Tag-Werte übernehmen.
+ * Aktueller Inhalt eines Felds, häufigste Werte zuerst. Mit einer Zusammenfassung
+ * lässt sich ein Wert per Klick in deren Werte übernehmen.
  */
 function TagContent({
   tag,
@@ -457,7 +453,7 @@ function Preview({ draft }: { draft: Draft }) {
     <section class="shelf admin-panel">
       <h2>Vorschau</h2>
       {body.fields.length === 0 ? (
-        <p class="admin-hint">Wähle mindestens ein Tag-Feld.</p>
+        <p class="admin-hint">Wähle mindestens ein Feld.</p>
       ) : error ? (
         <p class="admin-error">{error}</p>
       ) : !result ? (
