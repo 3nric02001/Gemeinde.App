@@ -44,7 +44,7 @@ export function listFavorites(db: DB, userId: number) {
 }
 
 /** Sichtbare Alben in der angegebenen Reihenfolge */
-function albumsByIds(db: DB, ids: number[]): Record<string, unknown>[] {
+export function albumsByIds(db: DB, ids: number[]): Record<string, unknown>[] {
   if (!ids.length) return [];
   const { items } = searchAlbums(db, { sort: 'title', limit: ids.length, offset: 0, ids });
   const byId = new Map(items.map((album) => [album.id as number, album]));

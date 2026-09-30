@@ -146,3 +146,8 @@ export function saveProgress(track: Pick<Track, 'id' | 'duration'>, position: nu
 export function countPlay(track: Pick<Track, 'id'>): void {
   void send('POST', `/api/me/plays/${track.id}`).catch(() => undefined);
 }
+
+/** Suchbegriff, aus dem ein Treffer geöffnet wurde; der Server zählt ihn für "Häufig gesucht". */
+export function countSearch(q: string): void {
+  void send('POST', '/api/me/searches', { q }).catch(() => undefined);
+}

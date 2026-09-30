@@ -8,6 +8,7 @@ import type { CoverThumbnails } from '../library/thumbnails.js';
 import type { NextcloudClient } from '../nextcloud/webdav.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerMeRoutes } from './me.js';
+import { popularAlbums, popularSearches } from '../library/searches.js';
 import {
   getAlbum,
   getAlbumCover,
@@ -241,6 +242,9 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   );
 
   app.get('/api/facets', async () => getFacets(db));
+
+  // Für die leere Suchseite: Begriffe, die mehrere gesucht haben, und oft gehörte Alben.
+  app.get('/api/search/suggestions', async () => ({ searches: popularSearches(db), albums: popularAlbums(db) }));
 
   // Frei definierbare Kategorien (in der Verwaltung angelegt)
   app.get('/api/categories', async () => ({
