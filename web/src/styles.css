@@ -507,6 +507,79 @@ html[data-text='xlarge'] .now-playing {
   flex-shrink: 0;
 }
 
+/* Startseite: Kachel zum Livestream */
+.live-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 28px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: inherit;
+}
+
+.live-tile:hover {
+  text-decoration: none;
+}
+
+.live-tile-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--bg);
+}
+
+.live-tile-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.live-tile-title {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.live-tile-sub {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.live-tile-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+/* Livestream-Seite: Player im Format 16:9 */
+.live-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-width: 1100px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #000;
+}
+
+.live-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.live-hint {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
 /* Pfeile an Reihen: nur am Rechner, auf dem Handy wischt man */
 .section-head > h2 {
   margin-right: auto;

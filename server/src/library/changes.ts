@@ -152,6 +152,8 @@ function describe(db: DB, method: string, route: string, params: Params, body: B
     }
     case 'PUT /api/admin/branding':
       return { action: 'Name und Begrüßung geändert' };
+    case 'PUT /api/admin/livestream':
+      return { action: body?.enabled === false ? 'Livestream ausgeschaltet' : 'Livestream geändert' };
     case 'PUT /api/admin/oidc':
       return { action: 'Anmeldung über das Gemeinde-Konto geändert' };
     case 'POST /api/scan':

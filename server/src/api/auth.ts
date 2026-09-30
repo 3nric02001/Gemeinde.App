@@ -2,6 +2,7 @@ import fastifyCookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import { getBranding } from '../branding.js';
+import { publicLivestream } from '../livestream.js';
 import { librarySettings } from '../library/settings.js';
 import { OidcService } from '../auth/oidc.js';
 import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_MS, sessionUser, type SessionUser } from '../auth/sessions.js';
@@ -22,6 +23,7 @@ const ADMIN_ONLY = [
   '/api/admin/oidc',
   '/api/admin/branding',
   '/api/admin/offline',
+  '/api/admin/livestream',
   '/api/admin/changes',
 ];
 
@@ -180,6 +182,8 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
         user: user ? { id: user.id, name: user.name, role: user.role, kind: user.kind, onboarded: isOnboarded(db, user.id) } : null,
         oidc: oidc.isReady(settings) ? { label: settings.label } : null,
         branding: getBranding(db),
+        // Kachel und Seite /live, nur für Angemeldete (Verwaltung → Anmeldung)
+        livestream: user ? publicLivestream(db) : null,
         // Ohne Policy läuft ein Titel ab dieser Länge im Predigt-Player (Verwaltung → Zuordnung)
         sermonMinutes: librarySettings().sermonMinutes,
       };

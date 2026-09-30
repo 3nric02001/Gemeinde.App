@@ -25,6 +25,13 @@ export interface AuthState {
   branding: Branding;
   /** Server nicht erreichbar: nur offline gespeicherte Titel */
   offline?: boolean;
+  /** Eingebetteter Livestream auf /live, null wenn in der Verwaltung ausgeschaltet */
+  livestream?: Livestream | null;
+}
+
+export interface Livestream {
+  url: string;
+  title: string;
 }
 
 export interface Branding {
@@ -51,7 +58,13 @@ export function getAuth(): AuthState {
 }
 
 export async function loadAuth(): Promise<void> {
-  let data: { user: CurrentUser | null; oidc: { label: string } | null; branding?: Branding; sermonMinutes?: number };
+  let data: {
+    user: CurrentUser | null;
+    oidc: { label: string } | null;
+    branding?: Branding;
+    sermonMinutes?: number;
+    livestream?: Livestream | null;
+  };
   try {
     const res = await fetch('/api/auth/status', { headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`Fehler ${res.status}`);
@@ -65,7 +78,13 @@ export async function loadAuth(): Promise<void> {
     return;
   }
   setSermonMinutes(data.sermonMinutes);
-  set({ user: data.user, oidc: data.oidc, offline: false, ...(data.branding ? { branding: data.branding } : {}) });
+  set({
+    user: data.user,
+    oidc: data.oidc,
+    offline: false,
+    livestream: data.livestream ?? null,
+    ...(data.branding ? { branding: data.branding } : {}),
+  });
   document.title = state.branding.name;
   // Der Server kennt die Sitzung nicht (mehr): Offline-Kopien gehören niemandem mehr.
   if (data.user) void connectOffline(data.user, state.branding);
@@ -96,6 +115,11 @@ export async function loginLocal(username: string, password: string): Promise<vo
   if (!res.ok || !data.user) throw new Error(data.error ?? `Fehler ${res.status}`);
   set({ user: data.user, notice: undefined, offline: false });
   void connectOffline(data.user, state.branding);
+  // Den Livestream gibt es erst mit Anmeldung
+  void fetch('/api/auth/status', { headers: { accept: 'application/json' } })
+    .then((r) => (r.ok ? (r.json() as Promise<{ livestream?: Livestream | null }>) : undefined))
+    .then((status) => status && set({ livestream: status.livestream ?? null }))
+    .catch(() => undefined);
 }
 
 export async function logout(): Promise<void> {
@@ -105,7 +129,7 @@ export async function logout(): Promise<void> {
   clearSearches();
   await wipeOffline();
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
-  set({ user: null, notice: undefined, offline: false });
+  set({ user: null, notice: undefined, offline: false, livestream: null });
 }
 
 /** Weiter zum Identity Provider; danach geht es zur aktuellen Seite zurück. */
@@ -130,6 +154,11 @@ export function finishOnboarding(): void {
 export function setBranding(branding: Branding): void {
   set({ branding });
   document.title = branding.name;
+}
+
+/** Nach einer Änderung in der Verwaltung Kachel und Seite sofort anpassen */
+export function setLivestream(livestream: Livestream | null): void {
+  set({ livestream });
 }
 
 export function useAuth(): AuthState {

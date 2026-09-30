@@ -1,7 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 
-/** Für die Weboberfläche: nur eigene Skripte, keine Einbettung in fremde Seiten. */
-export const PAGE_CSP = [
+/**
+ * Für die Weboberfläche: nur eigene Skripte, keine Einbettung in fremde Seiten.
+ * `frameOrigin` ist die Adresse des eingeschalteten Livestreams (https://host), den /live einbettet.
+ */
+export function pageCsp(frameOrigin?: string): string {
+  return [
+    ...PAGE_CSP_BASE,
+    // Ohne Livestream gilt default-src 'self'; fremde Seiten nur vom eingestellten Stream
+    ...(frameOrigin ? [`frame-src 'self' ${frameOrigin}`] : []),
+  ].join('; ');
+}
+
+const PAGE_CSP_BASE = [
   "default-src 'self'",
   "script-src 'self'",
   // Preact setzt einzelne style-Attribute (z. B. Farbton der Platzhalter).
@@ -16,7 +27,10 @@ export const PAGE_CSP = [
   "base-uri 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-].join('; ');
+];
+
+/** CSP der Seiten ohne Livestream */
+export const PAGE_CSP = pageCsp();
 
 /** Für alles unter /api: Direkt geöffnet darf eine Antwort (Cover, Stream, JSON) nie etwas ausführen. */
 export const API_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
@@ -25,13 +39,13 @@ export const API_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
  * Sicherheits-Header für jede Antwort. Schon gesetzte Header (etwa von einer Route) bleiben stehen.
  * HSTS nur, wenn die Anfrage per https kam; sonst würde ein Test über http den Browser aussperren.
  */
-export function registerSecurityHeaders(app: FastifyInstance): void {
+export function registerSecurityHeaders(app: FastifyInstance, frameOrigin: () => string | undefined = () => undefined): void {
   app.addHook('onSend', async (request, reply, payload) => {
     const set = (name: string, value: string) => {
       if (!reply.hasHeader(name)) reply.header(name, value);
     };
     const isApi = request.url.startsWith('/api/') || request.url === '/api';
-    set('content-security-policy', isApi ? API_CSP : PAGE_CSP);
+    set('content-security-policy', isApi ? API_CSP : pageCsp(frameOrigin()));
     set('x-content-type-options', 'nosniff');
     set('x-frame-options', 'DENY');
     set('referrer-policy', 'same-origin');

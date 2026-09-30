@@ -1,7 +1,7 @@
 import type { FunctionComponent } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { query } from '../api';
-import { ROLE_LABELS, setBranding, useAuth, type Branding, type Role } from '../auth';
+import { ROLE_LABELS, setBranding, setLivestream, useAuth, type Branding, type Role } from '../auth';
 import { Icon } from '../components/Icon';
 import { navigate } from '../router';
 import { plural } from '../format';
@@ -503,6 +503,7 @@ function LoginAdmin(_props: SectionProps) {
       <h1 class="page-title">Anmeldung</h1>
       <BrandingSettings />
       <OfflineSettings />
+      <LivestreamSettings />
       <OidcSettings />
       {user?.kind === 'local' && <PasswordForm />}
     </>
@@ -633,6 +634,94 @@ function OfflineSettings() {
           required
           value={form.days}
           onInput={(e) => setForm({ ...form, days: Number((e.target as HTMLInputElement).value) })}
+        />
+      </label>
+      {message && (
+        <p class={message.ok ? 'admin-ok' : 'admin-error'} role="status">
+          {message.text}
+        </p>
+      )}
+      <div class="actions">
+        <button type="submit" class="button-primary" disabled={busy}>
+          Speichern
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface LivestreamView {
+  enabled: boolean;
+  url: string;
+  title: string;
+}
+
+/** Livestream: Kachel auf der Startseite und Seite /live mit der eingebetteten Adresse */
+function LivestreamSettings() {
+  const [data, error, setData] = useLoad<LivestreamView>('/api/admin/livestream');
+  const [form, setForm] = useState<LivestreamView | undefined>();
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | undefined>();
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setForm(data), [data]);
+
+  if (error) return <ErrorNote message={error} />;
+  if (!form) return <Loading />;
+
+  const submit = async (event: Event) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const saved = await adminRequest<LivestreamView>('PUT', '/api/admin/livestream', form);
+      setData(saved);
+      setLivestream(saved.enabled ? { url: saved.url, title: saved.title } : null);
+      setMessage({
+        text: saved.enabled
+          ? 'Gespeichert. Wer die App schon offen hat, sieht den Stream nach dem Neuladen.'
+          : 'Gespeichert. Die Kachel ist ausgeblendet.',
+        ok: true,
+      });
+    } catch (e) {
+      setMessage({ text: (e as Error).message, ok: false });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form class="admin-panel admin-form" onSubmit={submit}>
+      <h2>Livestream</h2>
+      <p class="admin-hint">
+        Eine Kachel auf der Startseite führt zu einer Seite, die den Stream eingebettet zeigt. Die Adresse muss das
+        Einbetten erlauben, bei Owncast etwa https://…/embed/video/.
+      </p>
+      <label class="admin-check">
+        <input
+          type="checkbox"
+          checked={form.enabled}
+          onChange={(e) => setForm({ ...form, enabled: (e.target as HTMLInputElement).checked })}
+        />
+        <span>Livestream in der App zeigen</span>
+      </label>
+      <label class="field">
+        <span>Adresse zum Einbetten</span>
+        <input
+          type="url"
+          maxLength={500}
+          placeholder="https://stream.example.org/embed/video/"
+          required={form.enabled}
+          value={form.url}
+          onInput={(e) => setForm({ ...form, url: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+      <label class="field">
+        <span>
+          Name <em>(Kachel und Überschrift)</em>
+        </span>
+        <input
+          maxLength={60}
+          placeholder="Livestream"
+          value={form.title}
+          onInput={(e) => setForm({ ...form, title: (e.target as HTMLInputElement).value })}
         />
       </label>
       {message && (

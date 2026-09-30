@@ -5,6 +5,7 @@ import { registerRoutes } from './api/routes.js';
 import { registerUserAdminRoutes } from './api/users.js';
 import { OidcService } from './auth/oidc.js';
 import { getBranding, manifest } from './branding.js';
+import { livestreamOrigin } from './livestream.js';
 import { ensureLocalAdmin } from './auth/users.js';
 import type { Config } from './config.js';
 import { openDatabase, type DB } from './db.js';
@@ -51,7 +52,7 @@ export async function buildApp(config: Config, options: { fetch?: typeof fetch; 
     app.log.warn('OIDC ist eingeschaltet, aber PUBLIC_URL fehlt: bitte in der .env setzen, sonst stammt die Weiterleitungs-URL aus der Anfrage');
   }
 
-  registerSecurityHeaders(app);
+  registerSecurityHeaders(app, () => livestreamOrigin(db));
   // Zuerst: Der Zugriffsschutz muss vor allen API-Routen stehen.
   await registerAuth(app, { db, oidc, publicUrl: config.publicUrl });
   registerChangeLog(app, db);

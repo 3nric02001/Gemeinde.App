@@ -4,6 +4,7 @@ import type { OidcService, OidcSettings } from '../auth/oidc.js';
 import { AuthError, deleteGroup, deleteUser, lastDeniedLogin, listGroups, listUsers, ROLES, saveGroup, setUserDisabled, type Role } from '../auth/users.js';
 import { authErrorHandler, redirectUri } from './auth.js';
 import { getBranding, saveBranding, type Branding } from '../branding.js';
+import { getLivestream, saveLivestream, type Livestream } from '../livestream.js';
 import { getOfflineSettings, MAX_OFFLINE_DAYS, saveOfflineSettings, type OfflineSettings } from '../offline.js';
 
 const idParam = {
@@ -45,6 +46,25 @@ export async function registerUserAdminRoutes(
         },
       },
       async (request) => saveBranding(db, request.body as Partial<Branding>),
+    );
+
+    admin.get('/api/admin/livestream', async () => getLivestream(db));
+    admin.put(
+      '/api/admin/livestream',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              enabled: { type: 'boolean' },
+              url: { type: 'string', maxLength: 500 },
+              title: { type: 'string', maxLength: 60 },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request) => saveLivestream(db, request.body as Partial<Livestream>),
     );
 
     admin.get('/api/admin/offline', async () => getOfflineSettings(db));
