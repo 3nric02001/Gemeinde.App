@@ -2,6 +2,7 @@ import { getMeta, type DB } from '../db.js';
 import type { CategoryFilter } from './categories.js';
 import { SPEAKER_TAGS } from './metadata.js';
 import { albumTierSql, decayFactor, trackTierSql } from './popularity.js';
+import { aliasOf, aliasVersion } from './artists.js';
 import { getStructure } from './structure.js';
 import { artistKey, artistNames, foldValue, sortKey } from './text.js';
 
@@ -54,15 +55,15 @@ export interface AlbumFilter {
 }
 
 const TRACK_COLUMNS = `
-  t.id, coalesce((SELECT title FROM track_overrides WHERE path = t.path), t.display_title, t.title) AS title, coalesce(t.display_artist, t.artist) AS artist, t.album_artist AS albumArtist,
+  t.id, coalesce((SELECT title FROM track_overrides WHERE path = t.path), t.display_title, t.title) AS title, coalesce(t.display_artist, t.artist) AS artist, artist_alias(t.album_artist) AS albumArtist,
   t.content, t.playback AS player,
   coalesce((SELECT title FROM albums WHERE id = t.album_id), t.album) AS album, t.album_id AS albumId,
   t.track_no AS trackNo, t.disc_no AS discNo, t.year, t.genre, t.duration, t.mime AS mimeType,
   (SELECT date FROM albums WHERE id = t.album_id) AS albumDate,
-  coalesce(
+  artist_alias(coalesce(
     (SELECT speaker FROM track_overrides WHERE path = t.path),
     (SELECT value FROM track_tags WHERE track_id = t.id AND tag IN (${SPEAKER_TAGS.map((tag) => `'${tag}'`).join(', ')}) LIMIT 1)
-  ) AS speaker,
+  )) AS speaker,
   (t.cover_id IS NOT NULL OR EXISTS (
     SELECT 1 FROM albums x WHERE x.id = t.album_id AND (x.cover_path IS NOT NULL OR x.cover_id IS NOT NULL)
   )) AS hasCover
@@ -134,7 +135,7 @@ export function searchTracks(db: DB, filter: TrackFilter): Page<Record<string, u
   }
   if (filter.artist) {
     // Auch andere Schreibweisen und Gastauftritte ("Anna feat. Ben" gehört auch zu Ben)
-    where.clauses.push('(has_artist(coalesce(t.display_artist, t.artist), @artistKey) OR has_artist(t.album_artist, @artistKey))');
+    where.clauses.push('(has_artist(coalesce(t.display_artist, t.artist), @artistKey) OR has_artist(artist_alias(t.album_artist), @artistKey))');
     where.params.artistKey = artistKey(filter.artist);
   }
   if (filter.albumId) {
@@ -352,7 +353,7 @@ const artistCache = new WeakMap<DB, { version: string; artists: ArtistEntry[] }>
 function allArtists(db: DB): ArtistEntry[] {
   const { n, albums } = db.prepare('SELECT count(*) AS n, total(album_id) AS albums FROM tracks').get() as { n: number; albums: number };
   // Das Regelwerk ändert Anzeige-Interpreten ohne Scan; es gehört deshalb zum Stand.
-  const version = `${getMeta(db, 'lastScanAt') ?? ''}:${n}:${albums}:${getMeta(db, 'structure') ?? ''}`;
+  const version = `${getMeta(db, 'lastScanAt') ?? ''}:${n}:${albums}:${getMeta(db, 'structure') ?? ''}:${aliasVersion(db)}`;
   const cached = artistCache.get(db);
   if (cached?.version === version) return cached.artists;
 
@@ -364,7 +365,7 @@ function allArtists(db: DB): ArtistEntry[] {
   }>;
   const byKey = new Map<string, { spellings: Map<string, number>; albums: Set<number>; tracks: Set<number> }>();
   for (const row of rows) {
-    const names = new Set([...artistNames(row.artist), ...(row.album_artist ? artistNames(row.album_artist) : [])]);
+    const names = new Set([...artistNames(row.artist), ...(row.album_artist ? artistNames(aliasOf(db, row.album_artist)) : [])]);
     for (const name of names) {
       const key = artistKey(name);
       if (!key) continue;

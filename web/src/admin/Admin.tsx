@@ -7,7 +7,8 @@ import { albumTitle, formatCompactDate, plural } from '../format';
 import { useDebounced } from '../hooks';
 import { match, navigate, type Location } from '../router';
 import { Empty, ErrorNote, Loading } from '../pages/common';
-import { AdminTabs, ACCESS_SECTIONS } from './Access';
+import { AdminNav, ACCESS_SECTIONS } from './Access';
+import { ArtistsPanel } from './Artists';
 import { adminRequest, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
 import { CategoriesAdmin, CategoryEditor } from './Categories';
@@ -53,13 +54,16 @@ export function Admin({ location }: { location: Location }) {
   else if (location.path === '/admin/pruefen') content = <QualityPanel />;
   else if (location.path === '/admin/zuordnung') content = <StructurePanel />;
   else if (location.path === '/admin/schreibweisen') content = <ReplacementsPanel />;
+  else if (location.path === '/admin/interpreten') content = <ArtistsPanel />;
   else if (section) content = <section.Component params={location.params} />;
   else content = <AlbumsAdmin params={location.params} onError={onError} />;
 
   return (
-    <div class="page admin">
-      {!album && !category && <AdminTabs path={location.path} admin={admin} />}
-      {content}
+    <div class={`page admin${album || category ? ' admin-editing' : ''}`}>
+      <div class="admin-layout">
+        <AdminNav path={location.path} admin={admin} />
+        <div class="admin-content">{content}</div>
+      </div>
     </div>
   );
 }

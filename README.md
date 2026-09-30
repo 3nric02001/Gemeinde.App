@@ -100,6 +100,34 @@ Schutz gegen das Weitergeben der Dateien (ganz verhindern lässt sich ein Mitsch
 
 iPhones geben Web-Apps nur begrenzt Speicher und räumen ihn nach längerer Nichtnutzung auf.
 
+## Verwaltung: Aufbau
+
+Die Verwaltung (`/admin`) ist nach Aufgaben gruppiert, auf breiten Bildschirmen als Spalte links, auf dem Handy als
+Leiste zum Wischen:
+
+| Gruppe | Bereiche | Wer |
+| --- | --- | --- |
+| Inhalte | Alben, Interpreten, Kategorien | Manager, Admins |
+| Automatik | Zuordnung, Schreibweisen, Prüfen | Manager, Admins |
+| Zugang | Benutzer, Gruppen, Anmeldung | Admins |
+| Verlauf | Änderungen | Admins |
+
+## Verwaltung: Interpreten
+
+Unter **Verwaltung → Interpreten** (Manager und Admins) stehen alle Namen, wie sie aus Tags, Dateinamen und Regelwerk
+kommen, mit Anzahl Titel. Hat die Erkennung denselben Interpreten oder Sprecher unterschiedlich geschrieben, führt man
+die Namen zusammen, etwa „J. Rauschenberger“ und „Jakob Rauschenbeger“ unter „Jakob Rauschenberger“; einen einzelnen
+Namen auswählen heißt umbenennen.
+
+- Das gilt überall: Interpret und Sprecher der Titel, Interpret und Sprecher der Alben, Interpretenliste, Filter auf
+  der Interpretenseite und Kategorien aus Interpreten- oder Sprecher-Feldern (dort als zusammengefasster Wert).
+  Die Dateien in der Nextcloud bleiben unverändert; neue Dateien mit dem alten Namen folgen automatisch.
+- **Vorschläge** zeigen Namen, die vermutlich dasselbe meinen: gleicher Nachname mit Vorname oder Initiale,
+  gleiche Buchstaben ohne Leerzeichen („Kinder Chor“, „Kinderchor“) oder Tippfehler bei längeren Namen.
+  Ein Klick auf einen Namen wählt ihn als gemeinsamen Namen.
+- Zusammengeführte Namen lassen sich einzeln wieder trennen. Wird ein Zielname selbst zusammengeführt, folgen die
+  ihm zugeordneten Namen (keine Ketten). Jede Änderung steht unter Verlauf → Änderungen.
+
 ## Verwaltung: Alben zusammenstellen und korrigieren
 
 Unter `/admin` (Link „Verwaltung“ in der Seitenleiste bzw. unter „Mehr“) lassen sich Alben
@@ -462,6 +490,9 @@ Verwaltung (Manager und Admins):
 | `GET /api/admin/tag-fields` | Alle Tag-Felder der Bibliothek mit Anzahl Titel und Beispielwerten |
 | `GET /api/admin/tag-fields/:tag/values?q=&limit=` | Aktueller Inhalt eines Tag-Felds, häufigste Werte zuerst |
 | `GET /api/admin/quality` | Hinweise zur Datenqualität (aufgeteilte Ordner, fehlende Sprecher und Cover, auffällige Interpreten) |
+| `GET /api/admin/artists` | Alle Namen mit Anzahl Titel und Zielnamen, Vorschläge und bestehende Zusammenführungen |
+| `POST /api/admin/artists/merge` | Namen zusammenführen bzw. umbenennen: `{ sources, target }` |
+| `POST /api/admin/artists/unmerge` | Zusammenführung eines Namens aufheben: `{ source }` |
 | `GET /api/admin/structure` | Regelwerk für Aufnahmen, Vorgabe und Platzhalter |
 | `PUT /api/admin/structure` | Regelwerk speichern `{ kinds, contents }` und Alben neu bilden |
 | `POST /api/admin/structure/preview` | Was ein Regelwerk aus der Bibliothek machen würde, je Art mit Beispielen |

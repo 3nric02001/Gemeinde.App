@@ -15,6 +15,7 @@ import {
   type CompiledStructure,
   type FolderResult,
 } from './structure.js';
+import { aliasOf } from './artists.js';
 import { foldValue, sortKey } from './text.js';
 
 export const VARIOUS_ARTISTS = 'Verschiedene Interpreten';
@@ -43,6 +44,7 @@ interface TrackRow {
   display_title: string | null;
   raw_title: string | null;
   display_artist: string | null;
+  raw_artist: string | null;
   content: string | null;
   title_tagged: number | null;
   playback: string | null;
@@ -284,7 +286,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     const tracks = db
       .prepare(
         `SELECT id, path, title, artist, album_artist, album, year, genre, duration, compilation, track_no, disc_no, album_id,
-                cover_id, album_key, added_at, album_sort, album_artist_sort, album_tagged, display_title, raw_title, display_artist, content, title_tagged,
+                cover_id, album_key, added_at, album_sort, album_artist_sort, album_tagged, display_title, raw_title, display_artist, raw_artist, content, title_tagged,
                 playback, sermon, policy
          FROM tracks`,
       )
@@ -462,19 +464,26 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       );
       const ruleTitle = recording && !(recording.kind.preferTags && taggedAlbum) ? recording.title || basename(draft.folder) : undefined;
       const title = override?.title ?? fix(ruleTitle ?? tagTitle ?? draft.title);
-      const tracks = draft.tracks.map((t) => ({ ...t, title: t.display_title ?? t.title, artist: t.display_artist ?? t.artist }));
+      const tracks = draft.tracks.map((t) => ({
+        ...t,
+        title: t.display_title ?? t.title,
+        artist: t.display_artist ?? t.artist,
+        album_artist: t.album_artist && aliasOf(db, t.album_artist),
+      }));
       // Datum aus den Dateinamen, dem Albumordner ("2026-09-27 Erntedank") oder dem Albumnamen; nur bei automatischen Alben.
       const date = draft.folder
         ? (draft.date ?? folderDate(draft.folder) ?? (tagTitle ? parseFolderDate(tagTitle) : undefined))
         : undefined;
       // Längster Titel zuerst: bei einem Gottesdienst meist die Predigt
       const byLength = [...tracks].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
-      const speaker =
+      const speakerFound =
         override?.speaker ??
         mostCommon(draft.tracks.map((t) => speakers.get(t.id))) ??
         recording?.speaker ??
         (date && !recording ? mostCommon(byLength.map((t) => parsed(t.path).speaker)) : undefined) ??
         null;
+      // Zusammengeführte Interpreten gelten auch für den Sprecher (eine Korrektur am Album bleibt, wie sie ist)
+      const speaker = speakerFound && !override?.speaker ? aliasOf(db, speakerFound) : speakerFound;
       // Alle Bibelstellen des Albums: zuerst die des Ordners bzw. der Predigt, dann je Titel in Albumreihenfolge
       // aus den Tags oder dem Dateinamen nach dem Regelwerk, sonst (nur bei Aufnahmen) aus Titel oder Dateiname.
       const sermonLike = Boolean(date || recording);
@@ -643,7 +652,7 @@ function applyRecordings(
   manualDecisions: Map<string, ManualDecision>,
 ): void {
   const setDisplay = db.prepare(
-    'UPDATE tracks SET display_title = ?, raw_title = ?, display_artist = ?, content = ?, sort_title = ?, sort_artist = ? WHERE id = ?',
+    'UPDATE tracks SET display_title = ?, raw_title = ?, display_artist = ?, raw_artist = ?, content = ?, sort_title = ?, sort_artist = ? WHERE id = ?',
   );
   const setPolicy = db.prepare('UPDATE tracks SET playback = ?, sermon = ?, policy = ? WHERE id = ?');
   const derived = new Map<number, string>();
@@ -681,12 +690,23 @@ function applyRecordings(
     const content = file?.content ?? decision.content ?? null;
     // Name aus dem Dateinamen vor dem Tag, außer die Art bevorzugt Tags; ohne beides der Sprecher, sonst die Art
     const named = file?.performer && !(recording!.kind.preferTags && artistTagged) ? file.performer : undefined;
-    const artist = recording ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name))) : null;
-    if (title !== track.display_title || raw !== track.raw_title || artist !== track.display_artist || content !== track.content) {
-      setDisplay.run(title, raw, artist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
+    const rawArtist = recording ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name))) : null;
+    // Zusammengeführte Interpreten (Verwaltung → Interpreten) gelten auch für Namen aus den Tags
+    const base = rawArtist ?? track.artist;
+    const aliased = aliasOf(db, base);
+    const artist = aliased !== base ? aliased : rawArtist;
+    if (
+      title !== track.display_title ||
+      raw !== track.raw_title ||
+      artist !== track.display_artist ||
+      rawArtist !== track.raw_artist ||
+      content !== track.content
+    ) {
+      setDisplay.run(title, raw, artist, rawArtist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
       track.display_title = title;
       track.raw_title = raw;
       track.display_artist = artist;
+      track.raw_artist = rawArtist;
       track.content = content;
     }
     const playback = decision.player ?? null;

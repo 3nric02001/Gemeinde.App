@@ -100,6 +100,9 @@ export function QualityPanel() {
         count={report.suspiciousArtists.length}
         hint="Interpreten, die wie ein Datum oder Jahr aussehen oder ganz fehlen. Meist steht im Tag etwas anderes als gemeint."
       >
+        <p class="admin-hint">
+          Umbenennen oder unter dem richtigen Namen zusammenführen: <a href="/admin/interpreten">Verwaltung → Interpreten</a>
+        </p>
         <ul class="admin-list">
           {report.suspiciousArtists.map((artist) => (
             <li key={artist.name} class="admin-row admin-row-plain admin-row-wrap">
@@ -119,6 +122,9 @@ export function QualityPanel() {
         count={report.artistVariants.length}
         hint="Die App fasst sie schon zusammen; einheitliche Tags sehen aber auch in anderen Programmen besser aus."
       >
+        <p class="admin-hint">
+          Ähnliche Namen mit Tippfehlern oder Initialen führst du unter <a href="/admin/interpreten">Interpreten</a> zusammen.
+        </p>
         <ul class="admin-list">
           {report.artistVariants.map((variant) => (
             <li key={variant.names.join('|')} class="admin-row admin-row-plain admin-row-wrap">
