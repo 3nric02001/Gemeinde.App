@@ -134,15 +134,11 @@ export function TabBar({ path }: { path: string }) {
   );
 }
 
-/**
- * Tipp auf den Tab, in dem man schon ist: nach oben scrollen, oben angekommen bei der Suche ins Suchfeld.
- * Ersetzt das Tippen auf die Statusleiste, das beim eigenen Scrollbereich auf dem iPhone nicht mehr greift.
- */
+/** Tipp auf den Tab, in dem man schon ist: nach oben scrollen, oben angekommen bei der Suche ins Suchfeld. */
 function onActiveTab(event: MouseEvent, href: string): void {
-  const main = document.querySelector<HTMLElement>('.main');
-  if (main && main.scrollTop > 0) {
+  if (window.scrollY > 0) {
     event.preventDefault();
-    main.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
   const input = href === '/suche' ? document.querySelector<HTMLInputElement>('.main input[type="search"]') : null;

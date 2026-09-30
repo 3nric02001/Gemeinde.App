@@ -2545,22 +2545,12 @@ button.more-link {
     display: none;
   }
 
-  /* Auf dem Handy scrollt nur der Inhalt, nicht die Seite: iOS Safari verschiebt feste Leisten
-     sonst beim Scrollen (Adressleiste, Nachfedern) mit. */
+  /* Kein Nachfedern der Seite, damit Tab- und Player-Leiste beim Scrollen fest stehen. Die Seite selbst
+     scrollt: ein eigener fester Scrollbereich (.main) ließ die App auf dem iPhone nach der Rückkehr aus
+     dem Hintergrund bei laufender Musik manchmal auf keinen Tipp mehr reagieren. */
   html,
   body {
-    height: 100%;
-    overflow: hidden;
     overscroll-behavior: none;
-  }
-
-  .main {
-    position: fixed;
-    inset: 0;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    -webkit-overflow-scrolling: touch;
   }
 
   .page {
