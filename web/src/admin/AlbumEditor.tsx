@@ -188,7 +188,7 @@ export function AlbumEditor({ id, onError }: Props) {
         ) : (
           <>
             <p class="admin-hint admin-tracks-hint">
-              Mit dem Stift korrigierst du Name und Sprecher eines Titels. Mit den Häkchen wählst du Titel aus, um sie in eine
+              Mit dem Stift korrigierst du Name, Sprecher, Predigt und Player eines Titels. Mit den Häkchen wählst du Titel aus, um sie in eine
               Playlist zu übernehmen.
             </p>
             <ol class="admin-tracks">
