@@ -7,7 +7,8 @@ import { download, getOffline, removeDownloads, useOffline } from '../offline';
 import { navigate } from '../router';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
-import { Menu } from './Menu';
+import { Menu, type MenuItem } from './Menu';
+import { addToPlaylistDialog } from '../playlists';
 import { shareLink } from '../share';
 import { useEffect, useRef } from 'preact/hooks';
 
@@ -23,15 +24,18 @@ interface Props {
   from?: PlaybackContext;
   /** Titel aus einem geteilten Link: hervorheben und hinscrollen */
   highlight?: number;
+  /** Weitere Menüeinträge je Titel, z. B. "Aus der Playlist entfernen" in einer eigenen Playlist */
+  extraMenu?: (track: Track, index: number) => MenuItem[];
 }
 
-export function trackMenu(track: Track) {
-  const items = [
+export function trackMenu(track: Track): MenuItem[] {
+  const items: MenuItem[] = [
     { label: 'Als Nächstes spielen', onSelect: () => player.playNext([track]) },
     { label: 'Zur Warteschlange hinzufügen', onSelect: () => player.append([track]) },
     isFavorite('track', track.id)
       ? { label: 'Aus den Favoriten entfernen', onSelect: () => void toggleFavorite('track', track) }
       : { label: 'Zu den Favoriten', onSelect: () => void toggleFavorite('track', track) },
+    { label: 'Zur Playlist hinzufügen …', onSelect: () => addToPlaylistDialog([track]) },
   ];
   const offline = getOffline();
   if (offline.ids.has(track.id)) items.push({ label: 'Offline-Kopie löschen', onSelect: () => void removeDownloads([track.id]) });
@@ -44,7 +48,7 @@ export function trackMenu(track: Track) {
   return items;
 }
 
-export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, from, highlight }: Props) {
+export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, from, highlight, extraMenu }: Props) {
   const linked = useRef<HTMLLIElement>(null);
   useEffect(() => linked.current?.scrollIntoView({ block: 'center' }), [highlight]);
   const currentId = usePlayerSelect((s) => s.current?.id);
@@ -111,7 +115,7 @@ export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, f
               <span class="track-time">
                 {resume ? `noch ${formatTime(resume.duration - resume.position)}` : formatTime(track.duration)}
               </span>
-              <Menu label={`Weitere Aktionen für ${track.title}`} title={track.title} items={trackMenu(track)} />
+              <Menu label={`Weitere Aktionen für ${track.title}`} title={track.title} items={extraMenu ? [...trackMenu(track), ...extraMenu(track, index)] : trackMenu(track)} />
             </li>
           </Fragment>
         );

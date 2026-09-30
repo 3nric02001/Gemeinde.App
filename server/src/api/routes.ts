@@ -10,6 +10,7 @@ import { registerAdminRoutes } from './admin.js';
 import { listBooks, listSpeakers, tracksOfBook, tracksOfSpeaker } from '../library/browse.js';
 import { LiveStatus } from '../livestream.js';
 import { registerMeRoutes } from './me.js';
+import { registerPlaylistRoutes } from './playlists.js';
 import { popularAlbums, popularSearches } from '../library/searches.js';
 import {
   getAlbum,
@@ -346,4 +347,5 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   await registerAdminRoutes(app, { db });
   await registerMeRoutes(app, { db });
+  await registerPlaylistRoutes(app, { db });
 }

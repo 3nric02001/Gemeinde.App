@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { clearCache, getJson, type Album, type Track } from './api';
 import { sessionExpired } from './auth';
 import { syncFavorites } from './offline';
+import { loadPlaylists, resetPlaylists } from './playlists';
 import { sermonMinSeconds } from './playerSettings';
 
 /**
@@ -80,6 +81,7 @@ export async function loadMe(): Promise<void> {
     fetchJson<Favorites>('/api/me/favorites').catch(() => undefined),
     fetchJson<{ items: Array<Progress & { trackId: number }> }>('/api/me/progress').catch(() => undefined),
     loadDates(),
+    loadPlaylists(),
   ]);
   set({
     ...(favorites ? { favorites } : {}),
@@ -92,6 +94,7 @@ export async function loadMe(): Promise<void> {
 /** Nach dem Abmelden nichts vom vorigen Hörer stehen lassen. */
 export function resetMe(): void {
   state = empty();
+  resetPlaylists();
   listeners.forEach((listener) => listener());
 }
 

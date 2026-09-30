@@ -718,6 +718,35 @@ export const migrations: string[] = [
   -- Wann der Benutzer zuletzt unter "Datum" war; was danach dazukommt, ist für ihn neu. NULL: noch nie (dann gilt jetzt).
   ALTER TABLE users ADD COLUMN dates_seen_at INTEGER;
   `,
+  `
+  -- Eigene Playlists der Hörer (getrennt von den Playlists der Verwaltung, die Alben der Art 'manual' sind).
+  -- Titel hängen an der ID: ein verschobener Titel behält sie, ein gelöschter fällt heraus.
+  CREATE TABLE user_playlists (
+    id         INTEGER PRIMARY KEY,
+    owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title      TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX user_playlists_owner ON user_playlists(owner_id);
+
+  CREATE TABLE user_playlist_tracks (
+    playlist_id INTEGER NOT NULL REFERENCES user_playlists(id) ON DELETE CASCADE,
+    track_id    INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    position    INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, track_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX user_playlist_tracks_track ON user_playlist_tracks(track_id);
+
+  -- Mit wem eine Playlist geteilt ist; Empfänger hören sie, ändern kann sie nur der Besitzer.
+  CREATE TABLE user_playlist_shares (
+    playlist_id INTEGER NOT NULL REFERENCES user_playlists(id) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, user_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX user_playlist_shares_user ON user_playlist_shares(user_id);
+  `,
 ];
 
 export function openDatabase(path: string): DB {

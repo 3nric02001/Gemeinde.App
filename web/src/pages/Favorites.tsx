@@ -7,6 +7,7 @@ import { TrackList } from '../components/TrackList';
 import { formatDuration, plural } from '../format';
 import { FAVORITES_CONTEXT, useMe } from '../me';
 import { player } from '../player';
+import { addToPlaylistDialog } from '../playlists';
 import { Empty, Loading } from './common';
 
 /** Die Favoriten des angemeldeten Hörers: die Titel mit Herz als Playlist, darunter die Alben mit Herz */
@@ -56,6 +57,7 @@ export function Favorites() {
               items={[
                 { label: 'Als Nächstes spielen', onSelect: () => player.playNext(tracks, from) },
                 { label: 'Zur Warteschlange hinzufügen', onSelect: () => player.append(tracks, from) },
+                { label: 'Zur Playlist hinzufügen …', onSelect: () => addToPlaylistDialog(tracks) },
               ]}
             />
           </div>

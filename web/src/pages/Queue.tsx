@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon';
 import { Equalizer } from '../components/TrackList';
 import { formatTime } from '../format';
 import { player, usePlayerSelect, type Entry } from '../player';
+import { addToPlaylistDialog } from '../playlists';
 import { Empty } from './common';
 
 function Row({ entry, index, current, playing }: { entry: Entry; index: number; current: boolean; playing: boolean }) {
@@ -49,7 +50,12 @@ export function QueuePage() {
   const upcoming = queue.slice(index + 1);
   return (
     <div class="page">
-      <h1 class="page-title">Warteschlange</h1>
+      <div class="page-head">
+        <h1 class="page-title">Warteschlange</h1>
+        <button type="button" class="button-secondary" onClick={() => addToPlaylistDialog(queue.slice(index).map((entry) => entry.track))}>
+          <Icon name="playlist" size={18} /> Als Playlist speichern
+        </button>
+      </div>
       <section class="shelf">
         <div class="section-head">
           <h2>Jetzt läuft</h2>

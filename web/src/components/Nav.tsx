@@ -24,10 +24,11 @@ const items: NavItem[] = [
   albums,
   dates,
   { href: '/favoriten', label: 'Favoriten', icon: 'heart', match: (p) => p.startsWith('/favoriten') },
+  { href: '/playlists', label: 'Meine Playlists', icon: 'playlist', match: (p) => p.startsWith('/playlist') },
 ];
 
 /** Tab-Leiste auf dem Handy: die vier wichtigsten Ziele, der Rest unter "Mehr" */
-const MORE_PATHS = ['/mehr', '/live', '/titel', '/favoriten', '/kategorie', '/warteschlange', '/admin'];
+const MORE_PATHS = ['/mehr', '/live', '/titel', '/favoriten', '/playlist', '/kategorie', '/warteschlange', '/admin'];
 const tabs: NavItem[] = [
   start,
   search,

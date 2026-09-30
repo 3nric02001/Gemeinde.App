@@ -4,12 +4,14 @@ import { useAuth } from '../auth';
 import { playAlbum, Shelf } from '../components/AlbumCard';
 import { Cover } from '../components/Cover';
 import { FavoritesCard } from '../components/FavoritesCard';
+import { PlaylistCard } from '../components/PlaylistCard';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
 import { TrackList } from '../components/TrackList';
 import { formatDuration, formatLongDate, formatTime, plural, withoutDate } from '../format';
 import { useApi } from '../hooks';
 import { useMe } from '../me';
+import { usePlaylists } from '../playlists';
 import { LiveTile } from './Live';
 import { useLive } from '../live';
 import { Empty } from './common';
@@ -35,6 +37,9 @@ export function Home() {
   const personal = useApi<{ resume: Array<Track & { position: number }>; recent: Album[] }>('/api/me/home');
   const facets = useApi<Facets>('/api/facets');
   const live = useLive();
+  const playlists = usePlaylists();
+  // Eigene und geteilte Playlists, zuletzt geänderte zuerst
+  const myPlaylists = [...playlists.own, ...playlists.shared].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 12);
   const recordings = [...(facets.data?.recordings ?? [])].sort((a, b) => (b.latest ?? '').localeCompare(a.latest ?? ''));
   const name = firstName(user?.name, user?.kind);
   const title = name ? `${greeting()}, ${name}` : greeting();
@@ -97,6 +102,12 @@ export function Home() {
         href="/favoriten"
         albums={me.favorites?.albums.slice(0, 12) ?? []}
         lead={me.favorites?.tracks.length ? <FavoritesCard tracks={me.favorites.tracks} /> : undefined}
+      />
+      <Shelf
+        title="Deine Playlists"
+        href="/playlists"
+        albums={[]}
+        lead={myPlaylists.length ? myPlaylists.map((playlist) => <PlaylistCard key={playlist.id} playlist={playlist} />) : undefined}
       />
 
       {facets.data && (

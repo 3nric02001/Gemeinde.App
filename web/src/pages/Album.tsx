@@ -14,6 +14,7 @@ import { coverUrl, kindLabel, query, type Album as AlbumType, type Page } from '
 import { BackButton, ErrorNote, Loading } from './common';
 import { markAlbumHeard, useMe } from '../me';
 import { shareLink, showToast } from '../share';
+import { addToPlaylistDialog } from '../playlists';
 
 /** `track`: Titel aus einem geteilten Link, wird hervorgehoben */
 export function Album({ id, track }: { id: number; track?: number }) {
@@ -71,6 +72,7 @@ export function Album({ id, track }: { id: number; track?: number }) {
           items={[
             { label: 'Als Nächstes spielen', onSelect: () => player.playNext(album.tracks, from) },
             { label: 'Zur Warteschlange hinzufügen', onSelect: () => player.append(album.tracks, from) },
+            { label: 'Zur Playlist hinzufügen …', onSelect: () => addToPlaylistDialog(album.tracks) },
             // Gottesdienste: Hörstand von Hand, für die Liste unter "Datum"
             ...(album.date && album.kind !== 'manual'
               ? [
