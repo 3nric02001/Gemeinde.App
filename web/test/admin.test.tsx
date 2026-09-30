@@ -66,9 +66,11 @@ describe('Verwaltung', () => {
     await waitFor(() => expect(screen.getByText('Predigten')).toBeTruthy());
     expect(screen.queryByText('Benutzer')).toBeNull();
     cleanup();
-    // Auch direkt aufgerufen keine Benutzerverwaltung
+    // Direkt aufgerufen: ein Hinweis statt der Benutzerverwaltung
     render(<Admin location={at('/admin/benutzer')} />);
-    await waitFor(() => expect(screen.getByText('Alben verwalten')).toBeTruthy());
+    expect(screen.getByText('Nur für Admins')).toBeTruthy();
+    expect(screen.getByText('„Benutzer“ können nur Admins sehen und ändern.', { exact: false })).toBeTruthy();
+    expect(screen.queryByText('Lokaler Admin', { exact: false })).toBeNull();
   });
 
   it('zeigt Admins Benutzer, Gruppen und Anmeldung', async () => {

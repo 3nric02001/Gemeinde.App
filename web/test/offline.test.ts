@@ -94,7 +94,7 @@ describe('Offline-Kopien', () => {
 
     const blob = await readDownload(track.id);
     expect(blob?.type).toBe('audio/mpeg');
-    // Byte für Byte gleich; Buffer.equals statt toEqual, das 1 MiB Element für Element vergleicht und Sekunden braucht
+    // Byteweiser Vergleich über Buffer: toEqual braucht für 1 MiB mehrere Sekunden
     expect(Buffer.from(await blob!.arrayBuffer()).equals(Buffer.from(audio))).toBe(true);
     expect(trackCoverUrl(track)).toMatch(/^blob:/);
     expect(getOffline().items[0]).toMatchObject({ id: 41, size: audio.length, parts: 2 });

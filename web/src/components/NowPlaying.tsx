@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import { trackCoverUrl } from '../api';
 import { albumLabel } from '../format';
 import { navigate } from '../router';
-import { usePlayerSelect } from '../player';
+import { currentHref, usePlayerSelect } from '../player';
 import { Controls, RateButton, Volume } from './Controls';
 import { Cover } from './Cover';
 import { FavoriteButton } from './FavoriteButton';
@@ -12,6 +12,7 @@ import { Seek } from './Seek';
 /** Vollbild "Jetzt läuft" mit großem Cover, wie bei Apple Music; nach unten wischen schließt. */
 export function NowPlaying({ onClose }: { onClose: () => void }) {
   const track = usePlayerSelect((s) => s.current);
+  const from = usePlayerSelect((s) => s.from);
   const sheet = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number } | undefined>();
 
@@ -62,7 +63,14 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
         <button type="button" class="icon-button" aria-label="Schließen" onClick={onClose}>
           <Icon name="down" size={28} />
         </button>
-        <span class="now-label">Jetzt läuft</span>
+        {from ? (
+          <a class="now-label now-from" href={from.href} onClick={(event) => (event.preventDefault(), go(from.href))}>
+            <small>Aus der Playlist</small>
+            <span>{from.title}</span>
+          </a>
+        ) : (
+          <span class="now-label">Jetzt läuft</span>
+        )}
         <button type="button" class="icon-button" aria-label="Warteschlange" onClick={() => go('/warteschlange')}>
           <Icon name="queue" size={22} />
         </button>
@@ -70,7 +78,10 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
       <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} date={track.albumDate} class="cover-now" eager />
       <div class="now-head">
         <div class="now-meta">
-          <button type="button" class="now-title" onClick={() => track.albumId && go(`/album/${track.albumId}`)}>
+          <button type="button" class="now-title" onClick={() => {
+              const href = currentHref(track, from);
+              if (href) go(href);
+            }}>
             {track.title}
           </button>
           <button type="button" class="now-artist" onClick={() => go(`/interpret/${encodeURIComponent(track.artist)}`)}>

@@ -171,10 +171,6 @@ Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
 - **Inhalte ohne Titel** (Begrüßung, Gebet, Abkündigungen, Segen …): Folgt nur ein Teil, ist das der Name.
   `Begrüßung - Jakob Rauschenberger` wird „Begrüßung“ mit Jakob Rauschenberger; bei `Lied - Großer Gott` bleibt
   „Großer Gott“ der Titel.
-- **Einzelne Aufnahmen korrigieren**: Passt ein Dateiname gar nicht, lassen sich Inhalt, Titel und Name in der
-  Verwaltung am Album je Titel setzen (Knopf „…“ neben dem Titel, dort steht auch der Dateiname). Die Korrektur
-  gilt nach Dateipfad, übersteht jeden Scan und folgt der Datei beim Umbenennen; leere Felder nehmen wieder den
-  Dateinamen.
 - **Inhalte**: Liste, was am Anfang eines Dateinamens stehen kann; nötig für Inhalte aus mehreren Wörtern.
   Der Inhalt jeder Aufnahme steht in der Kategorie „Inhalt“ (vorgegeben, zunächst nicht im Menü) und in der Suche.
 - **Tags**: Standardmäßig gilt der Dateiname, auch wenn die Datei Tags hat. Je Art lässt sich einstellen, dass
@@ -401,16 +397,18 @@ Verwaltung (Manager und Admins):
 
 | Methode und Pfad | Zweck |
 | --- | --- |
-| `GET /api/admin/albums?q=&kind=auto\|manual` | Alle Alben inkl. ausgeblendeter |
+| `GET /api/admin/albums?q=&kind=auto\|manual&dated=&hidden=&noSpeaker=` | Alle Alben inkl. ausgeblendeter; `dated` Gottesdienste oder Musik, `hidden=true` nur ausgeblendete, `noSpeaker=true` Gottesdienste ohne Sprecher |
 | `POST /api/admin/albums` | Eigenes Album anlegen: `{ title, artist?, year?, genre?, trackIds?, move? }` |
 | `GET /api/admin/albums/:id` | Album mit Korrekturen, herausgenommenen und fehlenden Titeln |
 | `PATCH /api/admin/albums/:id` | `{ title?, artist?, year?, genre?, hidden? }`; `null` setzt auf automatisch zurück |
 | `DELETE /api/admin/albums/:id` | Eigenes Album löschen (die Titel bleiben) |
 | `POST /api/admin/albums/:id/tracks` | Titel anhängen: `{ trackIds, move? }`; `move` nimmt sie aus ihrem automatischen Album |
 | `PUT /api/admin/albums/:id/tracks` | Inhalt und Reihenfolge eines eigenen Albums setzen: `{ trackIds }` |
-| `PATCH /api/admin/albums/:id/tracks/:trackId` | Aufnahme korrigieren: `{ content?, title?, name? }`, `null` nimmt wieder den Dateinamen |
 | `DELETE /api/admin/albums/:id/tracks/:trackId` | Titel entfernen (bei automatischen Alben: herausnehmen) |
 | `POST /api/admin/albums/:id/tracks/:trackId/restore` | Herausgenommenen Titel zurückholen |
+| `PATCH /api/admin/albums/:id/tracks/:trackId` | Titel korrigieren: `{ title?, speaker? }`; `null` setzt auf den Wert aus der Datei zurück, die Korrektur übersteht Scans und folgt der Datei beim Umbenennen |
+| `PUT /api/admin/albums/:id/cover` | Eigenes Titelbild hochladen; Body ist das Bild (`image/jpeg`, `image/png`, `image/webp`, höchstens 15 MB), gespeichert verkleinert als JPEG ohne Metadaten |
+| `DELETE /api/admin/albums/:id/cover` | Eigenes Titelbild entfernen |
 | `POST /api/admin/albums/:id/rules` | Regel anlegen: `{ condition, move? }` (siehe unten) |
 | `PUT /api/admin/albums/:id/rules/:ruleId` | Regel ändern, gleicher Aufbau |
 | `DELETE /api/admin/albums/:id/rules/:ruleId` | Regel löschen |
@@ -465,6 +463,7 @@ Anmeldung und Benutzer:
 | `PUT /api/admin/groups/:name` | `{ enabled?, role?: listener\|manager\|admin }`, legt die Gruppe bei Bedarf an (nur Admin) |
 | `DELETE /api/admin/groups/:name` | Gruppe entfernen (nur Admin) |
 | `GET/PUT /api/admin/oidc` | OIDC-Einstellungen; das Secret wird nie ausgeliefert (nur Admin) |
+| `GET /api/admin/changes?limit=&offset=` | Änderungsprotokoll der Verwaltung, neueste zuerst; die letzten 5.000 bleiben (nur Admin) |
 | `POST /api/admin/oidc/test` | Discovery des Identity Providers testen (nur Admin) |
 | `GET/PUT /api/admin/branding` | `{ name, welcome }` für Anmeldeseite, Seitentitel und App-Manifest (nur Admin) |
 

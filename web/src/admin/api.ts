@@ -16,18 +16,9 @@ export interface AlbumFields {
   description: string | null;
 }
 
-/** Von Hand korrigierte Teile einer Aufnahme; null: aus dem Dateinamen */
-export interface TrackOverride {
-  content: string | null;
-  title: string | null;
-  name: string | null;
-}
-
 export interface AdminAlbumDetail extends AlbumDetail {
   kind: 'auto' | 'manual';
   hidden: boolean;
-  /** Dateiname und Korrektur je Titel */
-  trackFiles?: Record<number, { file: string; override: TrackOverride | null }>;
   /** Vom Admin festgelegte Werte; null heißt automatisch */
   overrides: AlbumFields;
   /** Aus einem automatischen Album herausgenommene Titel */
@@ -39,6 +30,32 @@ export interface AdminAlbumDetail extends AlbumDetail {
   ruleTrackIds: number[];
   /** Titel eines automatischen Albums, die eine Regel in ein eigenes Album verschiebt */
   movedByRule: Array<{ id: number; title: string; artist: string; albumId: number; albumTitle: string }>;
+  /** Je Titel: Name und Sprecher aus der Datei und die Korrekturen der Verwaltung */
+  trackEdits: TrackEdit[];
+  /** Albumordner in der Nextcloud; bei Gottesdiensten kommt das Datum aus seinem Namen */
+  folder: string;
+  /** Ein eigenes Titelbild ist hochgeladen */
+  customCover: boolean;
+  /** Letzte Änderung an diesem Album in der Verwaltung */
+  lastChange: Change | null;
+}
+
+export interface TrackEdit {
+  id: number;
+  fileTitle: string;
+  title: string | null;
+  speaker: string | null;
+  fileSpeaker: string | null;
+}
+
+export interface Change {
+  id: number;
+  at: number;
+  userId: number | null;
+  userName: string;
+  action: string;
+  target: string | null;
+  albumId: number | null;
 }
 
 export type RuleField = 'title' | 'artist' | 'album' | 'genre' | 'path';
@@ -108,6 +125,18 @@ export async function adminRequest<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' |
   // Nach Änderungen sollen Player-Seiten sofort den neuen Stand laden.
   if (method !== 'GET' && !url.endsWith('/preview')) clearCache();
   return (res.status === 204 ? undefined : await res.json()) as T;
+}
+
+/** Lädt ein Bild hoch; der Body ist die Datei selbst (siehe PUT /api/admin/albums/:id/cover). */
+export async function adminUpload<T>(url: string, file: Blob): Promise<T> {
+  const res = await fetch(url, { method: 'PUT', headers: { accept: 'application/json', 'content-type': file.type }, body: file });
+  if (res.status === 401) sessionExpired();
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(res.status, data.error ?? `Fehler ${res.status}`);
+  }
+  clearCache();
+  return (await res.json()) as T;
 }
 
 /** Kategorie mit Zuordnung, wie die Verwaltung sie bearbeitet */

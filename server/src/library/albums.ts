@@ -4,7 +4,7 @@ import { parseFolderDate } from './dateText.js';
 import { PASSAGE_TAGS, SPEAKER_TAGS, UNKNOWN_ARTIST } from './metadata.js';
 import { evaluateRules } from './rules.js';
 import { albumFolderOf, basename, dirname, fileStem, folderDate, parsePath, type PathMeta } from './pathMeta.js';
-import { applyToFolder, compileStructure, getStructure, kindOfFolder, type FolderResult, type TrackOverride } from './structure.js';
+import { applyToFolder, compileStructure, getStructure, kindOfFolder, type FolderResult } from './structure.js';
 import { foldValue, sortKey } from './text.js';
 
 export const VARIOUS_ARTISTS = 'Verschiedene Interpreten';
@@ -193,6 +193,8 @@ interface Override {
   passage: string | null;
   description: string | null;
   hidden: number;
+  /** Hochgeladenes Titelbild (covers.id) */
+  cover_id: number | null;
 }
 
 const COMPARED = [
@@ -302,25 +304,14 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       const { folder } = groups.get(track.id)!;
       byFolder.set(folder, [...(byFolder.get(folder) ?? []), track]);
     }
-    const trackOverrides = new Map(
-      (db.prepare('SELECT path, content, title, name FROM track_overrides').all() as Array<TrackOverride & { path: string }>).map(
-        (row) => [row.path, row],
-      ),
-    );
     const recordings = new Map<string, FolderResult>();
     for (const [folder, list] of byFolder) {
       const kind = kindOfFolder(structure, folder);
       if (!kind) continue;
-      const files = list.map((t) => ({
-        path: t.path,
-        title: t.title,
-        titleTagged: t.title_tagged === 1 || (t.title_tagged === null && t.title !== parsed(t.path).title),
-        duration: t.duration,
-        override: trackOverrides.get(t.path),
-      }));
+      const files = list.map((t) => ({ path: t.path, title: t.title, titleTagged: t.title_tagged === 1 || (t.title_tagged === null && t.title !== parsed(t.path).title), duration: t.duration }));
       recordings.set(folder, applyToFolder(kind, folder, files));
     }
-    applyRecordings(db, tracks, (track) => recordings.get(groups.get(track.id)!.folder), parsed, trackOverrides);
+    applyRecordings(db, tracks, (track) => recordings.get(groups.get(track.id)!.folder), parsed);
     // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) zählen zur Art ohne Ordner-Kennzeichen.
     const defaultRecording = structure.kinds.find((k) => !k.folderKey)?.kind.name ?? structure.kinds[0]?.kind.name ?? null;
 
@@ -360,7 +351,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     }
 
     const overrides = new Map(
-      (db.prepare('SELECT key, title, artist, year, genre, speaker, passage, description, hidden FROM album_overrides').all() as Array<
+      (db.prepare('SELECT key, title, artist, year, genre, speaker, passage, description, hidden, cover_id FROM album_overrides').all() as Array<
         Override & { key: string }
       >).map((row) => [row.key, row]),
     );
@@ -384,6 +375,15 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     };
     const speakers = sermonTag(SPEAKER_TAGS);
     const passages = sermonTag(PASSAGE_TAGS);
+    // Sprecher, die in der Verwaltung je Titel gesetzt wurden, gehen den Tags vor.
+    const pathIds = new Map(tracks.map((t) => [t.path, t.id]));
+    for (const row of db.prepare('SELECT path, speaker FROM track_overrides WHERE speaker IS NOT NULL').all() as Array<{
+      path: string;
+      speaker: string;
+    }>) {
+      const id = pathIds.get(row.path);
+      if (id !== undefined) speakers.set(id, row.speaker);
+    }
 
     // 3. Automatische Alben aus den Gruppen, ohne herausgenommene und per Regel verschobene Titel.
     const drafts = new Map<string, AlbumDraft>();
@@ -448,9 +448,10 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         description: override?.description ?? null,
         genre: override?.genre ?? mostCommon(draft.tracks.map((t) => t.genre)) ?? null,
         folder: draft.folder,
-        cover: cover ?? null,
+        // Ein hochgeladenes Titelbild geht dem Ordnerbild und den eingebetteten Bildern vor.
+        cover: override?.cover_id ? null : (cover ?? null),
         // Eingebettetes Bild, das die meisten Titel tragen (bei Gleichstand das des ersten Titels)
-        coverId: mostCommon(draft.tracks.map((t) => t.cover_id)) ?? null,
+        coverId: override?.cover_id ?? mostCommon(draft.tracks.map((t) => t.cover_id)) ?? null,
         count: draft.tracks.length,
         duration: draft.tracks.reduce((sum, t) => sum + (t.duration ?? 0), 0),
         hidden: override?.hidden ? 1 : 0,
@@ -572,7 +573,6 @@ function applyRecordings(
   tracks: TrackRow[],
   recordingOf: (track: TrackRow) => FolderResult | undefined,
   parsed: (path: string) => PathMeta,
-  overrides: Map<string, TrackOverride>,
 ): void {
   const setDisplay = db.prepare(
     'UPDATE tracks SET display_title = ?, display_artist = ?, content = ?, sort_title = ?, sort_artist = ? WHERE id = ?',
@@ -591,16 +591,11 @@ function applyRecordings(
     const recording = recordingOf(track);
     const file = recording?.files.get(track.path);
     const artistTagged = track.artist !== UNKNOWN_ARTIST && track.artist !== parsed(track.path).artist;
-    // Korrektur aus der Verwaltung; bei Aufnahmen fließt sie schon über applyToFolder ein, bei Musik direkt hier
-    const override = recording ? undefined : overrides.get(track.path);
-    const title = file?.title ?? override?.title ?? null;
-    const content = file?.content ?? override?.content ?? null;
+    const title = file?.title ?? null;
+    const content = file?.content ?? null;
     // Name aus dem Dateinamen vor dem Tag, außer die Art bevorzugt Tags; ohne beides der Sprecher, sonst die Art
-    const corrected = recording?.files.get(track.path) && overrides.get(track.path)?.name != null;
-    const named = file?.performer && (corrected || !(recording!.kind.preferTags && artistTagged)) ? file.performer : undefined;
-    const artist = recording
-      ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name)))
-      : (override?.name ?? null);
+    const named = file?.performer && !(recording!.kind.preferTags && artistTagged) ? file.performer : undefined;
+    const artist = recording ? (named ?? (artistTagged ? null : (recording.speaker ?? recording.kind.name))) : null;
     if (title !== track.display_title || artist !== track.display_artist || content !== track.content) {
       setDisplay.run(title, artist, content, sortKey(title ?? track.title), sortKey(artist ?? track.artist), track.id);
       track.display_title = title;

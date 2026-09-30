@@ -240,24 +240,14 @@ describe('Uneinheitliche Dateinamen', () => {
     ]);
   });
 
-  it('lässt einzelne Aufnahmen in der Verwaltung korrigieren, auch nach Umbenennen', async () => {
+  it('behält eine Korrektur aus der Verwaltung, wenn die Datei umbenannt wird', async () => {
     const album = await service();
     const odd = (await albumTracks(album.id)).find((t) => t.title === 'Schlusslied: Chor');
-    const detail = await call('PATCH', `/api/admin/albums/${album.id}/tracks/${odd.id}`, { content: 'Lied', title: 'Schlusslied', name: 'Chor' });
-    expect(detail.trackFiles[odd.id]).toEqual({
-      file: '10 - Schlusslied_Chor.mp3',
-      override: { content: 'Lied', title: 'Schlusslied', name: 'Chor' },
-    });
+    await call('PATCH', `/api/admin/albums/${album.id}/tracks/${odd.id}`, { title: 'Lied: Schlusslied', speaker: 'Chor' });
     const fixed = async () => (await albumTracks(album.id)).find((t) => t.id === odd.id);
-    expect(await fixed()).toMatchObject({ title: 'Lied: Schlusslied', artist: 'Chor', content: 'Lied' });
-
-    // Die Korrektur folgt der Datei, wenn sie in der Nextcloud umbenannt wird
+    expect(await fixed()).toMatchObject({ title: 'Lied: Schlusslied' });
     cloud.move(`${folder}/10 - Schlusslied_Chor.mp3`, `${folder}/10 - Schlusslied.mp3`);
     await ctx.scanner.scan();
-    expect(await fixed()).toMatchObject({ title: 'Lied: Schlusslied', artist: 'Chor' });
-
-    // null setzt auf automatisch zurück
-    await call('PATCH', `/api/admin/albums/${album.id}/tracks/${odd.id}`, { content: null, title: null, name: null });
-    expect(await fixed()).toMatchObject({ title: 'Schlusslied' });
+    expect(await fixed()).toMatchObject({ title: 'Lied: Schlusslied' });
   });
 });

@@ -15,12 +15,15 @@ import {
   type RuleInput,
   removeTrack,
   restoreTrack,
-  setTrackOverride,
+  setAlbumCover,
   setTracks,
   updateAlbum,
-  type TrackFields,
+  updateTrack,
+  MAX_COVER_UPLOAD,
   type AlbumFields,
+  type TrackFields,
 } from '../library/curation.js';
+import { listChanges } from '../library/changes.js';
 import {
   categoryValues,
   createCategory,
@@ -123,6 +126,11 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
       if (error instanceof CurationError) return reply.code(error.status).send({ error: error.message });
       if (error instanceof StructureError) return reply.code(400).send({ error: error.message });
       if ((error as { validation?: unknown }).validation) return reply.code(400).send({ error: (error as Error).message });
+      // Von Fastify selbst, z. B. falscher Dateityp oder zu großes Bild beim Hochladen
+      const status = (error as { statusCode?: number }).statusCode;
+      if (status === 415) return reply.code(415).send({ error: 'Bitte ein JPEG-, PNG- oder WebP-Bild hochladen' });
+      if (status === 413) return reply.code(413).send({ error: 'Das Bild ist zu groß (höchstens 15 MB)' });
+      if (status && status >= 400 && status < 500) return reply.code(status).send({ error: (error as Error).message });
       request.log.error({ err: error }, 'Fehler im Admin-Bereich');
       return reply.code(500).send({ error: 'Interner Fehler' });
     });
@@ -136,6 +144,9 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
             properties: {
               q: { type: 'string', maxLength: 200 },
               kind: { type: 'string', enum: ['auto', 'manual'] },
+              dated: { type: 'boolean' },
+              hidden: { type: 'boolean' },
+              noSpeaker: { type: 'boolean' },
               sort: { type: 'string', enum: ['title', 'artist', 'year', 'recent', 'date'], default: 'date' },
               limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
               offset: { type: 'integer', minimum: 0, default: 0 },
@@ -223,7 +234,11 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
       },
     );
 
-    // Inhalt, Titel und Name einer Aufnahme korrigieren, wenn der Dateiname nicht zum Regelwerk passt
+    admin.delete('/api/admin/albums/:id/tracks/:trackId', { schema: { params: trackParam } }, async (request: TrackRequest) => {
+      removeTrack(db, request.params.id, request.params.trackId);
+      return albumDetail(db, request.params.id);
+    });
+
     admin.patch(
       '/api/admin/albums/:id/tracks/:trackId',
       {
@@ -231,21 +246,55 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
           params: trackParam,
           body: {
             type: 'object',
-            properties: { content: nullableText(100), title: nullableText(200), name: nullableText(200) },
+            properties: { title: nullableText(300), speaker: nullableText(200) },
             additionalProperties: false,
           },
         },
       },
       async (request: TrackRequest) => {
-        setTrackOverride(db, request.params.trackId, request.body as TrackFields);
+        updateTrack(db, request.params.id, request.params.trackId, request.body as TrackFields);
         return albumDetail(db, request.params.id);
       },
     );
 
-    admin.delete('/api/admin/albums/:id/tracks/:trackId', { schema: { params: trackParam } }, async (request: TrackRequest) => {
-      removeTrack(db, request.params.id, request.params.trackId);
+    // Eigenes Titelbild: der Body ist das Bild selbst (Content-Type image/jpeg, image/png oder image/webp).
+    admin.addContentTypeParser(
+      ['image/jpeg', 'image/png', 'image/webp'],
+      { parseAs: 'buffer', bodyLimit: MAX_COVER_UPLOAD },
+      (_request, body, done) => done(null, body),
+    );
+    admin.put('/api/admin/albums/:id/cover', { schema: { params: idParam } }, async (request: IdRequest, reply) => {
+      if (!Buffer.isBuffer(request.body)) {
+        return reply.code(415).send({ error: 'Bitte ein JPEG-, PNG- oder WebP-Bild hochladen' });
+      }
+      await setAlbumCover(db, request.params.id, request.body);
       return albumDetail(db, request.params.id);
     });
+    admin.delete('/api/admin/albums/:id/cover', { schema: { params: idParam } }, async (request: IdRequest) => {
+      await setAlbumCover(db, request.params.id, null);
+      return albumDetail(db, request.params.id);
+    });
+
+    // Änderungsprotokoll; nur für Admins (siehe ADMIN_ONLY in auth.ts)
+    admin.get(
+      '/api/admin/changes',
+      {
+        schema: {
+          querystring: {
+            type: 'object',
+            properties: {
+              limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+              offset: { type: 'integer', minimum: 0, default: 0 },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request) => {
+        const { limit, offset } = request.query as { limit: number; offset: number };
+        return { ...listChanges(db, limit, offset), limit, offset };
+      },
+    );
 
     admin.post(
       '/api/admin/albums/:id/tracks/:trackId/restore',

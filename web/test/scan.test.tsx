@@ -32,8 +32,11 @@ describe('Scan in der Verwaltung', () => {
   it('zeigt den letzten Stand', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(base));
     render(<ScanPanel />);
-    await waitFor(() => expect(screen.getByText('1.200 Titel in der Nextcloud, zuletzt 3 neu.')).toBeTruthy());
+    // Ohne Probleme nur eine Zeile, Einzelheiten auf Wunsch
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/^Nextcloud: 1\.200 Titel · abgeglichen /));
     expect(screen.getByText('Jetzt scannen')).toBeTruthy();
+    fireEvent.click(screen.getByText('Details'));
+    expect(screen.getByText('1.200 Titel in der Nextcloud, zuletzt 3 neu.')).toBeTruthy();
     expect(screen.getByText('Ordner: /Gemeinde/Musik · /Gemeinde/Predigten')).toBeTruthy();
   });
 

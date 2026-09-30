@@ -1,6 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import type { DB } from '../db.js';
 import { MANUAL_KEY_PREFIX, rebuildAlbums } from './albums.js';
+import { lastChange } from './changes.js';
+import { searchExtra, SPEAKER_TAGS, withOverride } from './metadata.js';
 import { getAlbum } from './queries.js';
 import { evaluateRules, listRules, parseCondition, ruleMatcher, type RuleCondition, type RuleTrack } from './rules.js';
 
@@ -90,9 +93,11 @@ const TEXT_FIELDS = ['title', 'artist', 'genre', 'speaker', 'passage', 'descript
 
 function writeOverride(db: DB, key: string, fields: AlbumFields): void {
   const current = (db
-    .prepare('SELECT title, artist, year, genre, speaker, passage, description, hidden FROM album_overrides WHERE key = ?')
-    .get(key) as Record<(typeof TEXT_FIELDS)[number], string | null> & { year: number | null; hidden: number } | undefined) ?? {
-    title: null, artist: null, year: null, genre: null, speaker: null, passage: null, description: null, hidden: 0,
+    .prepare('SELECT title, artist, year, genre, speaker, passage, description, hidden, cover_id FROM album_overrides WHERE key = ?')
+    .get(key) as
+    | (Record<(typeof TEXT_FIELDS)[number], string | null> & { year: number | null; hidden: number; cover_id: number | null })
+    | undefined) ?? {
+    title: null, artist: null, year: null, genre: null, speaker: null, passage: null, description: null, hidden: 0, cover_id: null,
   };
   const next: Record<string, unknown> = {
     key,
@@ -100,7 +105,8 @@ function writeOverride(db: DB, key: string, fields: AlbumFields): void {
     hidden: fields.hidden !== undefined ? (fields.hidden ? 1 : 0) : current.hidden,
   };
   for (const field of TEXT_FIELDS) next[field] = fields[field] !== undefined ? cleanText(fields[field]) ?? null : current[field];
-  if (TEXT_FIELDS.every((field) => !next[field]) && next.year === null && !next.hidden) {
+  // Das Titelbild ändert nur setAlbumCover; die Zeile bleibt, solange eines gesetzt ist.
+  if (TEXT_FIELDS.every((field) => !next[field]) && next.year === null && !next.hidden && !current.cover_id) {
     db.prepare('DELETE FROM album_overrides WHERE key = ?').run(key);
     return;
   }
@@ -169,22 +175,24 @@ export function albumDetail(db: DB, id: number) {
     }>).map((r) => [r.id, r.path]),
   );
   const ruleTrackIds = row.kind === 'manual' ? [...paths].filter(([, path]) => !explicit.has(path)).map(([trackId]) => trackId) : [];
-  // Dateiname und Korrekturen je Titel, damit die Verwaltung zeigt, woraus ein Titel entstanden ist
-  const trackFiles: Record<number, { file: string; override: { content: string | null; title: string | null; name: string | null } | null }> = {};
-  for (const row of db
+  // Je Titel: was Datei und Regelwerk ergeben und was in der Verwaltung korrigiert wurde
+  const trackEdits = db
     .prepare(
-      `SELECT t.id, t.path, o.content, o.title, o.name, o.path IS NOT NULL AS corrected FROM album_tracks at
-       JOIN tracks t ON t.id = at.track_id LEFT JOIN track_overrides o ON o.path = t.path WHERE at.album_id = ?`,
+      `SELECT t.id, coalesce(t.display_title, t.title) AS fileTitle, o.title, o.speaker,
+              (SELECT value FROM track_tags WHERE track_id = t.id AND tag IN (SELECT value FROM json_each(?)) LIMIT 1) AS fileSpeaker
+       FROM album_tracks at JOIN tracks t ON t.id = at.track_id LEFT JOIN track_overrides o ON o.path = t.path
+       WHERE at.album_id = ? ORDER BY at.position`,
     )
-    .all(id) as Array<{ id: number; path: string; content: string | null; title: string | null; name: string | null; corrected: number }>) {
-    trackFiles[row.id] = {
-      file: row.path.slice(row.path.lastIndexOf('/') + 1),
-      override: row.corrected ? { content: row.content, title: row.title, name: row.name } : null,
-    };
-  }
+    .all(JSON.stringify(SPEAKER_TAGS), id) as TrackEdit[];
+  const customCover = db.prepare('SELECT 1 FROM album_overrides WHERE key = ? AND cover_id IS NOT NULL').get(row.key) !== undefined;
+  const { folder } = db.prepare('SELECT folder FROM albums WHERE id = ?').get(id) as { folder: string };
   return {
     ...album,
-    trackFiles,
+    /** Albumordner in der Nextcloud; bei Gottesdiensten kommt das Datum aus seinem Namen */
+    folder,
+    trackEdits,
+    customCover,
+    lastChange: lastChange(db, id) ?? null,
     rules: listRules(db, id),
     ruleTrackIds,
     movedByRule: row.kind === 'auto' ? movedByRule(db, row.key) : [],
@@ -392,37 +400,6 @@ export function restoreTrack(db: DB, id: number, trackId: number): void {
   rebuildAlbums(db);
 }
 
-export interface TrackFields {
-  content?: string | null;
-  title?: string | null;
-  name?: string | null;
-}
-
-/**
- * Korrigiert, was die App aus dem Dateinamen einer Aufnahme liest: Inhalt, Titel und Name (Sprecher bzw.
- * Interpret). null setzt auf automatisch zurück. Gespeichert nach Pfad, übersteht also jeden Scan.
- */
-export function setTrackOverride(db: DB, trackId: number, fields: TrackFields): void {
-  const [track] = trackPaths(db, [trackId]);
-  const current = (db.prepare('SELECT content, title, name FROM track_overrides WHERE path = ?').get(track!.path) as
-    | { content: string | null; title: string | null; name: string | null }
-    | undefined) ?? { content: null, title: null, name: null };
-  const next = {
-    content: fields.content !== undefined ? (cleanText(fields.content) ?? null) : current.content,
-    title: fields.title !== undefined ? (cleanText(fields.title) ?? null) : current.title,
-    name: fields.name !== undefined ? (cleanText(fields.name) ?? null) : current.name,
-  };
-  if (next.content === null && next.title === null && next.name === null) {
-    db.prepare('DELETE FROM track_overrides WHERE path = ?').run(track!.path);
-  } else {
-    db.prepare(
-      `INSERT INTO track_overrides (path, content, title, name) VALUES (@path, @content, @title, @name)
-       ON CONFLICT(path) DO UPDATE SET content = excluded.content, title = excluded.title, name = excluded.name`,
-    ).run({ path: track!.path, ...next });
-  }
-  rebuildAlbums(db);
-}
-
 /** Alle Alben, in denen ein Titel steht, für die Auswahl im Admin-Bereich. */
 export function albumsOfTracks(db: DB, trackIds: number[]): Record<number, Array<{ id: number; title: string; kind: string }>> {
   const result: Record<number, Array<{ id: number; title: string; kind: string }>> = {};
@@ -435,4 +412,108 @@ export function albumsOfTracks(db: DB, trackIds: number[]): Record<number, Array
     .all(...trackIds) as Array<{ trackId: number; id: number; title: string; kind: string }>;
   for (const { trackId, ...album } of rows) (result[trackId] ??= []).push(album);
   return result;
+}
+
+interface TrackEdit {
+  id: number;
+  /** Titelname aus der Datei */
+  fileTitle: string;
+  /** In der Verwaltung korrigierter Titelname, sonst null */
+  title: string | null;
+  speaker: string | null;
+  /** Sprecher aus den Tags der Datei */
+  fileSpeaker: string | null;
+}
+
+export interface TrackFields {
+  title?: string | null;
+  speaker?: string | null;
+}
+
+/**
+ * Korrigiert Titelname oder Sprecher eines Titels. Gespeichert wird je Pfad (track_overrides),
+ * damit die Korrektur neue Scans übersteht; null setzt auf den Wert aus der Datei zurück.
+ */
+export function updateTrack(db: DB, albumId: number, trackId: number, fields: TrackFields): void {
+  findAlbum(db, albumId);
+  if (!db.prepare('SELECT 1 FROM album_tracks WHERE album_id = ? AND track_id = ?').get(albumId, trackId)) {
+    throw new CurationError(404, 'Titel ist nicht in diesem Album');
+  }
+  db.transaction(() => {
+    const track = db.prepare('SELECT path, coalesce(display_title, title) AS fileTitle FROM tracks WHERE id = ?').get(trackId) as {
+      path: string;
+      fileTitle: string;
+    };
+    const current = (db.prepare('SELECT title, speaker FROM track_overrides WHERE path = ?').get(track.path) as
+      | { title: string | null; speaker: string | null }
+      | undefined) ?? { title: null, speaker: null };
+    const next = {
+      title: fields.title !== undefined ? (cleanText(fields.title) ?? null) : current.title,
+      speaker: fields.speaker !== undefined ? (cleanText(fields.speaker) ?? null) : current.speaker,
+    };
+    // Derselbe Name wie aus Datei und Regelwerk ist keine Korrektur.
+    if (next.title === track.fileTitle) next.title = null;
+    if (!next.title && !next.speaker) db.prepare('DELETE FROM track_overrides WHERE path = ?').run(track.path);
+    else {
+      db.prepare(
+        `INSERT INTO track_overrides (path, title, speaker) VALUES (?, ?, ?)
+         ON CONFLICT(path) DO UPDATE SET title = excluded.title, speaker = excluded.speaker`,
+      ).run(track.path, next.title, next.speaker);
+    }
+    const tags = (
+      db
+        .prepare('SELECT tag, value FROM track_tags WHERE track_id = ? AND derived = 0 ORDER BY rowid')
+        .all(trackId) as Array<{ tag: string; value: string }>
+    ).map((row): [string, string] => [row.tag, row.value]);
+    db.prepare('UPDATE tracks SET search_extra = ? WHERE id = ?').run(withOverride(searchExtra(tags), next), trackId);
+  })();
+  rebuildAlbums(db);
+}
+
+/** Größte Kantenlänge eines hochgeladenen Titelbilds; reicht für den großen Player. */
+export const COVER_UPLOAD_SIZE = 1600;
+/** Größere Uploads lehnt der Server ab (siehe admin.ts). */
+export const MAX_COVER_UPLOAD = 15 * 1024 * 1024;
+
+/**
+ * Setzt ein eigenes Titelbild (null entfernt es). Das Bild wird verkleinert und als JPEG
+ * ohne Metadaten gespeichert, so landen z. B. keine Standortdaten aus Handyfotos in der App.
+ */
+export async function setAlbumCover(db: DB, id: number, image: Buffer | null): Promise<void> {
+  const album = findAlbum(db, id);
+  let coverId: number | null = null;
+  if (image) {
+    let data: Buffer;
+    try {
+      const input = sharp(image, { limitInputPixels: 60_000_000 });
+      const { format } = await input.metadata();
+      if (format !== 'jpeg' && format !== 'png' && format !== 'webp') throw new Error(`Format ${format}`);
+      data = await input
+        .rotate()
+        .resize(COVER_UPLOAD_SIZE, COVER_UPLOAD_SIZE, { fit: 'inside', withoutEnlargement: true })
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+    } catch {
+      throw new CurationError(400, 'Das Bild lässt sich nicht lesen. Bitte ein JPEG-, PNG- oder WebP-Bild hochladen.');
+    }
+    const hash = createHash('sha256').update(data).digest('hex');
+    coverId = (
+      db
+        .prepare(
+          `INSERT INTO covers (hash, mime, data) VALUES (?, 'image/jpeg', ?)
+           ON CONFLICT(hash) DO UPDATE SET mime = excluded.mime RETURNING id`,
+        )
+        .get(hash, data) as { id: number }
+    ).id;
+  }
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO album_overrides (key, cover_id) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET cover_id = excluded.cover_id`,
+    ).run(album.key, coverId);
+    // Leere Korrektur wieder entfernen, wie in writeOverride
+    if (coverId === null) writeOverride(db, album.key, {});
+  })();
+  rebuildAlbums(db);
 }

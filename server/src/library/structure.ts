@@ -341,15 +341,6 @@ export interface FileInfo {
   /** Titel steht in einem Tag (nicht aus dem Dateinamen abgeleitet) */
   titleTagged: boolean;
   duration: number | null;
-  /** Korrektur aus der Verwaltung; ersetzt, was aus dem Dateinamen gelesen wurde */
-  override?: TrackOverride;
-}
-
-/** Von Hand gesetzte Werte einer Aufnahme; null: aus dem Dateinamen */
-export interface TrackOverride {
-  content: string | null;
-  title: string | null;
-  name: string | null;
 }
 
 export interface FileResult {
@@ -386,13 +377,7 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
   // Sprecher nur von der Predigt; "Lied - Befiehl du deine Wege" nennt keinen Sprecher
   const isSermon = (values: Values | undefined) => !sermonKey || (values?.inhalt !== undefined && foldValue(values.inhalt) === sermonKey);
   const parsed = files.map((file) => {
-    let values = readFileName(compiled, fileStem(file.path));
-    if (file.override) {
-      values = { ...values };
-      if (file.override.content !== null) values.inhalt = file.override.content;
-      if (file.override.title !== null) values.titel = file.override.title;
-      if (file.override.name !== null) values.sprecher = file.override.name;
-    }
+    const values = readFileName(compiled, fileStem(file.path));
     const nr = values?.nr ?? values?.lead;
     return { file, values, nr: nr !== undefined ? Number(nr) : undefined };
   });
@@ -403,7 +388,7 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
     }
     const all: Values = { ...folderValues, ...values, nr: nr !== undefined ? String(nr) : undefined };
     if (all.datum) all.datum = findDate(all.datum, folderYear(dirname(file.path)))?.date ?? all.datum;
-    const title = kind.preferTags && file.titleTagged && file.override?.title == null ? undefined : fillTemplate(kind.trackTitle || '{titel}', all) || undefined;
+    const title = kind.preferTags && file.titleTagged ? undefined : fillTemplate(kind.trackTitle || '{titel}', all) || undefined;
     results.set(file.path, {
       matched: true,
       title,
