@@ -6,8 +6,9 @@ import { lastChange } from './changes.js';
 import { searchText } from './metadata.js';
 import { getAlbum } from './queries.js';
 import type { Decision, Player } from './policies.js';
-import { compileStructure, getStructure, kindOfFolder, type KindSource } from './structure.js';
+import { compileStructure, FIXED_KINDS, getStructure, kindOfFolder, MUSIC_KIND, normalizeManualKind, type KindSource } from './structure.js';
 import { foldValue } from './text.js';
+import { albumFolderOf } from './pathMeta.js';
 import { evaluateRules, listRules, parseCondition, ruleMatcher, type RuleCondition, type RuleTrack } from './rules.js';
 
 /**
@@ -51,7 +52,7 @@ export interface AlbumFields {
   passage?: string | null;
   description?: string | null;
   hidden?: boolean;
-  /** Art der Aufnahme von Hand ("Bibelstunde"); "" heißt keine Art (Musik), null: nach dem Regelwerk */
+  /** Art der Aufnahme von Hand ("Bibelstunde", "Musik", "Sonstiges"); "" heißt Musik, null: nach dem Regelwerk */
   recording?: string | null;
 }
 
@@ -94,11 +95,13 @@ function cleanText(value: string | null | undefined): string | null | undefined 
 
 const TEXT_FIELDS = ['title', 'speaker', 'passage', 'description'] as const;
 
-/** Art von Hand: muss es im Regelwerk geben; "" (keine Art) und null (automatisch) gehen immer */
+/** Art von Hand: muss es im Regelwerk geben; Musik, Sonstiges und null (automatisch) gehen immer, "" heißt Musik */
 function checkRecording(db: DB, value: string | null | undefined): string | null | undefined {
   if (value === undefined || value === null) return value;
   const name = value.trim();
-  if (!name) return '';
+  if (!name) return MUSIC_KIND;
+  const fixed = FIXED_KINDS.find((k) => foldValue(k) === foldValue(name));
+  if (fixed) return fixed;
   const kind = getStructure(db).kinds.find((k) => foldValue(k.name) === foldValue(name));
   if (!kind) throw new CurationError(400, `Die Art „${name}“ gibt es nicht (Verwaltung → Zuordnung)`);
   return kind.name;
@@ -215,14 +218,18 @@ export function albumDetail(db: DB, id: number) {
   // Woher die Art kommt (von Hand, Regel in "Art bestimmen", Vorgabe für Ordner mit Datum), wie in rebuildAlbums
   let recordingSource: KindSource = { by: 'none' };
   if (row.kind === 'auto') {
-    const files = db.prepare('SELECT path, title FROM tracks WHERE album_key = ?').all(row.key) as Array<{ path: string; title: string }>;
+    // Die Regeln sehen alle Dateien im Albumordner, auch wenn er sich nach Datum in mehrere Alben teilt (wie rebuildAlbums)
+    const files = folder
+      ? (db.prepare(`SELECT path, title FROM tracks WHERE substr(path, 1, ?) = ?`).all(folder.length + 1, `${folder}/`) as Array<{
+          path: string;
+          title: string;
+        }>).filter((t) => albumFolderOf(t.path) === folder)
+      : [];
     recordingSource = override?.recording != null
       ? { by: 'manual' }
-      : folder
-        ? kindOfFolder(compileStructure(getStructure(db)), folder, files).source
-        : album.recording
-          ? { by: 'default' }
-          : { by: 'none' };
+      : kindOfFolder(compileStructure(getStructure(db)), folder, files).source;
+    // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) bekommen die Vorgabe für Ordner mit Datum
+    if (recordingSource.by === 'none' && album.date) recordingSource = { by: 'default' };
   }
   return {
     ...album,
@@ -245,8 +252,8 @@ export function albumDetail(db: DB, id: number) {
       passage: override?.passage ?? null,
       description: override?.description ?? null,
     },
-    /** Art von Hand ("" = keine Art), null: nach dem Regelwerk */
-    manualRecording: override?.recording ?? null,
+    /** Art von Hand (auch Musik oder Sonstiges), null: nach dem Regelwerk */
+    manualRecording: normalizeManualKind(override?.recording) ?? null,
     /** Woher die Art kommt */
     recordingSource,
     excluded,

@@ -203,7 +203,8 @@ describe('Migration ohne Tags', () => {
     try {
       const file = join(dir, 'db.sqlite');
       const old = new Database(file);
-      const before = migrations.length - 1;
+      // Stand vor der Migration ohne Tags (spätere Migrationen laufen danach mit)
+      const before = migrations.findIndex((sql) => sql.includes('DROP TABLE artist_aliases'));
       old.function('fold', (v) => (typeof v === 'string' ? v.toLowerCase() : v));
       old.function('sort_key', (v) => (typeof v === 'string' ? v.toLowerCase() : ''));
       old.function('file_stem', (v) => v);

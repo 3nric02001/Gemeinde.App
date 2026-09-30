@@ -7,11 +7,13 @@ import type { ManualDecision, Player } from './policies.js';
 import {
   applyToFolder,
   compileStructure,
+  defaultKindOf,
   getStructure,
   kindOfFolder,
   withManual,
   type CompiledStructure,
   type FolderResult,
+  type Section,
 } from './structure.js';
 import { trackFields } from './fields.js';
 import { foldValue, sortKey } from './text.js';
@@ -151,7 +153,7 @@ interface Override {
 
 const COMPARED = [
   'title', 'year', 'folder', 'cover', 'coverId', 'count', 'duration', 'hidden',
-  'date', 'speaker', 'passage', 'description', 'sortTitle', 'createdAt', 'recording',
+  'date', 'speaker', 'passage', 'description', 'sortTitle', 'createdAt', 'recording', 'music',
 ] as const;
 
 export const MANUAL_KEY_PREFIX = 'manual:';
@@ -265,20 +267,30 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         player: Player | null;
       }>).map((row): [string, ManualDecision] => [row.path, { sermon: row.sermon === null ? null : row.sermon === 1, player: row.player }]),
     );
+    // Die Regeln sehen den ganzen Ordner; die Art von Hand gilt je Album, auch wenn sich ein Ordner nach Datum in
+    // mehrere Alben teilt.
     const byFolder = new Map<string, TrackRow[]>();
-    const folderKinds = new Map<string, string>();
+    const byKey = new Map<string, TrackRow[]>();
     for (const track of tracks) {
       const { folder, key } = groups.get(track.id)!;
       byFolder.set(folder, [...(byFolder.get(folder) ?? []), track]);
-      const manual = manualKinds.get(key);
-      if (manual !== undefined && !folderKinds.has(folder)) folderKinds.set(folder, manual);
+      byKey.set(key, [...(byKey.get(key) ?? []), track]);
     }
-    const recordings = new Map<string, FolderResult>();
-    for (const [folder, list] of byFolder) {
-      const { kind } = kindOfFolder(structure, folder, list, folderKinds.get(folder));
-      if (!kind) continue;
-      const files = list.map((t) => ({ path: t.path, title: t.title, duration: t.duration, manual: manualDecisions.get(t.path) }));
-      recordings.set(folder, applyToFolder(kind, folder, files));
+    /** Art, Musik oder Sonstiges je automatischem Album, bei Aufnahmen mit dem, was das Regelwerk daraus liest */
+    const sections = new Map<string, { section: Section; kind: string | null; recording?: FolderResult }>();
+    for (const [key, list] of byKey) {
+      const { folder, date } = groups.get(list[0]!.id)!;
+      const found = kindOfFolder(structure, folder, byFolder.get(folder)!, manualKinds.get(key));
+      if (found.kind) {
+        const files = list.map((t) => ({ path: t.path, title: t.title, duration: t.duration, manual: manualDecisions.get(t.path) }));
+        sections.set(key, { section: 'recording', kind: found.kind.kind.name, recording: applyToFolder(found.kind, folder, files) });
+      } else if (found.source.by === 'none' && date) {
+        // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) bekommen die Vorgabe für Ordner mit Datum, nur als Name.
+        const fallback = defaultKindOf(structure);
+        sections.set(key, { section: fallback.section, kind: fallback.kind?.kind.name ?? null });
+      } else {
+        sections.set(key, { section: found.section, kind: null });
+      }
     }
     // Ersetzungen für Tippfehler (Verwaltung → Schreibweisen) für Titel und Albumnamen ohne eigene Korrektur
     const fix = compileReplacements(listReplacements(db));
@@ -288,9 +300,16 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         (row) => [row.path, row.speaker],
       ),
     );
-    applyRecordings(db, tracks, (track) => recordings.get(groups.get(track.id)!.folder), parsed, fix, structure, manualDecisions, speakerOverrides);
-    // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) zählen zur Vorgabe für Ordner mit Datum.
-    const defaultRecording = structure.structure.defaultKind || null;
+    applyRecordings(
+      db,
+      tracks,
+      (track) => sections.get(groups.get(track.id)!.key)?.recording,
+      parsed,
+      fix,
+      structure,
+      manualDecisions,
+      speakerOverrides,
+    );
 
     // Bisheriger Inhalt aller Alben (für Wiedererkennung und um unnötiges Schreiben zu sparen)
     const current = new Map<number, number[]>();
@@ -359,7 +378,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
 
     const derive = (draft: AlbumDraft, cover: string | undefined, createdAt: number) => {
       const override = overrides.get(draft.key);
-      const recording = draft.folder ? recordings.get(draft.folder) : undefined;
+      const { section, kind, recording } = sections.get(draft.key) ?? { section: 'other' as Section, kind: null };
       // Bei Aufnahmen gilt die Vorlage aus dem Regelwerk; ohne Anlass bleibt der Ordnername (die Oberfläche zeigt dann die Art).
       const ruleTitle = recording ? recording.title || basename(draft.folder) : undefined;
       const title = override?.title ?? fix(ruleTitle ?? draft.title);
@@ -412,29 +431,30 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         hidden: override?.hidden ? 1 : 0,
         sortTitle: sortKey(title),
         createdAt,
-        recording: recording?.kind.name ?? manualRecording(override?.recording, date ? defaultRecording : null),
+        recording: kind,
+        music: section === 'music' ? 1 : 0,
       };
     };
 
     const upsertAuto = db.prepare(`
       INSERT INTO albums (key, title, year, folder, cover_path, cover_id, track_count, duration, hidden, created_at,
-                          date, speaker, passage, description, sort_title, recording)
+                          date, speaker, passage, description, sort_title, recording, music)
       VALUES (@key, @title, @year, @folder, @cover, @coverId, @count, @duration, @hidden, @createdAt,
-              @date, @speaker, @passage, @description, @sortTitle, @recording)
+              @date, @speaker, @passage, @description, @sortTitle, @recording, @music)
       ON CONFLICT(key) DO UPDATE SET
         title = excluded.title, year = excluded.year,
         folder = excluded.folder, cover_path = excluded.cover_path, cover_id = excluded.cover_id,
         track_count = excluded.track_count, duration = excluded.duration, hidden = excluded.hidden,
         date = excluded.date, speaker = excluded.speaker, passage = excluded.passage, description = excluded.description,
         sort_title = excluded.sort_title, created_at = excluded.created_at,
-        recording = excluded.recording
+        recording = excluded.recording, music = excluded.music
       RETURNING id
     `);
     const updateManual = db.prepare(`
       UPDATE albums SET title = @title, year = @year, folder = @folder,
         cover_path = @cover, cover_id = @coverId, track_count = @count, duration = @duration, hidden = @hidden,
         date = @date, speaker = @speaker, passage = @passage, description = @description,
-        sort_title = @sortTitle, recording = @recording
+        sort_title = @sortTitle, recording = @recording, music = @music
       WHERE id = @id
     `);
 
@@ -442,7 +462,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       .prepare(
         `SELECT id, key, kind, title, year, folder, cover_path AS cover, cover_id AS coverId, track_count AS count, duration, hidden,
                 date, speaker, passage, description, sort_title AS sortTitle, created_at AS createdAt,
-                recording
+                recording, music
          FROM albums`,
       )
       .all() as Array<AlbumRow & Record<string, unknown>>;
@@ -515,12 +535,6 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       if (track.album_id !== albumId) assign.run(albumId, track.id);
     }
   })();
-}
-
-/** Art eines Albums ohne eigenen Aufnahme-Ordner: von Hand gesetzt ("" = keine), sonst die Vorgabe */
-function manualRecording(manual: string | null | undefined, fallback: string | null): string | null {
-  if (manual === undefined || manual === null) return fallback;
-  return manual || null;
 }
 
 /**

@@ -153,6 +153,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
               kind: { type: 'string', enum: ['auto', 'manual'] },
               dated: { type: 'boolean' },
               hidden: { type: 'boolean' },
+              section: { type: 'string', enum: ['recording', 'music', 'other'] },
               noSpeaker: { type: 'boolean' },
               sort: { type: 'string', enum: ['title', 'year', 'recent', 'date'], default: 'date' },
               limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },

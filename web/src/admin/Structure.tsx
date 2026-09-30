@@ -29,7 +29,7 @@ export interface Policy {
   content?: string;
 }
 
-/** Art bestimmen: Wenn ein Albumordner passt, dann ist er diese Art ("" = keine, Musik) */
+/** Art bestimmen: Wenn ein Albumordner passt, dann ist er diese Art, Musik oder Sonstiges */
 export interface KindRule {
   name: string;
   enabled: boolean;
@@ -42,7 +42,7 @@ export interface KindRule {
 export interface Structure {
   kinds: RecordingKind[];
   kindRules: KindRule[];
-  /** Art der übrigen Ordner mit Datum; "" = keine (Musik) */
+  /** Art der übrigen Ordner mit Datum, auch Musik oder Sonstiges */
   defaultKind: string;
   contents: string[];
   /** Inhalte ohne Titel: ein einzelner Teil danach ist der Name ("Begrüßung - Jakob Rauschenberger") */
@@ -296,7 +296,8 @@ export function StructurePanel() {
           {kind.name || 'Neue Art'}
         </option>
       ))}
-      <option value="">Keine Art (Musik)</option>
+      <option value="Musik">Musik</option>
+      <option value="Sonstiges">Sonstiges</option>
     </>
   );
   const updatePolicy = (index: number, patch: Partial<Policy>) =>
@@ -369,7 +370,8 @@ export function StructurePanel() {
         <h2>1. Art bestimmen</h2>
         <p class="admin-hint">
           Für jeden Albumordner gilt die erste passende Regel. Eine Regel passt, wenn der Ordner oder eine Datei darin passt, etwa
-          über den Ordnernamen. Passt keine, bekommen Ordner mit Datum die Vorgabe unten; Ordner ohne Datum bleiben Musik.
+          über den Ordnernamen. Passt keine, bekommen Ordner mit Datum die Vorgabe unten; alles andere ist Sonstiges. Musik ist,
+          was eine Regel oder die Verwaltung am Album zu Musik macht.
         </p>
         {kindRules.map((rule, index) => (
           <RuleCard
@@ -389,7 +391,7 @@ export function StructurePanel() {
             <div class="structure-grid">
               <label class="field">
                 <span>Art</span>
-                <select value={rule.kind} onChange={(e) => updateKindRule(index, { kind: (e.target as HTMLSelectElement).value })}>
+                <select value={rule.kind || 'Musik'} onChange={(e) => updateKindRule(index, { kind: (e.target as HTMLSelectElement).value })}>
                   {kindOptions}
                 </select>
               </label>
@@ -407,7 +409,7 @@ export function StructurePanel() {
         <div class="structure-policy structure-default-kind">
           <label class="field">
             <span>Sonst, bei Ordnern mit Datum</span>
-            <select value={draft.defaultKind} onChange={(e) => change({ ...draft, defaultKind: (e.target as HTMLSelectElement).value })}>
+            <select value={draft.defaultKind || 'Musik'} onChange={(e) => change({ ...draft, defaultKind: (e.target as HTMLSelectElement).value })}>
               {kindOptions}
             </select>
           </label>

@@ -174,13 +174,16 @@ Fehlt der Name am Ende, bleibt es beim Titel.
 
 - **Art bestimmen**: eine geordnete Liste „Wenn … dann Art …“ je Albumordner. Bedingungen auf Ordner im Pfad, Pfad und
   Dateiname, verschachtelbar mit UND/ODER; eine Regel passt, wenn der
-  Ordner oder eine Datei darin passt. Die erste passende Regel gilt, auch „Keine Art (Musik)“ ist möglich. Regeln
-  gelten standardmäßig nur für Ordner mit Datum, auf Wunsch auch für andere. Passt keine Regel, bekommen Ordner mit
-  Datum die Vorgabe („Sonst, bei Ordnern mit Datum“, vorgegeben Gottesdienst, auch „keine“ möglich).
+  Ordner oder eine Datei darin passt. Die erste passende Regel gilt; neben den Arten gibt es fest „Musik“ und
+  „Sonstiges“ (vorgegeben: Ordner „Musik“ im Pfad ist Musik). Regeln gelten standardmäßig nur für Ordner mit Datum,
+  auf Wunsch auch für andere. Passt keine Regel, bekommen Ordner mit Datum die Vorgabe („Sonst, bei Ordnern mit
+  Datum“, vorgegeben Gottesdienst, auch Musik oder Sonstiges möglich); alles andere ist **Sonstiges** und steht unter
+  Alben in einem eigenen Reiter.
 - **Arten**: Gottesdienst und Bibelstunde sind nur Vorgaben; Arten lassen sich umbenennen, löschen und neu anlegen
   (etwa „Jugendabend“), bis zu zehn. Beim Umbenennen ziehen Regeln, Vorgabe und Policies mit.
 - **Art je Album**: Der Album-Editor zeigt, woher die Art kommt (Regel, Vorgabe oder von Hand), und lässt sie von Hand
-  setzen, auch „Keine Art (Musik)“. Das geht dem Regelwerk vor, wie alle Korrekturen aus der Verwaltung.
+  setzen, auch Musik oder Sonstiges. Das geht dem Regelwerk vor, wie alle Korrekturen aus der Verwaltung, und gilt je
+  Album, auch wenn sich ein Ordner nach dem Datum in den Dateinamen in mehrere Alben teilt.
 - **Muster** für Ordner- und Dateinamen mit den Platzhaltern `{datum}`, `{anlass}`, `{bibelstelle}`,
   `{sprecher}`, `{inhalt}`, `{titel}` und `{nr}`. Trennzeichen sind austauschbar („ - “, „_“, „.“, „:“); zwischen
   zwei freien Textfeldern (etwa `{sprecher} - {titel}`) muss aber ein echtes Trennzeichen stehen, kein

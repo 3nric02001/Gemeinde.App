@@ -91,7 +91,8 @@ describe('Policies', () => {
     };
     const parsed = parseStructure(JSON.parse(JSON.stringify(legacy)));
     expect(parsed.kinds).toEqual(DEFAULT_STRUCTURE.kinds);
-    expect(parsed.kindRules).toEqual(DEFAULT_STRUCTURE.kindRules);
+    // Die Regel für Musik ist neu; früher blieben alle Ordner ohne Datum Musik
+    expect(parsed.kindRules).toEqual(DEFAULT_STRUCTURE.kindRules.filter((rule) => rule.kind !== 'Musik'));
     expect(parsed.defaultKind).toBe('Gottesdienst');
     expect(parsed.policies.map((p) => [p.when, p.sermon, p.player])).toEqual(
       [...DEFAULT_STRUCTURE.policies].reverse().map((p) => [p.when, p.sermon, p.player]),
@@ -308,6 +309,50 @@ describe('Eigene Arten', () => {
     expect((await get(`/api/admin/albums/${service.id}`)).manualRecording).toBeNull();
 
     await call('PATCH', `/api/admin/albums/${service.id}`, { recording: 'Konzert' }, 400);
+  });
+
+  it('gelten von Hand je Album, auch wenn sich ein Ordner nach Datum in mehrere Alben teilt', async () => {
+    cloud.put('Andachten/2025_01_05_001 Andacht.mp3', mp3({}, 30));
+    cloud.put('Andachten/2025_01_12_001 Andacht.mp3', mp3({}, 30));
+    await ctx.scanner.scan();
+    const [first, second] = [await byDate('2025-01-05'), await byDate('2025-01-12')];
+    // Ohne Regel: die Vorgabe für Aufnahmen mit Datum
+    expect([first.recording, second.recording]).toEqual(['Gottesdienst', 'Gottesdienst']);
+    await call('PATCH', `/api/admin/albums/${first.id}`, { recording: 'Bibelstunde' });
+    await call('PATCH', `/api/admin/albums/${second.id}`, { recording: 'Musik' });
+    expect(await byDate('2025-01-05')).toMatchObject({ recording: 'Bibelstunde', section: 'recording' });
+    expect(await byDate('2025-01-12')).toMatchObject({ recording: null, section: 'music' });
+    expect((await get(`/api/admin/albums/${second.id}`)).manualRecording).toBe('Musik');
+    await call('PATCH', `/api/admin/albums/${second.id}`, { recording: null });
+    expect(await byDate('2025-01-12')).toMatchObject({ recording: 'Gottesdienst', section: 'recording' });
+    expect((await get(`/api/admin/albums/${second.id}`)).recordingSource).toEqual({ by: 'default' });
+  });
+
+  it('sind ohne passende Regel Sonstiges; Musik kommt aus einer Regel oder von Hand', async () => {
+    const all = await albums();
+    const zion = all.find((a) => a.title === 'Zion');
+    const youth = all.find((a) => a.title === 'Abend mit Tim');
+    // Musik/… passt auf die Regel „Musik“, der Jugendabend auf keine
+    expect(zion).toMatchObject({ recording: null, section: 'music' });
+    expect(youth).toMatchObject({ recording: null, section: 'other' });
+    expect((await get(`/api/admin/albums/${zion.id}`)).recordingSource).toEqual({ by: 'rule', rule: 'Musik' });
+    expect((await get(`/api/admin/albums/${youth.id}`)).recordingSource).toEqual({ by: 'none' });
+    expect(await get('/api/facets')).toMatchObject({ music: 1, other: 1 });
+    expect((await get('/api/albums?section=other')).items.map((a: any) => a.title)).toEqual(['Abend mit Tim']);
+    expect((await get('/api/albums?section=music')).items.map((a: any) => a.title)).toEqual(['Zion']);
+
+    // Von Hand: Musik, Sonstiges oder "" (hieß früher keine Art, also Musik)
+    await call('PATCH', `/api/admin/albums/${youth.id}`, { recording: '' });
+    expect((await get(`/api/admin/albums/${youth.id}`)).manualRecording).toBe('Musik');
+    await call('PATCH', `/api/admin/albums/${zion.id}`, { recording: 'sonstiges' });
+    expect((await get('/api/albums?section=other')).items.map((a: any) => a.title)).toEqual(['Zion']);
+
+    // Ordner mit Datum ohne Vorgabe sind Sonstiges, wenn man es so will
+    const structure: Structure = structuredClone(getStructure(ctx.db));
+    await call('PUT', '/api/admin/structure', { ...structure, defaultKind: 'Sonstiges' });
+    expect(await byDate('2026-08-30')).toMatchObject({ recording: null, section: 'other' });
+    // Musik und Sonstiges gibt es fest, eigene Arten heißen anders
+    await call('PUT', '/api/admin/structure', { ...structure, kinds: [...structure.kinds, { ...structure.kinds[0], name: 'Sonstiges' }] }, 400);
   });
 
   it('zeigen je Titel die greifende Policy und lassen sich je Titel korrigieren', async () => {

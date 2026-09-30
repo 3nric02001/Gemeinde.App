@@ -702,6 +702,14 @@ export const migrations: string[] = [
   DELETE FROM category_fields WHERE tag NOT IN ('art', 'inhalt', 'sprecher', 'anlass', 'jahr');
   DELETE FROM categories WHERE id NOT IN (SELECT category_id FROM category_fields);
   `,
+  `
+  -- Musik ist eine eigene Zuordnung (Regel oder von Hand); was nichts zuordnet, ist Sonstiges. Füllt rebuildAlbums,
+  -- bis dahin gilt wie bisher alles ohne Art als Musik.
+  ALTER TABLE albums ADD COLUMN music INTEGER NOT NULL DEFAULT 0;
+  UPDATE albums SET music = 1 WHERE kind = 'auto' AND recording IS NULL;
+  -- Art von Hand: '' hieß keine Art, also Musik
+  UPDATE album_overrides SET recording = 'Musik' WHERE recording = '';
+  `,
 ];
 
 export function openDatabase(path: string): DB {

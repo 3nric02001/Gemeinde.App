@@ -10,7 +10,7 @@ import { SermonInfo } from '../components/SermonInfo';
 import { albumTitle, formatLongDate, formatDuration, plural, serviceEyebrow } from '../format';
 import { useApi } from '../hooks';
 import { albumContext, player } from '../player';
-import { coverUrl, query, type Album as AlbumType, type Page } from '../api';
+import { coverUrl, kindLabel, query, type Album as AlbumType, type Page } from '../api';
 import { BackButton, ErrorNote, Loading } from './common';
 
 export function Album({ id }: { id: number }) {
@@ -25,7 +25,7 @@ export function Album({ id }: { id: number }) {
   const others = (more.data?.items ?? []).filter((a) => a.id !== album.id).slice(0, 12);
   const moreHref = `/datum${query({ art: album.recording ?? undefined })}`;
   const from = albumContext(album);
-  const eyebrowText = album.date ? serviceEyebrow(albumTitle(album.title, album.date, album.recording), album.recording) : undefined;
+  const eyebrowText = album.date ? serviceEyebrow(albumTitle(album.title, album.date, kindLabel(album)), kindLabel(album)) : undefined;
   // Ohne Anlass heißt der Gottesdienst wie seine Art; eine Zeile "Datum" darüber wäre doppelt.
   const eyebrow = from ? (
     'Playlist'
@@ -41,7 +41,7 @@ export function Album({ id }: { id: number }) {
         <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-hero" eager />
         <div class="hero-text">
           {eyebrow && <span class="eyebrow">{eyebrow}</span>}
-          <h1>{albumTitle(album.title, album.date, album.recording)}</h1>
+          <h1>{albumTitle(album.title, album.date, kindLabel(album))}</h1>
           <p class="hero-sub">
             {/* Nur Datum bzw. Jahr: wer predigt, steht bei der Predigt in der Titelliste */}
             {album.date ? formatLongDate(album.date) : album.year}

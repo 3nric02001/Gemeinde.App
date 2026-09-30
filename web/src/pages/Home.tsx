@@ -1,5 +1,5 @@
 import type { Album, Facets, Page, Track } from '../api';
-import { coverUrl, query } from '../api';
+import { coverUrl, kindLabel, query } from '../api';
 import { useAuth } from '../auth';
 import { playAlbum, Shelf } from '../components/AlbumCard';
 import { Cover } from '../components/Cover';
@@ -125,7 +125,7 @@ function LatestService({ album, resume }: { album: DatedAlbum; resume?: Track & 
           eager
         />
         <span class="latest-text">
-          <span class="eyebrow">Aktuell · {album.recording ?? 'Gottesdienst'}</span>
+          <span class="eyebrow">Aktuell · {kindLabel(album)}</span>
           <span class="latest-title">{occasion || formatLongDate(album.date)}</span>
           <span class="latest-sub">
             {[occasion ? formatLongDate(album.date) : undefined, album.passage].filter(Boolean).join(' · ')}

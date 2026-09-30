@@ -57,13 +57,24 @@ export interface RecordingKind {
   trackTitle: string;
 }
 
-/** "Art bestimmen": Wenn ein Albumordner passt, dann ist er diese Art (oder keine, also Musik). */
+/**
+ * Feste Zuordnungen neben den Arten: Musik (von einer Regel oder von Hand) und Sonstiges für alles, dem nichts eine Art
+ * gibt. Beide sind keine Aufnahmen: kein Regelwerk für Namen, keine Policy nach Art.
+ */
+export const MUSIC_KIND = 'Musik';
+export const OTHER_KIND = 'Sonstiges';
+export const FIXED_KINDS = [MUSIC_KIND, OTHER_KIND] as const;
+
+/** Wie ein Album zählt: Aufnahme einer Art, Musik oder Sonstiges */
+export type Section = 'recording' | 'music' | 'other';
+
+/** "Art bestimmen": Wenn ein Albumordner passt, dann ist er diese Art (oder Musik bzw. Sonstiges). */
 export interface KindRule {
   name: string;
   enabled: boolean;
   /** Bedingung auf Ordner, Pfad und Dateiname; passt, wenn der Ordner oder eine Datei darin passt */
   when: PolicyCondition;
-  /** Name der Art; "": keine Art (Musik) */
+  /** Name der Art, oder Musik bzw. Sonstiges (MUSIC_KIND, OTHER_KIND) */
   kind: string;
   /** Nur Ordner mit Datum im Namen */
   datedOnly: boolean;
@@ -73,7 +84,7 @@ export interface Structure {
   kinds: RecordingKind[];
   /** Art eines Albumordners, von oben nach unten; die erste passende Regel gilt */
   kindRules: KindRule[];
-  /** Art der übrigen Ordner mit Datum, wenn keine Regel passt; "": keine (Musik) */
+  /** Art der übrigen Ordner mit Datum, wenn keine Regel passt; auch Musik oder Sonstiges. Ordner ohne Datum: Sonstiges */
   defaultKind: string;
   /** Bekannte Inhalte am Anfang von Dateinamen ("Lied", "Predigt" …); auch mehrere Wörter möglich */
   contents: string[];
@@ -108,7 +119,10 @@ export const DEFAULT_STRUCTURE: Structure = {
       trackTitle: '{inhalt}: {titel}',
     },
   ],
-  kindRules: [{ name: 'Bibelstunden', enabled: true, when: folderCondition('Bibelstunden'), kind: 'Bibelstunde', datedOnly: true }],
+  kindRules: [
+    { name: 'Bibelstunden', enabled: true, when: folderCondition('Bibelstunden'), kind: 'Bibelstunde', datedOnly: true },
+    { name: 'Musik', enabled: true, when: folderCondition('Musik'), kind: MUSIC_KIND, datedOnly: false },
+  ],
   defaultKind: 'Gottesdienst',
   contents: [
     'Lied', 'Predigt', 'Lesung', 'Schriftlesung', 'Gebet', 'Begrüßung', 'Abkündigungen', 'Segen', 'Musik', 'Vorspiel',
@@ -195,6 +209,9 @@ export function parseStructure(input: unknown): Structure {
     const name = text(k.name, 'Name', 60);
     if (!name) throw new StructureError(`Art ${index + 1} braucht einen Namen`);
     if (names.has(foldValue(name))) throw new StructureError(`„${name}“ gibt es doppelt`);
+    if (FIXED_KINDS.some((fixed) => foldValue(fixed) === foldValue(name))) {
+      throw new StructureError(`„${name}“ gibt es schon fest; bitte einen anderen Namen für die Art`);
+    }
     names.add(foldValue(name));
     const kind: RecordingKind = {
       name,
@@ -225,9 +242,12 @@ export function parseStructure(input: unknown): Structure {
     if (error instanceof PolicyError) throw new StructureError(error.message);
     throw error;
   }
+  // Früher hieß "" keine Art, also Musik
   const kindName = (value: unknown, label: string): string => {
     const wanted = text(value, label, 60);
-    if (!wanted) return '';
+    if (!wanted) return MUSIC_KIND;
+    const fixed = FIXED_KINDS.find((name) => foldValue(name) === foldValue(wanted));
+    if (fixed) return fixed;
     const found = kinds.find((k) => foldValue(k.name) === foldValue(wanted));
     if (!found) throw new StructureError(`${label}: Die Art „${wanted}“ gibt es nicht`);
     return found.name;
@@ -241,7 +261,7 @@ export function parseStructure(input: unknown): Structure {
       .map((kind, i) => ({ kind, folder: text(raw[i]!.folder, 'Ordner', 100) }))
       .filter(({ folder }) => folder)
       .map(({ kind, folder }) => ({ name: kind.plural, enabled: true, when: folderCondition(folder), kind: kind.name, datedOnly: true }));
-    defaultKind = kinds.find((_, i) => !text(raw[i]!.folder, 'Ordner', 100))?.name ?? '';
+    defaultKind = kinds.find((_, i) => !text(raw[i]!.folder, 'Ordner', 100))?.name ?? MUSIC_KIND;
   } else {
     if (!Array.isArray(body.kindRules)) throw new StructureError('Art bestimmen: Liste erwartet');
     if (body.kindRules.length > MAX_KIND_RULES) throw new StructureError(`Höchstens ${MAX_KIND_RULES} Regeln in „Art bestimmen“`);
@@ -283,6 +303,13 @@ export function getStructure(db: DB): Structure {
         const when = withoutFields(policy?.when, REMOVED_POLICY_FIELDS);
         return when ? [{ ...policy, when }] : [];
       });
+    }
+    // Eine eigene Art "Musik" oder "Sonstiges" von früher geht in der festen Zuordnung gleichen Namens auf
+    if (Array.isArray(raw.kinds)) {
+      const kinds = raw.kinds.filter(
+        (kind: Record<string, unknown>) => !FIXED_KINDS.some((fixed) => typeof kind?.name === 'string' && foldValue(kind.name) === foldValue(fixed)),
+      );
+      if (kinds.length) raw.kinds = kinds;
     }
     return parseStructure(raw);
   } catch {
@@ -455,7 +482,9 @@ export function compileStructure(structure: Structure): CompiledStructure {
 export type KindSource = { by: 'manual' } | { by: 'rule'; rule: string } | { by: 'default' } | { by: 'none' };
 
 export interface KindOfFolder {
+  /** Art der Aufnahme; undefined bei Musik und Sonstiges */
   kind: CompiledKind | undefined;
+  section: Section;
   source: KindSource;
 }
 
@@ -464,10 +493,27 @@ const findKind = (compiled: CompiledStructure, name: string) => {
   return key ? compiled.kinds.find((k) => foldValue(k.kind.name) === key) : undefined;
 };
 
+/** Art, Musik oder Sonstiges zu einem Namen aus Regel, Vorgabe oder Verwaltung ("" hieß früher Musik) */
+function resolveKind(compiled: CompiledStructure, name: string, source: KindSource): KindOfFolder {
+  const key = foldValue(name);
+  if (!key || key === foldValue(MUSIC_KIND)) return { kind: undefined, section: 'music', source };
+  const kind = findKind(compiled, name);
+  return kind ? { kind, section: 'recording', source } : { kind: undefined, section: 'other', source };
+}
+
+/** Vorgabe für Ordner mit Datum, auf die keine Regel passt */
+export const defaultKindOf = (compiled: CompiledStructure): KindOfFolder =>
+  resolveKind(compiled, compiled.structure.defaultKind, { by: 'default' });
+
+/** Art von Hand in Normalform: "" (früher keine Art) ist Musik */
+export const normalizeManualKind = (manual: string | null | undefined): string | null | undefined =>
+  manual === '' ? MUSIC_KIND : manual;
+
 /**
  * Art eines Albumordners nach "Art bestimmen": die erste passende Regel, sonst bei Ordnern mit Datum die Vorgabe.
  * Eine Regel passt, wenn ihre Bedingung auf den Ordner oder eine Datei darin passt (Pfad, Dateiname).
- * `manual`: in der Verwaltung für dieses Album gesetzte Art; sie geht allen Regeln vor, "" heißt keine Art.
+ * Passt nichts, ist das Album Sonstiges. `manual`: in der Verwaltung für dieses Album gesetzte Art (auch Musik oder
+ * Sonstiges); sie geht allen Regeln vor, auch bei Titeln ohne eigenen Ordner.
  */
 export function kindOfFolder(
   compiled: CompiledStructure,
@@ -475,17 +521,17 @@ export function kindOfFolder(
   files: Array<Omit<PolicySubject, 'content' | 'kind' | 'duration'>> = [],
   manual?: string | null,
 ): KindOfFolder {
-  if (!folder) return { kind: undefined, source: { by: 'none' } };
-  if (manual !== undefined && manual !== null) return { kind: findKind(compiled, manual), source: { by: 'manual' } };
+  if (manual !== undefined && manual !== null) return resolveKind(compiled, manual, { by: 'manual' });
+  if (!folder) return { kind: undefined, section: 'other', source: { by: 'none' } };
   const dated = Boolean(folderDate(folder));
   // Der Ordner selbst zählt mit ("Ordner im Pfad ist genau …"); der Schrägstrich macht ihn zum Ordner statt zur Datei
   const subjects = [{ path: `${folder}/` }, ...files];
   for (const { rule, matches } of compiled.kindRules) {
     if (rule.datedOnly && !dated) continue;
-    if (subjects.some(matches)) return { kind: findKind(compiled, rule.kind), source: { by: 'rule', rule: rule.name } };
+    if (subjects.some(matches)) return resolveKind(compiled, rule.kind, { by: 'rule', rule: rule.name });
   }
-  if (dated && compiled.structure.defaultKind) return { kind: findKind(compiled, compiled.structure.defaultKind), source: { by: 'default' } };
-  return { kind: undefined, source: { by: 'none' } };
+  if (dated) return defaultKindOf(compiled);
+  return { kind: undefined, section: 'other', source: { by: 'none' } };
 }
 
 export interface FileInfo {

@@ -22,10 +22,26 @@ function renderAlbums(search: string) {
 describe('Albenseite', () => {
   it('zeigt ohne Auswahl nur Musik, nach Titel sortiert', async () => {
     const urls = renderAlbums('');
-    await vi.waitFor(() => expect(urls()[0]).toContain('dated=false'));
+    await vi.waitFor(() => expect(urls()[0]).toContain('section=music'));
+    expect(urls()[0]).not.toContain('dated=');
     expect(urls()[0]).toContain('sort=title');
     expect(screen.queryByRole('option', { name: 'Interpret' })).toBeNull();
     expect(screen.getByRole('radio', { name: 'Musik' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('zeigt Sonstiges nur, wenn es Alben ohne Zuordnung gibt', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const body = String(input).startsWith('/api/facets')
+        ? { decades: [], totals: { tracks: 0, albums: 0, duration: 0 }, recordings: [], music: 3, other: 2 }
+        : { items: [], total: 0, limit: 50, offset: 0 };
+      return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+    });
+    render(<Albums params={new URLSearchParams('art=sonstiges')} />);
+    expect(await screen.findByRole('radio', { name: 'Sonstiges' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Sonstiges' }).getAttribute('aria-checked')).toBe('true');
+    const url = fetch.mock.calls.map(([u]) => String(u)).find((u) => u.startsWith('/api/albums'))!;
+    expect(url).toContain('section=other');
+    expect(url).toContain('sort=title');
   });
 
   it('zeigt Gottesdienste nach Datum', async () => {
