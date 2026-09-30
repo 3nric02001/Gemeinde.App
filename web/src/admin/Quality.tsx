@@ -24,7 +24,7 @@ function AlbumLinks({ albums }: { albums: AlbumRef[] }) {
     <ul class="admin-list">
       {albums.map((album) => (
         <li key={album.id}>
-          <a href={`/admin/album/${album.id}`} class="admin-row">
+          <a href={`/admin/album/${album.id}`} class="admin-row admin-row-plain admin-row-wrap">
             <span class="track-main">
               <span class="track-title">{albumTitle(album.title, album.date)}</span>
               <span class="track-sub">
@@ -102,7 +102,7 @@ export function QualityPanel() {
       >
         <ul class="admin-list">
           {report.suspiciousArtists.map((artist) => (
-            <li key={artist.name} class="admin-row">
+            <li key={artist.name} class="admin-row admin-row-plain admin-row-wrap">
               <span class="track-main">
                 <a class="track-title" href={`/interpret/${encodeURIComponent(artist.name)}`}>
                   {artist.name}
@@ -121,7 +121,7 @@ export function QualityPanel() {
       >
         <ul class="admin-list">
           {report.artistVariants.map((variant) => (
-            <li key={variant.names.join('|')} class="admin-row">
+            <li key={variant.names.join('|')} class="admin-row admin-row-plain admin-row-wrap">
               <span class="track-main">
                 <span class="track-title">{variant.names.join(' · ')}</span>
                 <span class="track-sub">{plural(variant.trackCount, 'Titel', 'Titel')}</span>

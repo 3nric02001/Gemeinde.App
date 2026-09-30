@@ -1805,6 +1805,13 @@ html[data-text='xlarge'] .now-playing {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* Prüfen: lange Album- und Ordnernamen umbrechen statt abschneiden */
+.admin-row-wrap .track-title,
+.admin-row-wrap .track-sub {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .admin-panel h2 {
   margin: 0 0 6px;
   font-size: 18px;
