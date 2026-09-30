@@ -95,6 +95,8 @@ export class Player {
   private loaded:
     | {
         track: Track;
+        /** Playlist, aus der er läuft (für "Zuletzt gehört") */
+        from?: string;
         savedAt: number;
         recorded: boolean;
         start?: number;
@@ -125,7 +127,7 @@ export class Player {
     if (current) {
       // Nach dem Neuladen an derselben Stelle weitermachen, aber nicht von selbst losspielen.
       void this.setSource(current.track);
-      this.loaded = { track: current.track, savedAt: Date.now(), recorded: true, heard: 0, counted: false };
+      this.loaded = { track: current.track, from: current.from?.href, savedAt: Date.now(), recorded: true, heard: 0, counted: false };
       this.applyRate();
       if (saved.position) {
         audio.addEventListener('loadedmetadata', () => (audio.currentTime = saved.position!), { once: true });
@@ -328,7 +330,11 @@ export class Player {
     const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : loaded.track.duration;
     loaded.savedAt = Date.now();
     loaded.recorded = true;
-    saveProgress({ id: loaded.track.id, duration, player: loaded.track.player }, this.audio.ended ? (duration ?? position) : position);
+    saveProgress(
+      { id: loaded.track.id, duration, player: loaded.track.player },
+      this.audio.ended ? (duration ?? position) : position,
+      loaded.from,
+    );
   }
 
   setVolume(volume: number): void {
@@ -372,7 +378,7 @@ export class Player {
     const source = this.setSource(current.track);
     // Angefangene Predigt: an der gemerkten Stelle weiter
     const start = resumePosition(current.track);
-    this.loaded = { track: current.track, savedAt: Date.now(), recorded: false, start, heard: 0, counted: false };
+    this.loaded = { track: current.track, from: current.from?.href, savedAt: Date.now(), recorded: false, start, heard: 0, counted: false };
     this.applyRate();
     if (start !== undefined) {
       this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = start), { once: true });

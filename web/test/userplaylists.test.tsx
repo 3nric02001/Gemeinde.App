@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Track } from '../src/api';
 import { PlaylistPicker } from '../src/components/PlaylistPicker';
 import { TrackList } from '../src/components/TrackList';
+import { Home } from '../src/pages/Home';
 import { Playlists } from '../src/pages/Playlists';
 import { UserPlaylist } from '../src/pages/UserPlaylist';
+import { saveProgress } from '../src/me';
 import { player } from '../src/player';
 import { closePlaylistDialog, loadPlaylists, resetPlaylists, type PlaylistDetail, type PlaylistSummary } from '../src/playlists';
 
@@ -56,6 +58,13 @@ beforeEach(() => {
     if (url === '/api/me/playlists/1' && method === 'GET') return json(detail);
     if (url === '/api/me/playlists/2' && method === 'GET') return json({ ...fromBen, tracks: [song], sharedWith: [] });
     if (url === '/api/me/playlists/1/tracks' && method === 'POST') return json({ added: 1 });
+    if (url === '/api/me/home')
+      return json({
+        resume: [],
+        recent: [{ id: 5, title: 'Lieder', year: 2020, trackCount: 1, duration: 240, hasCover: false, kind: 'auto', section: 'music', playedAt: 10 }],
+        recentPlaylists: [{ ...own, playedAt: 20 }],
+      });
+    if (url === '/api/facets') return json({ totals: { albums: 3, tracks: 9, duration: 1000 }, decades: [], recordings: [] });
     if (url === '/api/me/people') return json({ items: [{ id: 7, name: 'Ben' }, { id: 8, name: 'Carla' }] });
     if (url === '/api/me/playlists/1/shares') return json({ sharedWith: [{ id: 7, name: 'Ben' }] });
     if (method !== 'GET') return new Response(null, { status: 204 });
@@ -126,5 +135,23 @@ describe('eigene Playlists', () => {
     expect(screen.queryByText('Umbenennen')).toBeNull();
     fireEvent.click(screen.getByLabelText('Weitere Aktionen für Lobpreis'));
     expect(screen.queryByText('Aus der Playlist entfernen')).toBeNull();
+  });
+
+  it('stehen unter "Zuletzt gehört" zwischen den Alben, nach Zeit geordnet', async () => {
+    render(<Home />);
+    await screen.findByText('Zuletzt gehört');
+    const shelf = screen.getByText('Zuletzt gehört').closest('.shelf')!;
+    await waitFor(() => expect([...shelf.querySelectorAll('.card-title')].map((el) => el.textContent)).toEqual(['Sonntag', 'Lieder']));
+  });
+
+  it('der Hörstand nennt die Playlist, aus der ein Titel läuft', async () => {
+    saveProgress({ id: 42, duration: 240 }, 30, '/playlist/1');
+    saveProgress({ id: 43, duration: 240 }, 30, '/suche');
+    await waitFor(() => expect(calls.filter((c) => c.url.startsWith('/api/me/progress/'))).toHaveLength(2));
+    const bodies = calls.filter((c) => c.url.startsWith('/api/me/progress/')).map((c) => c.body);
+    expect(bodies).toEqual([
+      { position: 30, duration: 240, context: '/playlist/1' },
+      { position: 30, duration: 240 },
+    ]);
   });
 });

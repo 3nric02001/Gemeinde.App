@@ -55,6 +55,19 @@ export function listPlaylists(db: DB, userId: number): { own: PlaylistSummary[];
   return { own: own.map(toSummary(userId)), shared: shared.map(toSummary(userId)) };
 }
 
+/** Sichtbare Playlists (eigene und geteilte) in der angegebenen Reihenfolge; andere fallen heraus. */
+export function playlistSummaries(db: DB, userId: number, ids: number[]): PlaylistSummary[] {
+  if (!ids.length) return [];
+  const rows = db
+    .prepare(
+      `${SUMMARY} WHERE p.id IN (SELECT value FROM json_each(@ids))
+       AND (p.owner_id = @user OR EXISTS (SELECT 1 FROM user_playlist_shares s WHERE s.playlist_id = p.id AND s.user_id = @user))`,
+    )
+    .all({ ids: JSON.stringify(ids), user: userId }) as Row[];
+  const byId = new Map(rows.map((row) => [row.id, toSummary(userId)(row)]));
+  return ids.map((id) => byId.get(id)).filter((playlist) => playlist !== undefined);
+}
+
 /** Rolle des Benutzers bei einer Playlist: Besitzer, Empfänger oder keine (dann bleibt sie unsichtbar) */
 function access(db: DB, userId: number, playlistId: number): 'owner' | 'recipient' | undefined {
   const row = db

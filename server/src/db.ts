@@ -747,6 +747,11 @@ export const migrations: string[] = [
   ) WITHOUT ROWID;
   CREATE INDEX user_playlist_shares_user ON user_playlist_shares(user_id);
   `,
+  `
+  -- Woraus ein Titel zuletzt lief ('/album/5' bei Playlists der Verwaltung, '/playlist/3' bei eigenen), für "Zuletzt gehört".
+  -- NULL: aus seinem eigenen Album bzw. ohne Playlist.
+  ALTER TABLE listening ADD COLUMN context TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

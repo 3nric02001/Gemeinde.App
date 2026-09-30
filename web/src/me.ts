@@ -165,8 +165,14 @@ export function savedProgress(track: PlayerTrack): Progress | undefined {
 
 export const resumePosition = (track: PlayerTrack) => savedProgress(track)?.position;
 
-/** Hörstand an den Server; Titel im Predigt-Player merken sich die Stelle auch sofort hier. */
-export function saveProgress(track: PlayerTrack, position: number): void {
+/** Woraus ein Titel laufen kann, wie der Server es für "Zuletzt gehört" annimmt: Playlist der Verwaltung oder eigene */
+const CONTEXT = /^\/(album|playlist)\/[1-9]\d{0,9}$/;
+
+/**
+ * Hörstand an den Server; Titel im Predigt-Player merken sich die Stelle auch sofort hier.
+ * `from`: Playlist, aus der der Titel läuft, damit sie unter "Zuletzt gehört" erscheint.
+ */
+export function saveProgress(track: PlayerTrack, position: number, from?: string): void {
   const duration = track.duration ?? 0;
   const progress = new Map(state.progress);
   if (usesSermonPlayer(track, duration) && position < duration - FINISHED_MARGIN) progress.set(track.id, { position, duration });
@@ -176,6 +182,7 @@ export function saveProgress(track: PlayerTrack, position: number): void {
   void send('PUT', `/api/me/progress/${track.id}`, {
     position: round(position),
     ...(duration > 0 ? { duration: round(duration) } : {}),
+    ...(from && CONTEXT.test(from) ? { context: from } : {}),
   }).catch(() => undefined);
 }
 

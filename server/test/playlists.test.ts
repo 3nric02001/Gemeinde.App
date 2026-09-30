@@ -140,4 +140,28 @@ describe('eigene Playlists', () => {
     expect((await inject(anna, { method: 'DELETE', url: `/api/me/playlists/${list.id}` })).statusCode).toBe(204);
     expect((await inject(ben, { method: 'GET', url: `/api/me/playlists/${list.id}` })).statusCode).toBe(404);
   });
+
+  it('stehen unter "Zuletzt gehört", statt der Alben ihrer Titel', async () => {
+    const list = await create(anna, 'Mix', [trackId('Eins'), trackId('Zwei')]);
+    const progress = (id: number, context?: string) =>
+      inject(anna, { method: 'PUT', url: `/api/me/progress/${id}`, payload: { position: 20, ...(context ? { context } : {}) } });
+    expect((await progress(trackId('Eins'), `/playlist/${list.id}`)).statusCode).toBe(204);
+    let home = (await inject(anna, { method: 'GET', url: '/api/me/home' })).json();
+    expect(home.recent).toEqual([]);
+    expect(home.recentPlaylists.map((p: { title: string }) => p.title)).toEqual(['Mix']);
+    expect(home.recentPlaylists[0].playedAt).toBeGreaterThan(0);
+
+    // Aus dem Album selbst gehört: dann auch das Album
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await progress(trackId('Drei'));
+    home = (await inject(anna, { method: 'GET', url: '/api/me/home' })).json();
+    expect(home.recent.map((a: { title: string }) => a.title)).toEqual(['Album']);
+    expect(home.recentPlaylists).toHaveLength(1);
+
+    // Ben sieht Annas Playlist nicht, auch wenn er einen ungültigen Kontext schickt
+    const bad = await inject(ben, { method: 'PUT', url: `/api/me/progress/${trackId('Eins')}`, payload: { position: 5, context: '/admin/x' } });
+    expect(bad.statusCode).toBe(400);
+    await inject(ben, { method: 'PUT', url: `/api/me/progress/${trackId('Eins')}`, payload: { position: 5, context: `/playlist/${list.id}` } });
+    expect((await inject(ben, { method: 'GET', url: '/api/me/home' })).json().recentPlaylists).toEqual([]);
+  });
 });
