@@ -1,7 +1,7 @@
 import type { Album, Facets, Page, Track } from '../api';
 import { coverUrl, kindLabel, query } from '../api';
 import { useAuth } from '../auth';
-import { playAlbum, Shelf } from '../components/AlbumCard';
+import { AlbumCard, playAlbum, Shelf } from '../components/AlbumCard';
 import { Cover } from '../components/Cover';
 import { FavoritesCard } from '../components/FavoritesCard';
 import { PlaylistCard } from '../components/PlaylistCard';
@@ -11,7 +11,7 @@ import { TrackList } from '../components/TrackList';
 import { formatDuration, formatLongDate, formatTime, plural, withoutDate } from '../format';
 import { useApi } from '../hooks';
 import { useMe } from '../me';
-import { usePlaylists } from '../playlists';
+import { usePlaylists, type PlaylistSummary } from '../playlists';
 import { LiveTile } from './Live';
 import { useLive } from '../live';
 import { Empty } from './common';
@@ -34,7 +34,11 @@ export function Home() {
   const { user } = useAuth();
   const me = useMe();
   const latest = useApi<Page<DatedAlbum>>('/api/dates?limit=1');
-  const personal = useApi<{ resume: Array<Track & { position: number }>; recent: Album[] }>('/api/me/home');
+  const personal = useApi<{
+    resume: Array<Track & { position: number }>;
+    recent: Array<Album & { playedAt?: number }>;
+    recentPlaylists?: Array<PlaylistSummary & { playedAt?: number }>;
+  }>('/api/me/home');
   const facets = useApi<Facets>('/api/facets');
   const live = useLive();
   const playlists = usePlaylists();
@@ -61,7 +65,11 @@ export function Home() {
   // Ist der aktuelle Gottesdienst angefangen, zeigt ihn die große Karte zum Weiterhören; darunter nicht noch einmal
   const serviceResume = service ? resume.find((track) => track.albumId === service.id) : undefined;
   const otherResume = resume.filter((track) => track !== serviceResume);
-  const recentAlbums = (personal.data?.recent ?? []).filter((album) => album.id !== service?.id);
+  // Alben und Playlists (eigene, geteilte, die der Verwaltung) gemischt, zuletzt gehörte zuerst
+  const recent = [
+    ...(personal.data?.recent ?? []).filter((album) => album.id !== service?.id).map((album) => ({ at: album.playedAt ?? 0, album })),
+    ...(personal.data?.recentPlaylists ?? []).map((playlist) => ({ at: playlist.playedAt ?? 0, playlist })),
+  ].sort((a, b) => b.at - a.at);
 
   return (
     <div class="page">
@@ -85,7 +93,21 @@ export function Home() {
         </section>
       )}
 
-      <Shelf title="Zuletzt gehört" albums={recentAlbums} />
+      <Shelf
+        title="Zuletzt gehört"
+        albums={[]}
+        lead={
+          recent.length
+            ? recent.map((item) =>
+                'album' in item ? (
+                  <AlbumCard key={`a${item.album.id}`} album={item.album} />
+                ) : (
+                  <PlaylistCard key={`p${item.playlist.id}`} playlist={item.playlist} />
+                ),
+              )
+            : undefined
+        }
+      />
 
       {/* Je Art aus dem Regelwerk eine Reihe (Gottesdienste, Bibelstunden …), die mit dem jüngsten Eintrag zuerst */}
       {recordings.map((kind) => (

@@ -1,4 +1,5 @@
 import type { DB } from '../db.js';
+import { playlistSummaries } from './playlists.js';
 import { getTracksByIds, searchAlbums } from './queries.js';
 import { sermonSeconds } from './settings.js';
 
@@ -57,17 +58,20 @@ export function albumsByIds(db: DB, ids: number[]): Record<string, unknown>[] {
   return ids.map((id) => byId.get(id)).filter((album) => album !== undefined);
 }
 
+/** Woraus ein Titel lief: eine Playlist der Verwaltung ('/album/5') oder eine eigene ('/playlist/3') */
+export const CONTEXT_PATTERN = '^/(album|playlist)/[1-9][0-9]{0,9}$';
+
 /**
  * Hörstand speichern; `position` am Ende des Titels heißt "fertig gehört".
- * `duration` ist die Länge laut Browser, die gilt vor der aus dem Scan.
+ * `duration` ist die Länge laut Browser, die gilt vor der aus dem Scan. `context`: woraus er lief (siehe CONTEXT_PATTERN).
  */
-export function saveProgress(db: DB, userId: number, trackId: number, position: number, duration?: number): boolean {
+export function saveProgress(db: DB, userId: number, trackId: number, position: number, duration?: number, context?: string): boolean {
   if (!db.prepare('SELECT 1 FROM tracks WHERE id = ?').get(trackId)) return false;
   db.prepare(
-    `INSERT INTO listening (user_id, track_id, position, duration, updated_at) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO listening (user_id, track_id, position, duration, updated_at, context) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id, track_id) DO UPDATE SET position = excluded.position,
-       duration = coalesce(excluded.duration, listening.duration), updated_at = excluded.updated_at`,
-  ).run(userId, trackId, Math.max(0, position), duration && duration > 0 ? duration : null, Date.now());
+       duration = coalesce(excluded.duration, listening.duration), updated_at = excluded.updated_at, context = excluded.context`,
+  ).run(userId, trackId, Math.max(0, position), duration && duration > 0 ? duration : null, Date.now(), context ?? null);
   return true;
 }
 
@@ -100,16 +104,30 @@ export function listenerHome(db: DB, userId: number) {
     unfinished.map((row) => row.id),
   ).map((track) => ({ ...track, position: rows.get(track.id as number)!.position, duration: rows.get(track.id as number)!.duration }));
 
-  const recentIds = (
-    db
-      .prepare(
-        `SELECT t.album_id AS id, max(l.updated_at) AS at FROM listening l JOIN tracks t ON t.id = l.track_id
-         WHERE l.user_id = ? AND t.album_id IS NOT NULL AND l.updated_at > 0
-         GROUP BY t.album_id ORDER BY at DESC LIMIT 12`,
-      )
-      .all(userId) as Array<{ id: number }>
-  ).map((row) => row.id);
-  return { resume, recent: albumsByIds(db, recentIds) };
+  // Was aus einer Playlist lief, zählt für die Playlist, sonst für das Album des Titels.
+  const played = db
+    .prepare(
+      `SELECT coalesce(l.context, '/album/' || t.album_id) AS href, max(l.updated_at) AS at
+       FROM listening l JOIN tracks t ON t.id = l.track_id
+       WHERE l.user_id = ? AND l.updated_at > 0 AND (l.context IS NOT NULL OR t.album_id IS NOT NULL)
+       GROUP BY href ORDER BY at DESC LIMIT 24`,
+    )
+    .all(userId) as Array<{ href: string; at: number }>;
+  const idsOf = (kind: string) =>
+    played.filter((row) => row.href.startsWith(`/${kind}/`)).map((row) => Number(row.href.slice(kind.length + 2)));
+  const at = new Map(played.map((row) => [row.href, row.at]));
+  const albums = albumsByIds(db, idsOf('album')).map((album) => ({ ...album, playedAt: at.get(`/album/${album.id as number}`) }));
+  const playlists = playlistSummaries(db, userId, idsOf('playlist')).map((playlist) => ({
+    ...playlist,
+    playedAt: at.get(`/playlist/${playlist.id}`),
+  }));
+  // Beides zusammen höchstens 12, die zuletzt gehörten zuerst
+  const cutoff = [...albums, ...playlists].map((item) => item.playedAt ?? 0).sort((a, b) => b - a)[11] ?? 0;
+  return {
+    resume,
+    recent: albums.filter((album) => (album.playedAt ?? 0) >= cutoff),
+    recentPlaylists: playlists.filter((playlist) => (playlist.playedAt ?? 0) >= cutoff),
+  };
 }
 
 /** Hörstand eines Gottesdienstes (bzw. einer Aufnahme mit Datum) für die Liste unter "Datum" */

@@ -12,6 +12,7 @@ import {
   markAlbumHeard,
   markDatesSeen,
   saveProgress,
+  CONTEXT_PATTERN,
   setFavorite,
   type FavoriteKind,
 } from '../library/listener.js';
@@ -59,14 +60,15 @@ export async function registerMeRoutes(app: FastifyInstance, { db }: { db: DB })
           properties: {
             position: { type: 'number', minimum: 0, maximum: 1e6 },
             duration: { type: 'number', minimum: 0, maximum: 1e6 },
+            context: { type: 'string', pattern: CONTEXT_PATTERN },
           },
           additionalProperties: false,
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: number }; Body: { position: number; duration?: number } }>, reply) => {
-      const { position, duration } = request.body;
-      if (!saveProgress(db, userId(request), request.params.id, position, duration)) {
+    async (request: FastifyRequest<{ Params: { id: number }; Body: { position: number; duration?: number; context?: string } }>, reply) => {
+      const { position, duration, context } = request.body;
+      if (!saveProgress(db, userId(request), request.params.id, position, duration, context)) {
         return reply.code(404).send({ error: 'Titel nicht gefunden' });
       }
       return reply.code(204).send();
