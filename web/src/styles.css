@@ -3250,3 +3250,12 @@ button.more-link {
 .admin-kind select {
   max-width: 360px;
 }
+
+.structure-step {
+  margin: 32px 0 12px;
+  font-size: 20px;
+}
+
+.structure-default-kind .field {
+  max-width: 420px;
+}

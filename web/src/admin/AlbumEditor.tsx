@@ -561,6 +561,15 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
 
 const AUTOMATIC = '\u0000auto';
 
+/** Woher die Art eines Albums kommt, in Worten */
+function kindSource(album: AdminAlbumDetail): string {
+  const source = album.recordingSource;
+  if (album.manualRecording != null || source?.by === 'manual') return 'Von Hand festgelegt, geht dem Regelwerk vor';
+  if (source?.by === 'rule') return `Aus der Regel „${source.rule}“ in Verwaltung → Zuordnung → Art bestimmen`;
+  if (source?.by === 'default') return 'Keine Regel passt: Vorgabe für Ordner mit Datum (Verwaltung → Zuordnung)';
+  return 'Keine Regel in Verwaltung → Zuordnung → Art bestimmen passt';
+}
+
 /**
  * Art des Albums (Gottesdienst, Bibelstunde, eigene Arten aus Verwaltung → Zuordnung) von Hand festlegen.
  * Das geht den Bedingungen der Arten vor; „Keine Art“ macht aus einer Aufnahme wieder Musik.
@@ -598,9 +607,7 @@ function KindForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: bool
             <option value="">Keine Art (Musik)</option>
           </select>
         </label>
-        <p class="field-source">
-          {manual === null ? 'Nach dem Regelwerk in Verwaltung → Zuordnung' : 'Von Hand festgelegt, geht dem Regelwerk vor'}
-        </p>
+        <p class="field-source">{kindSource(album)}</p>
       </div>
     </div>
   );

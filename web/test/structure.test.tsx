@@ -8,15 +8,19 @@ const json = (body: unknown, status = 200) =>
 const structure: Structure = {
   kinds: [
     {
-      name: 'Bibelstunde', plural: 'Bibelstunden', match: { field: 'folder', op: 'equals', value: 'Bibelstunden' }, datedOnly: true,
+      name: 'Bibelstunde', plural: 'Bibelstunden',
       folderPattern: '{datum}_{bibelstelle}', filePattern: '{datum}_{nr}', albumTitle: '{bibelstelle}', trackTitle: 'Teil {nr}',
       preferTags: true,
     },
     {
-      name: 'Gottesdienst', plural: 'Gottesdienste', match: null, datedOnly: true, folderPattern: '{datum}_{anlass}',
+      name: 'Gottesdienst', plural: 'Gottesdienste', folderPattern: '{datum}_{anlass}',
       filePattern: '{inhalt} - {titel}', albumTitle: '{anlass}', trackTitle: '{inhalt}: {titel}', preferTags: true,
     },
   ],
+  kindRules: [
+    { name: 'Bibelstunden', enabled: true, when: { field: 'folder', op: 'equals', value: 'Bibelstunden' }, kind: 'Bibelstunde', datedOnly: true },
+  ],
+  defaultKind: 'Gottesdienst',
   contents: ['Lied', 'Predigt', 'Begrüßung'],
   untitled: ['Begrüßung'],
   policies: [
@@ -59,7 +63,8 @@ describe('Zuordnung in der Verwaltung', () => {
     render(<StructurePanel />);
     const values = (await screen.findAllByLabelText('Suchbegriff')) as HTMLInputElement[];
     expect(values.map((input) => input.value)).toEqual(['Bibelstunden', 'Gottesdienst', 'Predigt']);
-    expect(screen.getByRole('button', { name: 'Bedingung festlegen' })).toBeTruthy();
+    const kinds = screen.getAllByLabelText(/^Art$|Sonst, bei Ordnern mit Datum/) as HTMLSelectElement[];
+    expect(kinds.map((select) => select.value)).toEqual(['Bibelstunde', 'Gottesdienst']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Vorschau' }));
     expect(await screen.findByText('Predigt: Der gute Hirte')).toBeTruthy();
@@ -82,7 +87,7 @@ describe('Zuordnung in der Verwaltung', () => {
     });
     render(<StructurePanel />);
     fireEvent.click(await screen.findByRole('button', { name: 'Policy hinzufügen' }));
-    fireEvent.input(screen.getByPlaceholderText('Policy 2'), { target: { value: 'Konzerte' } });
+    fireEvent.input(screen.getByPlaceholderText('Regel 2'), { target: { value: 'Konzerte' } });
     const fields = screen.getAllByLabelText('Feld') as HTMLSelectElement[];
     fireEvent.change(fields[fields.length - 1]!, { target: { value: 'genre' } });
     const values = screen.getAllByLabelText('Suchbegriff') as HTMLInputElement[];
@@ -100,6 +105,35 @@ describe('Zuordnung in der Verwaltung', () => {
       enabled: true,
       when: { match: 'all', conditions: [{ field: 'genre', op: 'equals', value: 'Konzert' }] },
       player: 'music',
+    });
+  });
+
+  it('bestimmt die Art über eigene Regeln und zieht beim Umbenennen mit', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (init?.method === 'PUT') return json({ structure: JSON.parse(String(init.body)) });
+      if (String(input).endsWith('/preview')) return json({ kinds: [] });
+      return json({ structure, defaults: structure });
+    });
+    render(<StructurePanel />);
+    // Gottesdienst heißt jetzt Sonntagsgottesdienst: Vorgabe und Policies ziehen mit
+    const names = (await screen.findAllByLabelText('Name')) as HTMLInputElement[];
+    fireEvent.input(names[1]!, { target: { value: 'Sonntagsgottesdienst' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Regel hinzufügen' })[0]!);
+    const values = screen.getAllByLabelText('Suchbegriff') as HTMLInputElement[];
+    fireEvent.input(values[1]!, { target: { value: 'Konzerte' } });
+    const kinds = screen.getAllByLabelText(/^Art$/) as HTMLSelectElement[];
+    fireEvent.change(kinds[1]!, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern und anwenden' }));
+    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true));
+    const body = JSON.parse(String(fetch.mock.calls.find(([, init]) => init?.method === 'PUT')![1]!.body));
+    expect(body.defaultKind).toBe('Sonntagsgottesdienst');
+    expect(body.policies[0].when.conditions[0].value).toBe('Sonntagsgottesdienst');
+    expect(body.kindRules[1]).toEqual({
+      name: '',
+      enabled: true,
+      when: { match: 'all', conditions: [{ field: 'folder', op: 'equals', value: 'Konzerte' }] },
+      kind: '',
+      datedOnly: true,
     });
   });
 

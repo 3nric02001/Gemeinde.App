@@ -21,6 +21,8 @@ export interface AlbumFields {
 export interface AdminAlbumDetail extends AlbumDetail {
   /** Art von Hand ("" = keine Art), null: nach dem Regelwerk (Verwaltung → Zuordnung) */
   manualRecording?: string | null;
+  /** Woher die Art kommt: von Hand, Regel in „Art bestimmen“, Vorgabe für Ordner mit Datum oder keine */
+  recordingSource?: { by: 'manual' } | { by: 'rule'; rule: string } | { by: 'default' } | { by: 'none' };
   kind: 'auto' | 'manual';
   hidden: boolean;
   /** Vom Admin festgelegte Werte; null heißt automatisch */

@@ -7,13 +7,16 @@ import { foldValue } from './text.js';
  *   dann gilt als Predigt und spielt im Predigt-Player
  *
  * Die Liste gilt von oben nach unten; für jede Wirkung entscheidet die erste passende Policy, die sie setzt.
- * Dieselben Bedingungen (ohne Titelfelder) legen fest, woran eine Art ihre Ordner erkennt.
+ * Dieselben Bedingungen (ohne Inhalt, Art und Dauer) bestimmen in "Art bestimmen" die Art eines Albumordners.
  */
 
 export const POLICY_FIELDS = ['title', 'content', 'kind', 'artist', 'album', 'genre', 'folder', 'path', 'duration'] as const;
 export const POLICY_OPS = ['contains', 'not_contains', 'starts', 'equals', 'at_least', 'less_than'] as const;
-/** Felder, an denen eine Art ihre Ordner erkennt: Nur der Pfad steht fest, bevor die Dateinamen gelesen sind. */
-export const FOLDER_FIELDS = ['folder', 'path'] as const;
+/**
+ * Felder für "Art bestimmen": Pfad und Tags der Dateien. Inhalt und Titel aus dem Dateinamen stehen noch nicht fest,
+ * denn die Art bestimmt erst, wie Dateinamen gelesen werden.
+ */
+export const KIND_FIELDS = ['folder', 'path', 'title', 'artist', 'album', 'genre'] as const;
 const NUMBER_OPS = new Set<PolicyOp>(['at_least', 'less_than']);
 export const MAX_POLICIES = 50;
 const MAX_DEPTH = 4;

@@ -4,7 +4,7 @@ import { findDate } from './dateText.js';
 import { albumFolderOf, basename, dirname, fileStem, folderDate, folderYear } from './pathMeta.js';
 import {
   compilePolicies,
-  FOLDER_FIELDS,
+  KIND_FIELDS,
   folderCondition,
   parsePolicies,
   parsePolicyCondition,
@@ -45,10 +45,6 @@ export interface RecordingKind {
   name: string;
   /** Mehrzahl für Überschriften und Filter: "Gottesdienste" */
   plural: string;
-  /** Woran die Art ihre Albumordner erkennt (Ordnername, Pfad); null: alle übrigen Ordner mit Datum */
-  match: PolicyCondition | null;
-  /** Nur Ordner mit Datum im Namen; sonst auch Ordner ohne Datum, auf die die Bedingung passt */
-  datedOnly: boolean;
   /** Muster für den Namen des Aufnahme-Ordners */
   folderPattern: string;
   /** Muster für Dateinamen (ohne Endung) */
@@ -61,8 +57,24 @@ export interface RecordingKind {
   preferTags: boolean;
 }
 
+/** "Art bestimmen": Wenn ein Albumordner passt, dann ist er diese Art (oder keine, also Musik). */
+export interface KindRule {
+  name: string;
+  enabled: boolean;
+  /** Bedingung auf Ordner, Pfad und Tags; passt, wenn der Ordner oder eine Datei darin passt */
+  when: PolicyCondition;
+  /** Name der Art; "": keine Art (Musik) */
+  kind: string;
+  /** Nur Ordner mit Datum im Namen */
+  datedOnly: boolean;
+}
+
 export interface Structure {
   kinds: RecordingKind[];
+  /** Art eines Albumordners, von oben nach unten; die erste passende Regel gilt */
+  kindRules: KindRule[];
+  /** Art der übrigen Ordner mit Datum, wenn keine Regel passt; "": keine (Musik) */
+  defaultKind: string;
   /** Bekannte Inhalte am Anfang von Dateinamen ("Lied", "Predigt" …); auch mehrere Wörter möglich */
   contents: string[];
   /**
@@ -82,8 +94,6 @@ export const DEFAULT_STRUCTURE: Structure = {
     {
       name: 'Bibelstunde',
       plural: 'Bibelstunden',
-      match: folderCondition('Bibelstunden'),
-      datedOnly: true,
       folderPattern: '{datum}_{bibelstelle}',
       filePattern: '{datum}_{nr}',
       albumTitle: '{bibelstelle}',
@@ -93,8 +103,6 @@ export const DEFAULT_STRUCTURE: Structure = {
     {
       name: 'Gottesdienst',
       plural: 'Gottesdienste',
-      match: null,
-      datedOnly: true,
       folderPattern: '{datum}_{anlass}',
       filePattern: '{inhalt} - {titel} - {sprecher}',
       albumTitle: '{anlass}',
@@ -102,6 +110,8 @@ export const DEFAULT_STRUCTURE: Structure = {
       preferTags: false,
     },
   ],
+  kindRules: [{ name: 'Bibelstunden', enabled: true, when: folderCondition('Bibelstunden'), kind: 'Bibelstunde', datedOnly: true }],
+  defaultKind: 'Gottesdienst',
   contents: [
     'Lied', 'Predigt', 'Lesung', 'Schriftlesung', 'Gebet', 'Begrüßung', 'Abkündigungen', 'Segen', 'Musik', 'Vorspiel',
     'Nachspiel', 'Chor', 'Zeugnis', 'Kinderpredigt', 'Taufe', 'Abendmahl', 'Grußwort', 'Bericht', 'Einleitung', 'Beitrag',
@@ -128,6 +138,7 @@ export const DEFAULT_STRUCTURE: Structure = {
 
 const META_KEY = 'structure';
 export const MAX_KINDS = 10;
+const MAX_KIND_RULES = 30;
 const MAX_TEXT = 200;
 const MAX_CONTENTS = 100;
 
@@ -176,7 +187,7 @@ function checkPattern(pattern: string, field: string): void {
 /** Prüft ein Regelwerk aus der Verwaltung und bringt es in Normalform. Wirft mit verständlicher Meldung. */
 export function parseStructure(input: unknown): Structure {
   if (!input || typeof input !== 'object') throw new StructureError('Ungültiges Regelwerk');
-  const body = input as { kinds?: unknown; contents?: unknown; policies?: unknown };
+  const body = input as { kinds?: unknown; contents?: unknown; policies?: unknown; kindRules?: unknown; defaultKind?: unknown };
   if (!Array.isArray(body.kinds) || body.kinds.length === 0) throw new StructureError('Mindestens eine Art ist nötig');
   if (body.kinds.length > MAX_KINDS) throw new StructureError(`Höchstens ${MAX_KINDS} Arten`);
   const names = new Set<string>();
@@ -187,24 +198,9 @@ export function parseStructure(input: unknown): Structure {
     if (!name) throw new StructureError(`Art ${index + 1} braucht einen Namen`);
     if (names.has(foldValue(name))) throw new StructureError(`„${name}“ gibt es doppelt`);
     names.add(foldValue(name));
-    // Früher ein einzelner Ordnername ("folder"), heute eine Bedingung
-    const legacyFolder = k.match === undefined ? text(k.folder, 'Ordner', 100) : '';
-    let match: PolicyCondition | null;
-    try {
-      match = legacyFolder
-        ? folderCondition(legacyFolder)
-        : k.match === undefined || k.match === null
-          ? null
-          : parsePolicyCondition(k.match, FOLDER_FIELDS, `${name}, Erkennen an`);
-    } catch (error) {
-      if (error instanceof PolicyError) throw new StructureError(error.message);
-      throw error;
-    }
     const kind: RecordingKind = {
       name,
       plural: text(k.plural, 'Mehrzahl', 60) || name,
-      match,
-      datedOnly: match === null || k.datedOnly !== false,
       folderPattern: text(k.folderPattern, 'Muster für Ordner'),
       filePattern: text(k.filePattern, 'Muster für Dateien'),
       albumTitle: text(k.albumTitle, 'Name des Albums'),
@@ -232,7 +228,43 @@ export function parseStructure(input: unknown): Structure {
     if (error instanceof PolicyError) throw new StructureError(error.message);
     throw error;
   }
-  return { kinds, contents, untitled, policies };
+  const kindName = (value: unknown, label: string): string => {
+    const wanted = text(value, label, 60);
+    if (!wanted) return '';
+    const found = kinds.find((k) => foldValue(k.name) === foldValue(wanted));
+    if (!found) throw new StructureError(`${label}: Die Art „${wanted}“ gibt es nicht`);
+    return found.name;
+  };
+  let kindRules: KindRule[];
+  let defaultKind: string;
+  if (body.kindRules === undefined) {
+    // Früher erkannte jede Art ihre Ordner an einem Ordnernamen ("folder"); ohne ihn nahm sie die übrigen Ordner mit Datum.
+    const raw = body.kinds as Array<Record<string, unknown>>;
+    kindRules = kinds
+      .map((kind, i) => ({ kind, folder: text(raw[i]!.folder, 'Ordner', 100) }))
+      .filter(({ folder }) => folder)
+      .map(({ kind, folder }) => ({ name: kind.plural, enabled: true, when: folderCondition(folder), kind: kind.name, datedOnly: true }));
+    defaultKind = kinds.find((_, i) => !text(raw[i]!.folder, 'Ordner', 100))?.name ?? '';
+  } else {
+    if (!Array.isArray(body.kindRules)) throw new StructureError('Art bestimmen: Liste erwartet');
+    if (body.kindRules.length > MAX_KIND_RULES) throw new StructureError(`Höchstens ${MAX_KIND_RULES} Regeln in „Art bestimmen“`);
+    kindRules = body.kindRules.map((rawRule, index): KindRule => {
+      if (!rawRule || typeof rawRule !== 'object') throw new StructureError('Ungültige Regel in „Art bestimmen“');
+      const r = rawRule as Record<string, unknown>;
+      const ruleName = text(r.name, 'Name der Regel', 80) || `Regel ${index + 1}`;
+      const label = `Art bestimmen, „${ruleName}“`;
+      let when: PolicyCondition;
+      try {
+        when = parsePolicyCondition(r.when, KIND_FIELDS, label);
+      } catch (error) {
+        if (error instanceof PolicyError) throw new StructureError(error.message);
+        throw error;
+      }
+      return { name: ruleName, enabled: r.enabled !== false, when, kind: kindName(r.kind, label), datedOnly: r.datedOnly !== false };
+    });
+    defaultKind = kindName(body.defaultKind, 'Übrige Ordner mit Datum');
+  }
+  return { kinds, kindRules, defaultKind, contents, untitled, policies };
 }
 
 export function getStructure(db: DB): Structure {
@@ -375,8 +407,6 @@ export function fillTemplate(template: string, values: Values): string {
 
 export interface CompiledKind {
   kind: RecordingKind;
-  /** Erkennt die Albumordner der Art; undefined: alle übrigen Ordner mit Datum */
-  matches?: (subject: PolicySubject) => boolean;
   folder?: CompiledPattern;
   file?: CompiledPattern;
   /** Dasselbe Dateimuster für Namen mit " - " als Trenner */
@@ -391,6 +421,7 @@ export interface CompiledStructure {
   structure: Structure;
   kinds: CompiledKind[];
   decide: (subject: PolicySubject) => Decision;
+  kindRules: Array<{ rule: KindRule; matches: (subject: PolicySubject) => boolean }>;
 }
 
 export function compileStructure(structure: Structure): CompiledStructure {
@@ -398,9 +429,9 @@ export function compileStructure(structure: Structure): CompiledStructure {
   return {
     structure,
     decide,
+    kindRules: structure.kindRules.filter((rule) => rule.enabled).map((rule) => ({ rule, matches: policyMatcher(rule.when) })),
     kinds: structure.kinds.map((kind) => ({
       kind,
-      matches: kind.match ? policyMatcher(kind.match) : undefined,
       decide,
       folder: compilePattern(kind.folderPattern),
       file: compilePattern(kind.filePattern, structure.contents, { leadingNumber: true }),
@@ -410,23 +441,41 @@ export function compileStructure(structure: Structure): CompiledStructure {
   };
 }
 
+/** Woher die Art eines Albums kommt: von Hand, aus einer Regel in "Art bestimmen" oder als Vorgabe für Ordner mit Datum */
+export type KindSource = { by: 'manual' } | { by: 'rule'; rule: string } | { by: 'default' } | { by: 'none' };
+
+export interface KindOfFolder {
+  kind: CompiledKind | undefined;
+  source: KindSource;
+}
+
+const findKind = (compiled: CompiledStructure, name: string) => {
+  const key = foldValue(name);
+  return key ? compiled.kinds.find((k) => foldValue(k.kind.name) === key) : undefined;
+};
+
 /**
- * Art eines Albumordners: die erste, deren Bedingung passt, sonst die erste ohne Bedingung (nur Ordner mit Datum).
- * `manual`: in der Verwaltung für dieses Album gesetzte Art; sie geht allen Bedingungen vor, "" heißt keine Art.
+ * Art eines Albumordners nach "Art bestimmen": die erste passende Regel, sonst bei Ordnern mit Datum die Vorgabe.
+ * Eine Regel passt, wenn ihre Bedingung auf den Ordner oder eine Datei darin passt (Tags wie Genre).
+ * `manual`: in der Verwaltung für dieses Album gesetzte Art; sie geht allen Regeln vor, "" heißt keine Art.
  */
-export function kindOfFolder(compiled: CompiledStructure, folder: string, manual?: string | null): CompiledKind | undefined {
-  if (!folder) return undefined;
-  if (manual !== undefined && manual !== null) {
-    const key = foldValue(manual);
-    return key ? compiled.kinds.find((k) => foldValue(k.kind.name) === key) : undefined;
-  }
+export function kindOfFolder(
+  compiled: CompiledStructure,
+  folder: string,
+  files: Array<Omit<PolicySubject, 'content' | 'kind' | 'duration'>> = [],
+  manual?: string | null,
+): KindOfFolder {
+  if (!folder) return { kind: undefined, source: { by: 'none' } };
+  if (manual !== undefined && manual !== null) return { kind: findKind(compiled, manual), source: { by: 'manual' } };
   const dated = Boolean(folderDate(folder));
-  // Der Ordner selbst zählt mit ("Ordner heißt …"); der Schrägstrich macht ihn zum Ordner statt zur Datei
-  const subject = { path: `${folder}/` };
-  return (
-    compiled.kinds.find((k) => k.matches && (dated || !k.kind.datedOnly) && k.matches(subject)) ??
-    (dated ? compiled.kinds.find((k) => !k.matches) : undefined)
-  );
+  // Der Ordner selbst zählt mit ("Ordner im Pfad ist genau …"); der Schrägstrich macht ihn zum Ordner statt zur Datei
+  const subjects = [{ path: `${folder}/` }, ...files];
+  for (const { rule, matches } of compiled.kindRules) {
+    if (rule.datedOnly && !dated) continue;
+    if (subjects.some(matches)) return { kind: findKind(compiled, rule.kind), source: { by: 'rule', rule: rule.name } };
+  }
+  if (dated && compiled.structure.defaultKind) return { kind: findKind(compiled, compiled.structure.defaultKind), source: { by: 'default' } };
+  return { kind: undefined, source: { by: 'none' } };
 }
 
 export interface FileInfo {
@@ -625,7 +674,7 @@ export function previewStructure(db: DB, structure: Structure, examples = 4): Pr
   const result = compiled.kinds.map((k) => ({ name: k.kind.name, albums: 0, unmatchedFiles: 0, examples: [] as PreviewAlbum[] }));
   const folders = [...byFolder].sort((a, b) => (folderDate(b[0]) ?? '').localeCompare(folderDate(a[0]) ?? ''));
   for (const [folder, files] of folders) {
-    const kind = kindOfFolder(compiled, folder);
+    const { kind } = kindOfFolder(compiled, folder, files);
     if (!kind) continue;
     const entry = result[compiled.kinds.indexOf(kind)]!;
     const applied = applyToFolder(

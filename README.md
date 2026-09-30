@@ -151,22 +151,28 @@ Audio Aufnahmen/2026/2026_08_30_Einschulung/Predigt - Der gute Hirte.mp3
 Audio Aufnahmen/2026/Bibelstunden/2026_01_14_Matthäus 9, 27-38/2026_01_14_001.mp3
 ```
 
-| Art | Erkennen an | Ordnername | Dateiname | Name des Albums | Titel |
+Das Regelwerk arbeitet in drei Schritten: **1. Art bestimmen**, **2. Ordner- und Dateinamen nach den Mustern der Art
+lesen**, **3. Policies** für Predigt und Player.
+
+| Art | Bestimmt durch | Ordnername | Dateiname | Name des Albums | Titel |
 | --- | --- | --- | --- | --- | --- |
-| Bibelstunde | Ordner im Pfad ist genau „Bibelstunden“ | `{datum}_{bibelstelle}` | `{datum}_{nr}` | `{bibelstelle}` | `Teil {nr}` |
-| Gottesdienst | (alle übrigen mit Datum) | `{datum}_{anlass}` | `{inhalt} - {titel} - {sprecher}` | `{anlass}` | `{inhalt}: {titel}` |
+| Bibelstunde | Regel „Ordner im Pfad ist genau Bibelstunden“ | `{datum}_{bibelstelle}` | `{datum}_{nr}` | `{bibelstelle}` | `Teil {nr}` |
+| Gottesdienst | Vorgabe für übrige Ordner mit Datum | `{datum}_{anlass}` | `{inhalt} - {titel} - {sprecher}` | `{anlass}` | `{inhalt}: {titel}` |
 
 Daraus werden „Einschulung“ mit „Predigt: Der gute Hirte“ und die Bibelstunde „Matthäus 9, 27-38“ mit
 „Teil 1“. Aus `Predigt - Der gute Hirte - Pastor Meier.mp3` wird Pastor Meier Sprecher und Interpret des
 Gottesdienstes; bei `Lied - Nun danket alle Gott - Chor.mp3` ist der Chor Interpret des Liedes, aber nicht
 Sprecher. Fehlt der Name am Ende, bleibt es beim Titel.
 
+- **Art bestimmen**: eine geordnete Liste „Wenn … dann Art …“ je Albumordner. Bedingungen auf Ordner im Pfad, Pfad und
+  die Tags der Dateien (Genre, Album, Interpret, Titel), verschachtelbar mit UND/ODER; eine Regel passt, wenn der
+  Ordner oder eine Datei darin passt. Die erste passende Regel gilt, auch „Keine Art (Musik)“ ist möglich. Regeln
+  gelten standardmäßig nur für Ordner mit Datum, auf Wunsch auch für andere. Passt keine Regel, bekommen Ordner mit
+  Datum die Vorgabe („Sonst, bei Ordnern mit Datum“, vorgegeben Gottesdienst, auch „keine“ möglich).
 - **Arten**: Gottesdienst und Bibelstunde sind nur Vorgaben; Arten lassen sich umbenennen, löschen und neu anlegen
-  (etwa „Jugendabend“), bis zu zehn. Jede Art erkennt ihre Albumordner an einer Bedingung auf „Ordner im Pfad“ oder
-  „Pfad“ (verschachtelbar mit UND/ODER). Es gilt die erste Art, deren Bedingung passt; eine Art ohne Bedingung nimmt
-  alle übrigen Ordner mit Datum. Mit abgewähltem „Nur Ordner mit Datum“ erkennt eine Art auch Ordner ohne Datum.
-- **Art je Album**: Im Album-Editor lässt sich die Art eines Albums von Hand setzen, auch „Keine Art (Musik)“. Das
-  geht dem Regelwerk vor, wie alle Korrekturen aus der Verwaltung.
+  (etwa „Jugendabend“), bis zu zehn. Beim Umbenennen ziehen Regeln, Vorgabe und Policies mit.
+- **Art je Album**: Der Album-Editor zeigt, woher die Art kommt (Regel, Vorgabe oder von Hand), und lässt sie von Hand
+  setzen, auch „Keine Art (Musik)“. Das geht dem Regelwerk vor, wie alle Korrekturen aus der Verwaltung.
 - **Muster** für Ordner- und Dateinamen mit den Platzhaltern `{datum}`, `{anlass}`, `{bibelstelle}`,
   `{sprecher}`, `{inhalt}`, `{titel}` und `{nr}`. Trennzeichen sind austauschbar („ - “, „_“, „.“, „:“); zwischen
   zwei freien Textfeldern (etwa `{sprecher} - {titel}`) muss aber ein echtes Trennzeichen stehen, kein

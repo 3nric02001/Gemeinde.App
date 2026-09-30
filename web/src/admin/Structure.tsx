@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../components/Icon';
 import { formatCompactDate, plural } from '../format';
@@ -8,10 +9,6 @@ import { asGroup, ConditionGroup, type Condition, type Leaf } from './Conditions
 export interface RecordingKind {
   name: string;
   plural: string;
-  /** Woran die Art ihre Ordner erkennt; null: alle übrigen Ordner mit Datum */
-  match: Condition | null;
-  /** Nur Ordner mit Datum im Namen */
-  datedOnly: boolean;
   folderPattern: string;
   filePattern: string;
   albumTitle: string;
@@ -30,15 +27,36 @@ export interface Policy {
   player?: Player;
 }
 
+/** Art bestimmen: Wenn ein Albumordner passt, dann ist er diese Art ("" = keine, Musik) */
+export interface KindRule {
+  name: string;
+  enabled: boolean;
+  when: Condition;
+  kind: string;
+  /** Nur Ordner mit Datum im Namen */
+  datedOnly: boolean;
+}
+
 export interface Structure {
   kinds: RecordingKind[];
+  kindRules: KindRule[];
+  /** Art der übrigen Ordner mit Datum; "" = keine (Musik) */
+  defaultKind: string;
   contents: string[];
   /** Inhalte ohne Titel: ein einzelner Teil danach ist der Name ("Begrüßung - Jakob Rauschenberger") */
   untitled: string[];
   policies: Policy[];
 }
 
-const FOLDER_FIELDS: Record<string, string> = { folder: 'Ordner im Pfad', path: 'Pfad' };
+/** Felder für „Art bestimmen“: Pfad und Tags; Inhalt und Titel aus dem Dateinamen hängen erst von der Art ab */
+const KIND_FIELDS: Record<string, string> = {
+  folder: 'Ordner im Pfad',
+  path: 'Pfad',
+  genre: 'Genre (Tag)',
+  album: 'Album (Tag)',
+  artist: 'Interpret (Tag)',
+  title: 'Titel (Tag)',
+};
 const POLICY_FIELDS: Record<string, string> = {
   kind: 'Art',
   content: 'Inhalt',
@@ -64,6 +82,7 @@ const POLICY_PLACEHOLDERS: Record<string, string> = {
 const placeholderFor = (field: string) => POLICY_PLACEHOLDERS[field] ?? 'Suchbegriff';
 const newFolderLeaf = (): Leaf => ({ field: 'folder', op: 'equals', value: '' });
 const newPolicyLeaf = (): Leaf => ({ field: 'content', op: 'equals', value: '' });
+const EMPTY_KIND_RULE: KindRule = { name: '', enabled: true, when: { match: 'all', conditions: [newFolderLeaf()] }, kind: '', datedOnly: true };
 const EMPTY_POLICY: Policy = { name: '', enabled: true, when: { match: 'all', conditions: [newPolicyLeaf()] }, sermon: true, player: 'sermon' };
 
 interface Preview {
@@ -95,8 +114,6 @@ const PLACEHOLDER_HELP: Array<[string, string]> = [
 const EMPTY_KIND: RecordingKind = {
   name: '',
   plural: '',
-  match: { match: 'all', conditions: [newFolderLeaf()] },
-  datedOnly: true,
   folderPattern: '{datum}_{anlass}',
   filePattern: '{inhalt} - {titel} - {sprecher}',
   albumTitle: '{anlass}',
@@ -110,6 +127,78 @@ type TextField = 'name' | 'plural' | 'folderPattern' | 'filePattern' | 'albumTit
 function renameKind(condition: Condition, from: string, to: string): Condition {
   if ('match' in condition) return { ...condition, conditions: condition.conditions.map((c) => renameKind(c, from, to)) };
   return condition.field === 'kind' && condition.op === 'equals' && condition.value === from ? { ...condition, value: to } : condition;
+}
+
+/**
+ * Eine Regel „Wenn … dann …“ in einer geordneten Liste: Name, Reihenfolge, Aktiv, Bedingung; „Dann“ kommt als children.
+ */
+function RuleCard({
+  name,
+  index,
+  count,
+  enabled,
+  when,
+  fields,
+  newLeaf,
+  onChange,
+  onMove,
+  onRemove,
+  children,
+}: {
+  name: string;
+  index: number;
+  count: number;
+  enabled: boolean;
+  when: Condition;
+  fields: Record<string, string>;
+  newLeaf: () => Leaf;
+  onChange: (patch: { name?: string; enabled?: boolean; when?: Condition }) => void;
+  onMove: (delta: number) => void;
+  onRemove: () => void;
+  children: ComponentChildren;
+}) {
+  const label = name || `Regel ${index + 1}`;
+  return (
+    <div class={`structure-policy${enabled ? '' : ' is-disabled'}`}>
+      <div class="section-head">
+        <label class="field structure-policy-name">
+          <span class="visually-hidden">Name der Regel</span>
+          <input
+            value={name}
+            maxLength={80}
+            placeholder={`Regel ${index + 1}`}
+            onInput={(e) => onChange({ name: (e.target as HTMLInputElement).value })}
+          />
+        </label>
+        <span class="admin-track-actions">
+          <button type="button" class="icon-button" aria-label={`${label} nach oben`} disabled={index === 0} onClick={() => onMove(-1)}>
+            <Icon name="down" size={18} class="flip" />
+          </button>
+          <button type="button" class="icon-button" aria-label={`${label} nach unten`} disabled={index === count - 1} onClick={() => onMove(1)}>
+            <Icon name="down" size={18} />
+          </button>
+          <button type="button" class="icon-button" aria-label={`${label} entfernen`} onClick={onRemove}>
+            <Icon name="close" size={18} />
+          </button>
+        </span>
+      </div>
+      <label class="admin-check">
+        <input type="checkbox" checked={enabled} onChange={(e) => onChange({ enabled: (e.target as HTMLInputElement).checked })} />
+        Aktiv
+      </label>
+      <h3>Wenn</h3>
+      <ConditionGroup
+        group={asGroup(when)}
+        fields={fields}
+        ops={opsFor}
+        newLeaf={newLeaf}
+        placeholder={placeholderFor}
+        onChange={(next) => onChange({ when: next })}
+      />
+      <h3>Dann</h3>
+      {children}
+    </div>
+  );
 }
 
 /** Eintrag in einer Liste um `delta` verschieben */
@@ -147,15 +236,32 @@ export function StructurePanel() {
   const updateKind = (index: number, patch: Partial<RecordingKind>) => {
     const before = draft.kinds[index]!.name;
     const kinds = draft.kinds.map((kind, i) => (i === index ? { ...kind, ...patch } : kind));
-    // Umbenennen: Policies mit „Art ist genau …“ ziehen mit
-    const policies =
-      patch.name !== undefined && before
-        ? (draft.policies ?? []).map((policy) => ({ ...policy, when: renameKind(policy.when, before, patch.name!) }))
-        : draft.policies;
-    change({ ...draft, kinds, policies });
+    // Umbenennen: „Art bestimmen“ und Policies mit „Art ist genau …“ ziehen mit
+    if (patch.name === undefined || !before) return change({ ...draft, kinds });
+    const to = patch.name;
+    change({
+      ...draft,
+      kinds,
+      kindRules: draft.kindRules.map((rule) => (rule.kind === before ? { ...rule, kind: to } : rule)),
+      defaultKind: draft.defaultKind === before ? to : draft.defaultKind,
+      policies: draft.policies.map((policy) => ({ ...policy, when: renameKind(policy.when, before, to) })),
+    });
   };
   const moveKind = (index: number, delta: number) => change({ ...draft, kinds: move(draft.kinds, index, delta) });
-  const policies = draft.policies ?? [];
+  const policies = draft.policies;
+  const kindRules = draft.kindRules;
+  const updateKindRule = (index: number, patch: Partial<KindRule>) =>
+    change({ ...draft, kindRules: kindRules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)) });
+  const kindOptions = (
+    <>
+      {draft.kinds.map((kind) => (
+        <option key={kind.name} value={kind.name}>
+          {kind.name || 'Neue Art'}
+        </option>
+      ))}
+      <option value="">Keine Art (Musik)</option>
+    </>
+  );
   const updatePolicy = (index: number, patch: Partial<Policy>) =>
     change({ ...draft, policies: policies.map((policy, i) => (i === index ? { ...policy, ...patch } : policy)) });
 
@@ -202,10 +308,9 @@ export function StructurePanel() {
     >
       <h1 class="page-title">Zuordnung von Aufnahmen</h1>
       <p class="admin-hint">
-        Hier steht, wie die App Gottesdienste, Bibelstunden und eigene Arten von Aufnahmen in der Nextcloud erkennt, wie sie Ordner-
-        und Dateinamen liest und was als Predigt gilt. Es gilt die erste Art, deren Bedingung passt; eine Art ohne Bedingung nimmt
-        alle übrigen Ordner mit Datum. Trennzeichen sind austauschbar: „ - “, „_“ und „.“ passen aufeinander. Einzelne Alben
-        lassen sich im Album-Editor einer anderen Art zuordnen.
+        Das Regelwerk arbeitet in drei Schritten: Zuerst bestimmt es die Art eines Albumordners (Gottesdienst, Bibelstunde oder eine
+        eigene Art), dann liest es Ordner- und Dateinamen nach den Mustern dieser Art, zuletzt legen die Policies fest, was als
+        Predigt gilt und welcher Player läuft. Einzelne Alben und Titel lassen sich im Album-Editor von Hand korrigieren.
       </p>
 
       <details class="admin-panel structure-help">
@@ -222,6 +327,65 @@ export function StructurePanel() {
         </dl>
       </details>
 
+      <section class="shelf admin-panel structure-policies structure-kind-rules">
+        <h2>1. Art bestimmen</h2>
+        <p class="admin-hint">
+          Für jeden Albumordner gilt die erste passende Regel. Eine Regel passt, wenn der Ordner oder eine Datei darin passt, etwa
+          über das Genre. Passt keine, bekommen Ordner mit Datum die Vorgabe unten; Ordner ohne Datum bleiben Musik.
+        </p>
+        {kindRules.map((rule, index) => (
+          <RuleCard
+            key={index}
+            name={rule.name}
+            index={index}
+            count={kindRules.length}
+            enabled={rule.enabled}
+            when={rule.when}
+            fields={KIND_FIELDS}
+            newLeaf={newFolderLeaf}
+            onChange={(patch) => updateKindRule(index, patch)}
+            onMove={(delta) => change({ ...draft, kindRules: move(kindRules, index, delta) })}
+            onRemove={() => change({ ...draft, kindRules: kindRules.filter((_, i) => i !== index) })}
+          >
+            <div class="structure-grid">
+              <label class="field">
+                <span>Art</span>
+                <select value={rule.kind} onChange={(e) => updateKindRule(index, { kind: (e.target as HTMLSelectElement).value })}>
+                  {kindOptions}
+                </select>
+              </label>
+            </div>
+            <label class="admin-check">
+              <input
+                type="checkbox"
+                checked={rule.datedOnly}
+                onChange={(e) => updateKindRule(index, { datedOnly: (e.target as HTMLInputElement).checked })}
+              />
+              Nur Ordner mit Datum im Namen
+            </label>
+          </RuleCard>
+        ))}
+        <div class="structure-policy structure-default-kind">
+          <label class="field">
+            <span>Sonst, bei Ordnern mit Datum</span>
+            <select value={draft.defaultKind} onChange={(e) => change({ ...draft, defaultKind: (e.target as HTMLSelectElement).value })}>
+              {kindOptions}
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button
+            type="button"
+            class="button-secondary"
+            disabled={kindRules.length >= 30}
+            onClick={() => change({ ...draft, kindRules: [...kindRules, { ...structuredClone(EMPTY_KIND_RULE), kind: draft.kinds[0]?.name ?? '' }] })}
+          >
+            Regel hinzufügen
+          </button>
+        </div>
+      </section>
+
+      <h2 class="structure-step">2. Arten: Ordner- und Dateinamen lesen</h2>
       {draft.kinds.map((kind, index) => (
         <section key={index} class="shelf admin-panel structure-kind">
           <div class="section-head">
@@ -258,43 +422,6 @@ export function StructurePanel() {
             {text(index, 'albumTitle', 'Name des Albums', 'Leer oder ohne Wert: der Name der Art', '{anlass}')}
             {text(index, 'trackTitle', 'Titel einer Aufnahme', 'Leere Platzhalter fallen samt Trennern weg', '{inhalt}: {titel}')}
           </div>
-          <div class="structure-match">
-            <h3>Erkennen an</h3>
-            {kind.match ? (
-              <>
-                <ConditionGroup
-                  group={asGroup(kind.match)}
-                  fields={FOLDER_FIELDS}
-                  ops={opsFor}
-                  newLeaf={newFolderLeaf}
-                  placeholder={(field) => (field === 'folder' ? 'z. B. Bibelstunden' : 'z. B. Jugend')}
-                  onChange={(match) => updateKind(index, { match })}
-                />
-                <label class="admin-check">
-                  <input
-                    type="checkbox"
-                    checked={kind.datedOnly}
-                    onChange={(e) => updateKind(index, { datedOnly: (e.target as HTMLInputElement).checked })}
-                  />
-                  Nur Ordner mit Datum im Namen
-                </label>
-                <button type="button" class="more-link" onClick={() => updateKind(index, { match: null, datedOnly: true })}>
-                  Ohne Bedingung: alle übrigen Ordner mit Datum
-                </button>
-              </>
-            ) : (
-              <p class="admin-hint">
-                Alle übrigen Ordner mit Datum.{' '}
-                <button
-                  type="button"
-                  class="more-link"
-                  onClick={() => updateKind(index, { match: { match: 'all', conditions: [newFolderLeaf()] } })}
-                >
-                  Bedingung festlegen
-                </button>
-              </p>
-            )}
-          </div>
           <label class="admin-check">
             <input
               type="checkbox"
@@ -323,71 +450,26 @@ export function StructurePanel() {
       </div>
 
       <section class="shelf admin-panel structure-policies">
-        <h2>Policies: Predigt und Player</h2>
+        <h2>3. Policies: Predigt und Player</h2>
         <p class="admin-hint">
           Wenn … dann …: Die Liste gilt von oben nach unten, für jede Wirkung entscheidet die erste passende Policy. Eine Predigt
           liefert Sprecher und Bibelstelle des Albums. Der Predigt-Player hat Sprünge, Tempo und merkt sich die Stelle. Passt keine
           Policy, ist ein Titel keine Predigt und bekommt ab 10 Minuten Länge den Predigt-Player.
         </p>
         {policies.map((policy, index) => (
-          <div key={index} class={`structure-policy${policy.enabled ? '' : ' is-disabled'}`}>
-            <div class="section-head">
-              <label class="field structure-policy-name">
-                <span class="visually-hidden">Name der Policy</span>
-                <input
-                  value={policy.name}
-                  maxLength={80}
-                  placeholder={`Policy ${index + 1}`}
-                  onInput={(e) => updatePolicy(index, { name: (e.target as HTMLInputElement).value })}
-                />
-              </label>
-              <span class="admin-track-actions">
-                <button
-                  type="button"
-                  class="icon-button"
-                  aria-label={`${policy.name || `Policy ${index + 1}`} nach oben`}
-                  disabled={index === 0}
-                  onClick={() => change({ ...draft, policies: move(policies, index, -1) })}
-                >
-                  <Icon name="down" size={18} class="flip" />
-                </button>
-                <button
-                  type="button"
-                  class="icon-button"
-                  aria-label={`${policy.name || `Policy ${index + 1}`} nach unten`}
-                  disabled={index === policies.length - 1}
-                  onClick={() => change({ ...draft, policies: move(policies, index, 1) })}
-                >
-                  <Icon name="down" size={18} />
-                </button>
-                <button
-                  type="button"
-                  class="icon-button"
-                  aria-label={`${policy.name || `Policy ${index + 1}`} entfernen`}
-                  onClick={() => change({ ...draft, policies: policies.filter((_, i) => i !== index) })}
-                >
-                  <Icon name="close" size={18} />
-                </button>
-              </span>
-            </div>
-            <label class="admin-check">
-              <input
-                type="checkbox"
-                checked={policy.enabled}
-                onChange={(e) => updatePolicy(index, { enabled: (e.target as HTMLInputElement).checked })}
-              />
-              Aktiv
-            </label>
-            <h3>Wenn</h3>
-            <ConditionGroup
-              group={asGroup(policy.when)}
-              fields={POLICY_FIELDS}
-              ops={opsFor}
-              newLeaf={newPolicyLeaf}
-              placeholder={placeholderFor}
-              onChange={(when) => updatePolicy(index, { when })}
-            />
-            <h3>Dann</h3>
+          <RuleCard
+            key={index}
+            name={policy.name}
+            index={index}
+            count={policies.length}
+            enabled={policy.enabled}
+            when={policy.when}
+            fields={POLICY_FIELDS}
+            newLeaf={newPolicyLeaf}
+            onChange={(patch) => updatePolicy(index, patch)}
+            onMove={(delta) => change({ ...draft, policies: move(policies, index, delta) })}
+            onRemove={() => change({ ...draft, policies: policies.filter((_, i) => i !== index) })}
+          >
             <div class="structure-grid">
               <label class="field">
                 <span>Gilt als Predigt</span>
@@ -418,7 +500,7 @@ export function StructurePanel() {
                 </select>
               </label>
             </div>
-          </div>
+          </RuleCard>
         ))}
         <div class="actions">
           <button

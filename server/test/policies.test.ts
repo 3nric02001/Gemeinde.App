@@ -60,20 +60,19 @@ describe('Policies', () => {
     expect(() => parsePolicies([{ name: 'X', when: { field: 'title', op: 'contains', value: ' ' }, player: 'music' }])).toThrow('Wert');
   });
 
-  it('übernimmt Regelwerke von vor den Policies: Ordner wird Bedingung, Inhalt der Predigt wird Policy', () => {
+  it('übernimmt Regelwerke von vor den Policies: Ordner wird Regel in „Art bestimmen“, Inhalt der Predigt wird Policy', () => {
     const legacy = {
       kinds: [
-        { ...DEFAULT_STRUCTURE.kinds[0], match: undefined, datedOnly: undefined, folder: 'Bibelstunden', sermon: '' },
-        { ...DEFAULT_STRUCTURE.kinds[1], match: undefined, datedOnly: undefined, folder: '', sermon: 'Predigt' },
+        { ...DEFAULT_STRUCTURE.kinds[0], folder: 'Bibelstunden', sermon: '' },
+        { ...DEFAULT_STRUCTURE.kinds[1], folder: '', sermon: 'Predigt' },
       ],
       contents: DEFAULT_STRUCTURE.contents,
       untitled: DEFAULT_STRUCTURE.untitled,
     };
     const parsed = parseStructure(JSON.parse(JSON.stringify(legacy)));
-    expect(parsed.kinds.map((k) => [k.name, k.match, k.datedOnly])).toEqual([
-      ['Bibelstunde', { field: 'folder', op: 'equals', value: 'Bibelstunden' }, true],
-      ['Gottesdienst', null, true],
-    ]);
+    expect(parsed.kinds).toEqual(DEFAULT_STRUCTURE.kinds);
+    expect(parsed.kindRules).toEqual(DEFAULT_STRUCTURE.kindRules);
+    expect(parsed.defaultKind).toBe('Gottesdienst');
     expect(parsed.policies.map((p) => [p.when, p.sermon, p.player])).toEqual(
       [...DEFAULT_STRUCTURE.policies].reverse().map((p) => [p.when, p.sermon, p.player]),
     );
@@ -185,13 +184,18 @@ describe('Policies im Regelwerk', () => {
 });
 
 describe('Eigene Arten', () => {
-  it('erkennen Ordner auch ohne Datum an einer eigenen Bedingung', async () => {
+  it('werden über „Art bestimmen“ zugeordnet, auch Ordner ohne Datum', async () => {
     const structure: Structure = structuredClone(getStructure(ctx.db));
+    structure.kindRules.unshift({
+      name: 'Jugend',
+      enabled: true,
+      when: { match: 'all', conditions: [{ field: 'folder', op: 'equals', value: 'Jugend' }] },
+      kind: 'jugendabend',
+      datedOnly: false,
+    });
     structure.kinds.unshift({
       name: 'Jugendabend',
       plural: 'Jugendabende',
-      match: { match: 'all', conditions: [{ field: 'folder', op: 'equals', value: 'Jugend' }] },
-      datedOnly: false,
       folderPattern: '{anlass}',
       filePattern: '{inhalt} - {titel}',
       albumTitle: '{anlass}',
@@ -201,13 +205,38 @@ describe('Eigene Arten', () => {
     structure.contents.push('Andacht');
     structure.policies.push({ name: 'Andachten', enabled: true, when: { field: 'kind', op: 'equals', value: 'Jugendabend' }, sermon: true, player: 'sermon' });
     const saved = (await call('PUT', '/api/admin/structure', structure)).structure;
-    // Eine Gruppe mit nur einer Bedingung wird zur Bedingung
-    expect(saved.kinds[0].match).toEqual({ field: 'folder', op: 'equals', value: 'Jugend' });
+    // Eine Gruppe mit nur einer Bedingung wird zur Bedingung, der Name der Art wie in der Liste geschrieben
+    expect(saved.kindRules[0]).toMatchObject({ when: { field: 'folder', op: 'equals', value: 'Jugend' }, kind: 'Jugendabend' });
     const youth = (await albums()).find((a) => a.recording === 'Jugendabend');
     expect(youth).toMatchObject({ title: 'Abend mit Tim' });
     expect((await albumTracks(youth.id)).map((t) => [t.title, t.content, t.player])).toEqual([['Mut', 'Andacht', 'sermon']]);
     // Musik bleibt Musik
     expect((await albums()).find((a) => a.title === 'Zion').recording).toBeNull();
+    expect((await get(`/api/admin/albums/${youth.id}`)).recordingSource).toEqual({ by: 'rule', rule: 'Jugend' });
+  });
+
+  it('richten sich auch nach Tags der Dateien, Gottesdienst ist nur die Vorgabe für übrige Ordner mit Datum', async () => {
+    cloud.put('Audio Aufnahmen/2026/2026_09_13/01.mp3', mp3({ title: 'Teil 1', genre: 'Bibelstunde' }, 30));
+    await ctx.scanner.scan();
+    const structure: Structure = structuredClone(getStructure(ctx.db));
+    structure.kindRules.push({
+      name: 'Genre Bibelstunde',
+      enabled: true,
+      when: { field: 'genre', op: 'equals', value: 'Bibelstunde' },
+      kind: 'Bibelstunde',
+      datedOnly: true,
+    });
+    await call('PUT', '/api/admin/structure', structure);
+    expect(await byDate('2026-09-13')).toMatchObject({ recording: 'Bibelstunde' });
+    const service = await byDate('2026-08-30');
+    expect(service.recording).toBe('Gottesdienst');
+    expect((await get(`/api/admin/albums/${service.id}`)).recordingSource).toEqual({ by: 'default' });
+
+    // Ohne Vorgabe bleiben übrige Ordner mit Datum Musik
+    await call('PUT', '/api/admin/structure', { ...structure, defaultKind: '' });
+    expect((await byDate('2026-08-30')).recording).toBeNull();
+    expect((await byDate('2026-09-13')).recording).toBe('Bibelstunde');
+    await call('PUT', '/api/admin/structure', { ...structure, defaultKind: 'Konzert' }, 400);
   });
 
   it('lassen sich je Album von Hand setzen; das geht dem Regelwerk vor und landet im Protokoll', async () => {
@@ -217,6 +246,7 @@ describe('Eigene Arten', () => {
     // Als Bibelstunde gilt jeder Titel als Predigt
     expect((await albumTracks(service.id)).map((t) => t.player)).toEqual(['sermon', 'sermon', 'sermon']);
     expect((await get(`/api/admin/albums/${service.id}`)).manualRecording).toBe('Bibelstunde');
+    expect((await get(`/api/admin/albums/${service.id}`)).recordingSource).toEqual({ by: 'manual' });
     const changes = (await get('/api/admin/changes')).items as any[];
     expect(changes[0].action).toBe('Album bearbeitet (Art)');
 

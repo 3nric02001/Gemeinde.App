@@ -338,7 +338,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     }
     const recordings = new Map<string, FolderResult>();
     for (const [folder, list] of byFolder) {
-      const kind = kindOfFolder(structure, folder, folderKinds.get(folder));
+      const { kind } = kindOfFolder(structure, folder, list, folderKinds.get(folder));
       if (!kind) continue;
       const files = list.map((t) => ({
         path: t.path,
@@ -353,8 +353,8 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       recordings.set(folder, applyToFolder(kind, folder, files));
     }
     applyRecordings(db, tracks, (track) => recordings.get(groups.get(track.id)!.folder), parsed, structure, manualDecisions);
-    // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) zählen zur Art ohne Bedingung.
-    const defaultRecording = structure.kinds.find((k) => !k.matches)?.kind.name ?? structure.kinds[0]?.kind.name ?? null;
+    // Aufnahmen ohne eigenen Ordner mit Datum (Datum im Dateinamen) zählen zur Vorgabe für Ordner mit Datum.
+    const defaultRecording = structure.structure.defaultKind || null;
 
     // Bisheriger Inhalt aller Alben (für Wiedererkennung und um unnötiges Schreiben zu sparen)
     const current = new Map<number, number[]>();

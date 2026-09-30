@@ -6,7 +6,7 @@ import { lastChange } from './changes.js';
 import { searchExtra, SPEAKER_TAGS, withOverride } from './metadata.js';
 import { getAlbum } from './queries.js';
 import type { Decision, Player } from './policies.js';
-import { getStructure } from './structure.js';
+import { compileStructure, getStructure, kindOfFolder, type KindSource } from './structure.js';
 import { foldValue } from './text.js';
 import { evaluateRules, listRules, parseCondition, ruleMatcher, type RuleCondition, type RuleTrack } from './rules.js';
 
@@ -216,6 +216,24 @@ export function albumDetail(db: DB, id: number) {
     .all(JSON.stringify(SPEAKER_TAGS), id) as Array<TrackEdit & { sermon: number | null; auto: string | null }>;
   const customCover = db.prepare('SELECT 1 FROM album_overrides WHERE key = ? AND cover_id IS NOT NULL').get(row.key) !== undefined;
   const { folder } = db.prepare('SELECT folder FROM albums WHERE id = ?').get(id) as { folder: string };
+  // Woher die Art kommt (von Hand, Regel in "Art bestimmen", Vorgabe für Ordner mit Datum), wie in rebuildAlbums
+  let recordingSource: KindSource = { by: 'none' };
+  if (row.kind === 'auto') {
+    const files = db.prepare('SELECT path, title, artist, album, genre FROM tracks WHERE album_key = ?').all(row.key) as Array<{
+      path: string;
+      title: string;
+      artist: string;
+      album: string | null;
+      genre: string | null;
+    }>;
+    recordingSource = override?.recording != null
+      ? { by: 'manual' }
+      : folder
+        ? kindOfFolder(compileStructure(getStructure(db)), folder, files).source
+        : album.recording
+          ? { by: 'default' }
+          : { by: 'none' };
+  }
   return {
     ...album,
     /** Albumordner in der Nextcloud; bei Gottesdiensten kommt das Datum aus seinem Namen */
@@ -241,6 +259,8 @@ export function albumDetail(db: DB, id: number) {
     },
     /** Art von Hand ("" = keine Art), null: nach dem Regelwerk */
     manualRecording: override?.recording ?? null,
+    /** Woher die Art kommt */
+    recordingSource,
     excluded,
     missing,
   };
