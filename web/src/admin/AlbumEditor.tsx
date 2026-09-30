@@ -164,9 +164,7 @@ export function AlbumEditor({ id, onError }: Props) {
       {error && <p class="admin-error" role="alert">{error}</p>}
 
       <DetailsForm key={revision} album={album} busy={busy} onSave={(fields) => run(() => adminRequest('PATCH', base, fields))} />
-      {album.kind === 'auto' && (
-        <KindForm album={album} busy={busy} onSave={(recording) => run(() => adminRequest('PATCH', base, { recording }))} />
-      )}
+      <KindForm album={album} busy={busy} onSave={(recording) => run(() => adminRequest('PATCH', base, { recording }))} />
 
       <section class="shelf">
         <div class="section-head">
@@ -549,6 +547,11 @@ const AUTOMATIC = '\u0000auto';
 
 /** Woher die Art eines Albums kommt, in Worten */
 function kindSource(album: AdminAlbumDetail): string {
+  if (album.kind === 'manual') {
+    return album.manualRecording != null
+      ? 'Die Playlist steht zusätzlich unter dieser Art, etwa bei Alben → Musik'
+      : 'Ohne Art steht die Playlist nur unter Playlists';
+  }
   const source = album.recordingSource;
   if (album.manualRecording != null || source?.by === 'manual') return 'Von Hand festgelegt, geht dem Regelwerk vor';
   if (source?.by === 'rule') return `Aus der Regel „${source.rule}“ in Verwaltung → Zuordnung → Art bestimmen`;
@@ -558,7 +561,7 @@ function kindSource(album: AdminAlbumDetail): string {
 
 /**
  * Art des Albums (Gottesdienst, Bibelstunde, eigene Arten aus Verwaltung → Zuordnung, Musik oder Sonstiges) von Hand
- * festlegen. Das geht den Bedingungen der Arten vor.
+ * festlegen. Das geht den Bedingungen der Arten vor. Eine Playlist mit Art steht zusätzlich unter dieser Art.
  */
 function KindForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: boolean; onSave: (recording: string | null) => void }) {
   const [kinds, setKinds] = useState<string[]>();
@@ -586,7 +589,11 @@ function KindForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: bool
               onSave(next === AUTOMATIC ? null : next);
             }}
           >
-            <option value={AUTOMATIC}>Automatisch{manual === null ? ` (${kindLabel(album)})` : ''}</option>
+            {album.kind === 'manual' ? (
+              <option value={AUTOMATIC}>Keine (nur Playlist)</option>
+            ) : (
+              <option value={AUTOMATIC}>Automatisch{manual === null ? ` (${kindLabel(album)})` : ''}</option>
+            )}
             {[...names, ...fixed].map((name) => (
               <option key={name} value={name}>
                 {name}

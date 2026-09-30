@@ -871,6 +871,24 @@ button.chip {
   cursor: pointer;
 }
 
+/* "Mehr anzeigen" unter einer gekürzten Liste (Suche) */
+.show-more {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.show-more:hover {
+  color: var(--text);
+}
+
 button.more-link {
   padding: 0;
   border: 0;

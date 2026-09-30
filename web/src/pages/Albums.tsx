@@ -16,10 +16,12 @@ const SORTS = [
 
 /**
  * Musik und Aufnahmen getrennt, Aufnahmen je Art aus der Zuordnung (Gottesdienste, Bibelstunden …), dahinter
- * Sonstiges (Alben, denen nichts eine Art gibt). Aufnahmen stehen zusätzlich unter "Datum".
- * `art` ist "musik", "sonstiges", "alle" oder der Name einer Art. "gottesdienste" aus älteren Links heißt: alle Aufnahmen mit Datum.
+ * Sonstiges (Alben, denen nichts eine Art gibt) und Playlists. Aufnahmen stehen zusätzlich unter "Datum"; eine
+ * Playlist, der die Verwaltung eine Art gibt, steht zusätzlich unter dieser Art.
+ * `art` ist "musik", "sonstiges", "playlists", "alle" oder der Name einer Art. "gottesdienste" aus älteren Links heißt: alle Aufnahmen mit Datum.
  */
 const ALL_RECORDINGS = 'gottesdienste';
+const PLAYLISTS = 'playlists';
 
 export function Albums({ params }: { params: URLSearchParams }) {
   const filter = readFilter(params);
@@ -32,16 +34,19 @@ export function Albums({ params }: { params: URLSearchParams }) {
     ['musik', 'Musik'],
     ...(recordings.length ? recordings.map((r): [string, string] => [r.name, r.plural]) : [[ALL_RECORDINGS, 'Gottesdienste'] as [string, string]]),
     ...(facets?.other ? [['sonstiges', 'Sonstiges'] as [string, string]] : []),
+    ...(facets?.playlists ? [[PLAYLISTS, 'Playlists'] as [string, string]] : []),
   ];
   // Ohne Auswahl nur Musik (gibt es keine, alles); kommt man über eine Suche oder ein Jahrzehnt, alles, damit nichts fehlt.
   const kind = params.get('art') || (q || filter.decade || facets?.music === 0 ? 'alle' : 'musik');
   const section = kind === 'musik' ? 'music' : kind === 'sonstiges' ? 'other' : undefined;
-  const recording = !section && kind !== 'alle' && kind !== ALL_RECORDINGS ? kind : undefined;
-  const defaultSort = section || kind === 'alle' ? 'title' : 'date';
+  const playlists = kind === PLAYLISTS;
+  const recording = !section && !playlists && kind !== 'alle' && kind !== ALL_RECORDINGS ? kind : undefined;
+  const defaultSort = section || playlists || kind === 'alle' ? 'title' : 'date';
   const sort = SORTS.some(([key]) => key === params.get('sort')) ? params.get('sort')! : defaultSort;
-  const dated = section || kind === 'alle' ? undefined : 'true';
+  // Eine Art grenzt schon ein; "mit Datum" nur für das alte "gottesdienste" (Playlists einer Art haben kein Datum)
+  const dated = kind === ALL_RECORDINGS ? 'true' : undefined;
   const { items, total, loading, error, sentinel } = usePaged<Album>(
-    `/api/albums${query({ ...filter, q, sort, dated, recording, section })}`,
+    `/api/albums${query({ ...filter, q, sort, dated, recording, section, kind: playlists ? 'manual' : undefined })}`,
   );
 
   const update = (next: { sort?: string; decade?: number; art?: string }) =>
@@ -79,7 +84,7 @@ export function Albums({ params }: { params: URLSearchParams }) {
         ))}
       </div>
       <Filters value={filter} onChange={(next: FilterValue) => update({ decade: next.decade })} />
-      {total !== undefined && <p class="count">{plural(total, 'Album', 'Alben')}</p>}
+      {total !== undefined && <p class="count">{playlists ? plural(total, 'Playlist', 'Playlists') : plural(total, 'Album', 'Alben')}</p>}
       {error && <ErrorNote message={error} />}
       {total === 0 && <Empty title="Keine Alben gefunden">Entferne einen Filter, um mehr zu sehen.</Empty>}
       <AlbumGrid albums={items} />

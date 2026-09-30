@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Album, Facets, Page, Track } from '../api';
 import { categoryUrl, getJson, query } from '../api';
-import { AlbumGrid, Shelf } from '../components/AlbumCard';
+import { Shelf } from '../components/AlbumCard';
 import { TrackList } from '../components/TrackList';
 import { plural } from '../format';
 import { useAuth } from '../auth';
@@ -68,50 +68,60 @@ function Results({ q, user }: { q: string; user: number | undefined }) {
     if (user) rememberSearch(user, q);
     countSearch(q);
   };
-  const tracks = useApi<Page<Track>>(`/api/tracks${query({ q, limit: 20 })}`);
-  const albums = useApi<Page<Album>>(`/api/albums${query({ q, limit: 12, sort: 'date' })}`);
+  const tracks = useApi<Page<Track>>(`/api/tracks${query({ q, limit: TRACKS_MORE })}`);
+  const albums = useApi<Page<Album>>(`/api/albums${query({ q, limit: SHELF, sort: 'date', kind: 'auto' })}`);
+  const playlists = useApi<Page<Album>>(`/api/albums${query({ q, limit: SHELF, sort: 'title', kind: 'manual' })}`);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => setExpanded(false), [q]);
 
-  const done = !tracks.loading && !albums.loading;
-  const nothing = done && !tracks.data?.total && !albums.data?.total;
+  const done = !tracks.loading && !albums.loading && !playlists.loading;
+  const nothing = done && !tracks.data?.total && !albums.data?.total && !playlists.data?.total;
   if (nothing) return <Empty title={`Keine Treffer für „${q}“`}>Prüfe die Schreibweise oder versuche weniger Wörter.</Empty>;
 
   const playAll = async (index: number) => {
-    // Alle Treffer in die Warteschlange, nicht nur die sichtbaren 20.
+    // Alle Treffer in die Warteschlange, nicht nur die sichtbaren.
     const all = await getJson<Page<Track>>(`/api/tracks${query({ q, limit: 500 })}`);
     player.playList(all.items, index, { shuffle: false });
   };
+  const loaded = tracks.data?.items ?? [];
+  const shown = expanded ? loaded : loaded.slice(0, TRACKS_FIRST);
+  const more = (page: Page<Album> | undefined, href: string) => (page && page.total > page.items.length ? href : undefined);
 
   return (
     <div onClickCapture={found}>
-      {tracks.data && tracks.data.items.length > 0 && (
+      {shown.length > 0 && (
         <section class="shelf">
           <div class="section-head">
             <h2>Titel</h2>
-            {tracks.data.total > tracks.data.items.length && (
+            {tracks.data!.total > loaded.length && (
               <a class="more-link" href={`/titel${query({ q })}`}>
-                {plural(tracks.data.total, 'Titel', 'Titel')} anzeigen
+                {plural(tracks.data!.total, 'Titel', 'Titel')} anzeigen
               </a>
             )}
           </div>
-          <TrackList tracks={tracks.data.items} onPlay={(index) => void playAll(index)} />
+          <TrackList tracks={shown} onPlay={(index) => void playAll(index)} />
+          {!expanded && loaded.length > shown.length && (
+            <button type="button" class="show-more" onClick={() => setExpanded(true)}>
+              Mehr anzeigen
+            </button>
+          )}
         </section>
       )}
-      {albums.data && albums.data.items.length > 0 && (
-        <section class="shelf">
-          <div class="section-head">
-            <h2>Alben</h2>
-            {albums.data.total > albums.data.items.length && (
-              <a class="more-link" href={`/alben${query({ q })}`}>
-                Alle anzeigen
-              </a>
-            )}
-          </div>
-          <AlbumGrid albums={albums.data.items} />
-        </section>
-      )}
+      <Shelf title="Alben" href={more(albums.data, `/alben${query({ q, art: 'alle' })}`)} albums={albums.data?.items ?? []} />
+      <Shelf
+        title="Playlists"
+        href={more(playlists.data, `/alben${query({ q, art: 'playlists' })}`)}
+        albums={playlists.data?.items ?? []}
+      />
     </div>
   );
 }
+
+/** Zuerst wenige Titel, damit Alben und Playlists ohne langes Scrollen sichtbar bleiben; "Mehr anzeigen" holt den Rest */
+const TRACKS_FIRST = 5;
+const TRACKS_MORE = 20;
+/** Alben und Playlists je als eine Reihe */
+const SHELF = 12;
 
 interface Suggestions {
   searches: string[];

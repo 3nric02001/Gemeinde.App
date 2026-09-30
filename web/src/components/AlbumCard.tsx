@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Album } from '../api';
 import { coverUrl, getJson, kindLabel, type AlbumDetail } from '../api';
 import { albumContext, player } from '../player';
-import { albumSubtitle, albumTitle, formatDuration } from '../format';
+import { albumSubtitle, albumTitle, formatDuration, plural } from '../format';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
 
@@ -26,7 +26,7 @@ export function AlbumCard({ album, subtitle, extra }: { album: Album; subtitle?:
         <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} />
         <span class="card-title">{title}</span>
         <span class="card-sub">
-          {subtitle ?? albumSubtitle(album)}
+          {subtitle ?? (album.kind === 'manual' ? `Playlist · ${plural(album.trackCount, 'Titel', 'Titel')}` : albumSubtitle(album))}
           {extra && <span class="card-extra"> · {extra}</span>}
         </span>
       </a>

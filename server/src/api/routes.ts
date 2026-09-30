@@ -190,6 +190,8 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
             dated: { type: 'boolean' },
             recording: { type: 'string', maxLength: 60 },
             section: { type: 'string', enum: ['recording', 'music', 'other'] },
+            // Automatische Alben oder Playlists (von Hand zusammengestellt)
+            kind: { type: 'string', enum: ['auto', 'manual'] },
           },
           additionalProperties: false,
         },
