@@ -4,7 +4,8 @@ import { Icon } from '../components/Icon';
 import { formatCompactDate, plural } from '../format';
 import { ErrorNote, Loading } from '../pages/common';
 import { adminRequest } from './api';
-import { asGroup, ConditionGroup, type Condition, type Leaf } from './Conditions';
+import { setLeaveGuard } from '../router';
+import { asGroup, ConditionGroup, describeCondition, isComplete, type Condition, type Leaf } from './Conditions';
 
 export interface RecordingKind {
   name: string;
@@ -122,8 +123,19 @@ function renameKind(condition: Condition, from: string, to: string): Condition {
   return condition.field === 'kind' && condition.op === 'equals' && condition.value === from ? { ...condition, value: to } : condition;
 }
 
+/** „Dann“ einer Policy in Worten, für die eingeklappte Regel */
+function describePolicy(policy: Policy): string {
+  const parts = [
+    policy.content && `Inhalt „${policy.content}“`,
+    policy.sermon === true ? 'Predigt' : policy.sermon === false ? 'keine Predigt' : undefined,
+    policy.player === 'sermon' ? 'Predigt-Player' : policy.player === 'music' ? 'Musik-Player' : undefined,
+  ].filter(Boolean);
+  return parts.length ? parts.join(', ') : 'nichts festgelegt';
+}
+
 /**
  * Eine Regel „Wenn … dann …“ in einer geordneten Liste: Name, Reihenfolge, Aktiv, Bedingung; „Dann“ kommt als children.
+ * Eingeklappt steht sie als ein Satz da; neue oder unvollständige Regeln sind aufgeklappt.
  */
 function RuleCard({
   name,
@@ -131,6 +143,7 @@ function RuleCard({
   count,
   enabled,
   when,
+  then,
   fields,
   newLeaf,
   onChange,
@@ -143,6 +156,8 @@ function RuleCard({
   count: number;
   enabled: boolean;
   when: Condition;
+  /** „Dann“ in Worten, z. B. „Bibelstunde“ oder „Predigt, Predigt-Player“ */
+  then: string;
   fields: Record<string, string>;
   newLeaf: () => Leaf;
   onChange: (patch: { name?: string; enabled?: boolean; when?: Condition }) => void;
@@ -151,8 +166,21 @@ function RuleCard({
   children: ComponentChildren;
 }) {
   const label = name || `Regel ${index + 1}`;
+  const [open, setOpen] = useState(() => !isComplete(when));
+  const sentence = isComplete(when) ? `Wenn ${describeCondition(when, { fields, ops: { ...TEXT_OPS, ...DURATION_OPS } })} → ${then}` : 'Bedingung unvollständig';
   return (
-    <div class={`structure-policy${enabled ? '' : ' is-disabled'}`}>
+    <details
+      class={`structure-policy structure-rule${enabled ? '' : ' is-disabled'}`}
+      open={open}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary>
+        <span class="structure-rule-name">
+          {label}
+          {!enabled && <span class="badge badge-muted">inaktiv</span>}
+        </span>
+        <span class="structure-rule-sentence">{sentence}</span>
+      </summary>
       <div class="section-head">
         <label class="field structure-policy-name">
           <span class="visually-hidden">Name der Regel</span>
@@ -190,7 +218,7 @@ function RuleCard({
       />
       <h3>Dann</h3>
       {children}
-    </div>
+    </details>
   );
 }
 
@@ -205,6 +233,8 @@ function move<T>(list: T[], index: number, delta: number): T[] {
 /** Verwaltung → Zuordnung: Regelwerk für Gottesdienste, Bibelstunden und andere Aufnahmen */
 export function StructurePanel() {
   const [draft, setDraft] = useState<Structure | undefined>();
+  // Stand auf dem Server, um ungespeicherte Änderungen zu erkennen
+  const [saved, setSaved] = useState<Structure | undefined>();
   const [defaults, setDefaults] = useState<Structure | undefined>();
   const [preview, setPreview] = useState<Preview | undefined>();
   const [error, setError] = useState<string | undefined>();
@@ -215,10 +245,24 @@ export function StructurePanel() {
     adminRequest<{ structure: Structure; defaults: Structure }>('GET', '/api/admin/structure')
       .then((body) => {
         setDraft(body.structure);
+        setSaved(body.structure);
         setDefaults(body.defaults);
       })
       .catch((e: Error) => setError(e.message));
   }, []);
+
+  const dirty = Boolean(draft && saved && JSON.stringify(draft) !== JSON.stringify(saved));
+  // Wer mit ungespeicherten Änderungen weggeht, wird gefragt: beim Schließen des Tabs und bei Links in der App
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    setLeaveGuard(() => window.confirm('Die Änderungen an der Zuordnung sind noch nicht gespeichert. Trotzdem verlassen?'));
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      setLeaveGuard(undefined);
+    };
+  }, [dirty]);
 
   if (!draft) return error ? <ErrorNote message={error} /> : <Loading />;
 
@@ -267,6 +311,7 @@ export function StructurePanel() {
       } else {
         const body = await adminRequest<{ structure: Structure }>('PUT', '/api/admin/structure', draft);
         setDraft(body.structure);
+        setSaved(body.structure);
         setPreview(await adminRequest<Preview>('POST', '/api/admin/structure/preview', body.structure));
         setMessage('Gespeichert. Die Alben sind neu gebildet.');
       }
@@ -334,6 +379,7 @@ export function StructurePanel() {
             count={kindRules.length}
             enabled={rule.enabled}
             when={rule.when}
+            then={rule.kind || 'Musik'}
             fields={KIND_FIELDS}
             newLeaf={newFolderLeaf}
             onChange={(patch) => updateKindRule(index, patch)}
@@ -455,6 +501,7 @@ export function StructurePanel() {
             count={policies.length}
             enabled={policy.enabled}
             when={policy.when}
+            then={describePolicy(policy)}
             fields={POLICY_FIELDS}
             newLeaf={newPolicyLeaf}
             onChange={(patch) => updatePolicy(index, patch)}
@@ -558,17 +605,28 @@ export function StructurePanel() {
         </label>
       </section>
 
-      {error && (
-        <p class="admin-error" role="alert">
-          {error}
+      {/* Immer sichtbar am unteren Rand, damit Änderungen oben auf der Seite nicht verloren gehen */}
+      <div class={`structure-bar${dirty ? ' is-dirty' : ''}`}>
+        <p class="structure-bar-state">
+          {error ? (
+            <span class="admin-error" role="alert">
+              {error}
+            </span>
+          ) : message ? (
+            <span role="status">{message}</span>
+          ) : dirty ? (
+            <span>
+              <i class="structure-dot" aria-hidden="true" /> Ungespeicherte Änderungen
+            </span>
+          ) : (
+            <span class="admin-hint">Alles gespeichert</span>
+          )}
         </p>
-      )}
-      {message && (
-        <p class="admin-hint" role="status">
-          {message}
-        </p>
-      )}
-      <div class="actions">
+        {dirty && saved && (
+          <button type="button" class="button-secondary" disabled={busy} onClick={() => change(structuredClone(saved))}>
+            Verwerfen
+          </button>
+        )}
         <button type="button" class="button-secondary" disabled={busy} onClick={() => void run('preview')}>
           Vorschau
         </button>
@@ -591,7 +649,7 @@ function PreviewList({ preview }: { preview: Preview }) {
           <h3>
             {kind.name} <span class="badge badge-muted">{plural(kind.albums, 'Album', 'Alben')}</span>
             {kind.unmatchedFiles > 0 && (
-              <span class="badge"> {plural(kind.unmatchedFiles, 'Datei passt', 'Dateien passen')} nicht zum Muster</span>
+              <span class="badge badge-attention"> {plural(kind.unmatchedFiles, 'Datei passt', 'Dateien passen')} nicht zum Muster</span>
             )}
           </h3>
           {kind.examples.map((example) => (
@@ -615,7 +673,7 @@ function PreviewList({ preview }: { preview: Preview }) {
                       {track.content && <span class="badge badge-muted">{track.content}</span>}
                       {track.sermon && <span class="badge badge-muted">Predigt</span>}
                       {track.player === 'sermon' && <span class="badge badge-muted">Predigt-Player</span>}
-                      {!track.matched && <span class="badge">passt nicht</span>}
+                      {!track.matched && <span class="badge badge-attention">passt nicht</span>}
                     </span>
                   </li>
                 ))}

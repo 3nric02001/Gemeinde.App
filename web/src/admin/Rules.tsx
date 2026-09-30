@@ -71,7 +71,7 @@ export function Rules({
                 >
                   Bearbeiten
                 </button>
-                <button type="button" class="button-secondary button-small" disabled={busy} onClick={() => onDelete(rule.id)}>
+                <button type="button" class="button-secondary button-small button-danger" disabled={busy} onClick={() => onDelete(rule.id)}>
                   Löschen
                 </button>
               </span>

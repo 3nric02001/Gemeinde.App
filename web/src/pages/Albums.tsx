@@ -25,10 +25,11 @@ export function Albums({ params }: { params: URLSearchParams }) {
   const filter = readFilter(params);
   const q = params.get('q') ?? undefined;
   const recordings = useApi<Facets>('/api/facets').data?.recordings ?? [];
+  // "Alle" steht wie unter "Datum" vorne; ohne Auswahl bleibt es bei Musik
   const kinds: Array<[string, string]> = [
+    ['alle', 'Alle'],
     ['musik', 'Musik'],
     ...(recordings.length ? recordings.map((r): [string, string] => [r.name, r.plural]) : [[ALL_RECORDINGS, 'Gottesdienste'] as [string, string]]),
-    ['alle', 'Alle'],
   ];
   // Ohne Auswahl nur Musik; kommt man über eine Suche oder ein Jahrzehnt, alles, damit nichts fehlt.
   const kind = params.get('art') || (q || filter.decade ? 'alle' : 'musik');
@@ -48,7 +49,7 @@ export function Albums({ params }: { params: URLSearchParams }) {
       <div class="page-head">
         <h1 class="page-title">{q ? `Alben zu „${q}“` : 'Alben'}</h1>
         <label class="select">
-          <span class="visually-hidden">Sortieren nach</span>
+          <span class="select-label">Sortieren:</span>
           <select value={sort} onChange={(event) => update({ sort: (event.target as HTMLSelectElement).value })}>
             {SORTS.map(([key, label]) => (
               <option key={key} value={key}>

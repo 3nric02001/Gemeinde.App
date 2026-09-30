@@ -372,7 +372,7 @@ export function AlbumEditor({ id, onError }: Props) {
         <section class="shelf admin-danger">
           <button
             type="button"
-            class="button-secondary"
+            class="button-secondary button-danger"
             disabled={busy}
             onClick={() => {
               if (!confirm(`Playlist „${album.title}“ löschen? Die Titel selbst bleiben erhalten.`)) return;

@@ -61,7 +61,7 @@ export function Dates({ params }: { params: URLSearchParams }) {
             <div class="section-head">
               <h2>{month.label}</h2>
             </div>
-            <AlbumGrid albums={month.albums} />
+            <AlbumGrid albums={month.albums} list />
           </section>
         </Fragment>
       ))}

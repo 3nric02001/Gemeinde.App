@@ -106,7 +106,7 @@ export function ScanPanel() {
   if (!expanded) {
     return (
       <section class="admin-panel scan-panel scan-compact" aria-label="Abgleich mit der Nextcloud">
-        <p class="scan-line" role="status">
+        <p class="scan-line" role="status" onClick={() => status && setOpen(true)}>
           <strong>Nextcloud:</strong>{' '}
           {status ? (
             <>

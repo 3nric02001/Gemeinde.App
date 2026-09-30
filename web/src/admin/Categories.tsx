@@ -330,7 +330,7 @@ export function CategoryEditor({ id, onError }: { id: number | undefined; onErro
           Abbrechen
         </a>
         {id !== undefined && (
-          <button type="button" class="button-secondary" onClick={() => void remove()}>
+          <button type="button" class="button-secondary button-danger" onClick={() => void remove()}>
             Löschen
           </button>
         )}
