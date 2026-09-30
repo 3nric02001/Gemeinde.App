@@ -714,6 +714,10 @@ export const migrations: string[] = [
   -- Wann der Benutzer die kurze Einführung gesehen oder übersprungen hat; NULL zeigt sie beim nächsten Öffnen.
   ALTER TABLE users ADD COLUMN onboarded_at INTEGER;
   `,
+  `
+  -- Wann der Benutzer zuletzt unter "Datum" war; was danach dazukommt, ist für ihn neu. NULL: noch nie (dann gilt jetzt).
+  ALTER TABLE users ADD COLUMN dates_seen_at INTEGER;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

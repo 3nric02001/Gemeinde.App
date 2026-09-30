@@ -6,6 +6,7 @@ import { albumContext, player } from '../player';
 import { albumSubtitle, albumTitle, formatDuration, plural } from '../format';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
+import type { DatedState } from '../me';
 
 /** Spielt ein Album ab, ab `start` bzw. ab dem Titel `trackId` (dort setzt der Predigt-Player an der gemerkten Stelle fort). */
 export async function playAlbum(albumId: number, options: { shuffle?: boolean; start?: number; trackId?: number } = {}) {
@@ -19,17 +20,31 @@ export async function playAlbum(albumId: number, options: { shuffle?: boolean; s
  * Karte eines Albums. `extra` erscheint nur in der Listenansicht (Datum auf dem Handy) hinter dem Untertitel,
  * z. B. Sprecher und Länge.
  */
-export function AlbumCard({ album, subtitle, extra }: { album: Album; subtitle?: string; extra?: string }) {
+export function AlbumCard({ album, subtitle, extra, state }: { album: Album; subtitle?: string; extra?: string; state?: DatedState }) {
   const title = albumTitle(album.title, album.date, kindLabel(album));
   return (
-    <div class="card">
+    <div class={`card${state ? ` is-${state.state}` : ''}`}>
       <a class="card-link" href={`/album/${album.id}`}>
         <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} />
-        <span class="card-title">{title}</span>
+        <span class="card-title">
+          {state?.state === 'new' && <span class="card-new">Neu</span>}
+          {title}
+        </span>
         <span class="card-sub">
+          {state?.state === 'heard' && (
+            <span class="card-heard" title="Gehört">
+              <Icon name="check" size={15} />
+              <span class="sr-only">Gehört · </span>
+            </span>
+          )}
           {subtitle ?? (album.kind === 'manual' ? `Playlist · ${plural(album.trackCount, 'Titel', 'Titel')}` : albumSubtitle(album))}
           {extra && <span class="card-extra"> · {extra}</span>}
         </span>
+        {state?.state === 'started' && (
+          <span class="track-progress card-progress" title="Angefangen">
+            <i style={{ width: `${Math.round((state.progress ?? 0) * 100)}%` }} />
+          </span>
+        )}
       </a>
       <button
         class="card-play"
@@ -44,13 +59,14 @@ export function AlbumCard({ album, subtitle, extra }: { album: Album; subtitle?:
 }
 
 /** Raster aus Karten; `list` macht daraus auf dem Handy eine kompakte Liste mit Sprecher und Länge. */
-export function AlbumGrid({ albums, list = false }: { albums: Album[]; list?: boolean }) {
+export function AlbumGrid({ albums, list = false, states }: { albums: Album[]; list?: boolean; states?: Map<number, DatedState> }) {
   return (
     <div class={list ? 'grid grid-list' : 'grid'}>
       {albums.map((album) => (
         <AlbumCard
           key={album.id}
           album={album}
+          state={states?.get(album.id)}
           extra={list ? [album.speaker, album.duration ? formatDuration(album.duration) : undefined].filter(Boolean).join(' · ') : undefined}
         />
       ))}

@@ -7,10 +7,11 @@ import { FavoritesCard } from '../components/FavoritesCard';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
 import { TrackList } from '../components/TrackList';
-import { decadeLabel, formatDuration, formatLongDate, formatTime, plural, withoutDate } from '../format';
+import { formatDuration, formatLongDate, formatTime, plural, withoutDate } from '../format';
 import { useApi } from '../hooks';
 import { useMe } from '../me';
 import { LiveTile } from './Live';
+import { useLive } from '../live';
 import { Empty } from './common';
 import type { DatedAlbum } from './Dates';
 
@@ -33,6 +34,8 @@ export function Home() {
   const latest = useApi<Page<DatedAlbum>>('/api/dates?limit=1');
   const personal = useApi<{ resume: Array<Track & { position: number }>; recent: Album[] }>('/api/me/home');
   const facets = useApi<Facets>('/api/facets');
+  const live = useLive();
+  const recordings = [...(facets.data?.recordings ?? [])].sort((a, b) => (b.latest ?? '').localeCompare(a.latest ?? ''));
   const name = firstName(user?.name, user?.kind);
   const title = name ? `${greeting()}, ${name}` : greeting();
 
@@ -61,9 +64,12 @@ export function Home() {
 
       <InstallHint />
 
+      {/* Sendet der Livestream gerade, steht er ganz oben */}
+      {live && <LiveTile live />}
+
       {service && <LatestService album={service} resume={serviceResume} />}
 
-      <LiveTile />
+      {!live && <LiveTile live={live} />}
 
       {otherResume.length > 0 && (
         <section class="shelf">
@@ -76,12 +82,12 @@ export function Home() {
 
       <Shelf title="Zuletzt gehört" albums={recentAlbums} />
 
-      {/* Je Art aus dem Regelwerk eine Reihe (Gottesdienste, Bibelstunden …), ohne die große Karte oben */}
-      {(facets.data?.recordings ?? []).map((kind, index) => (
+      {/* Je Art aus dem Regelwerk eine Reihe (Gottesdienste, Bibelstunden …), die mit dem jüngsten Eintrag zuerst */}
+      {recordings.map((kind) => (
         <RecordingShelf
           key={kind.name}
           name={kind.name}
-          title={index === 0 && facets.data!.recordings!.length === 1 ? `Weitere ${kind.plural}` : kind.plural}
+          title={recordings.length === 1 ? `Weitere ${kind.plural}` : kind.plural}
           skip={service?.id}
         />
       ))}
@@ -92,21 +98,6 @@ export function Home() {
         albums={me.favorites?.albums.slice(0, 12) ?? []}
         lead={me.favorites?.tracks.length ? <FavoritesCard tracks={me.favorites.tracks} /> : undefined}
       />
-
-      {facets.data && facets.data.decades.length > 1 && (
-        <section class="shelf">
-          <div class="section-head">
-            <h2>Nach Jahrzehnt</h2>
-          </div>
-          <div class="chips-row">
-            {facets.data.decades.map((d) => (
-              <a key={d.value} class="chip" href={`/alben${query({ decade: d.value, sort: 'year' })}`}>
-                {decadeLabel(d.value)}
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
 
       {facets.data && (
         <p class="stats">

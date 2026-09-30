@@ -21,6 +21,7 @@ import {
 } from './policies.js';
 import { foldValue } from './text.js';
 import {
+  BIBLE_TRANSLATIONS,
   compiledLibrary,
   DEFAULT_LIBRARY,
   librarySettings,
@@ -316,6 +317,8 @@ function parseLibrary(input: unknown): LibrarySettings {
   };
   const minutes = raw.sermonMinutes === undefined ? DEFAULT_LIBRARY.sermonMinutes : Number(raw.sermonMinutes);
   if (!Number.isFinite(minutes) || minutes < 0 || minutes > 600) throw new StructureError('Predigt-Player ab: Minuten zwischen 0 und 600');
+  const translation = raw.bibleTranslation === undefined ? DEFAULT_LIBRARY.bibleTranslation : String(raw.bibleTranslation);
+  if (!Object.hasOwn(BIBLE_TRANSLATIONS, translation)) throw new StructureError('Bibelübersetzung: unbekannt');
   return {
     discFolders: words('discFolders', 'Disc-Unterordner'),
     mergeDatedSubfolders: flag('mergeDatedSubfolders'),
@@ -326,6 +329,7 @@ function parseLibrary(input: unknown): LibrarySettings {
     sermonMinutes: Math.round(minutes * 10) / 10,
     passagePrefixes: words('passagePrefixes', 'Wörter vor Bibelstellen'),
     bookSpellings: words('bookSpellings', 'Weitere Schreibweisen von Bibelbüchern'),
+    bibleTranslation: translation,
   };
 }
 

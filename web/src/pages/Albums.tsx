@@ -34,7 +34,7 @@ export function Albums({ params }: { params: URLSearchParams }) {
     ['musik', 'Musik'],
     ...(recordings.length ? recordings.map((r): [string, string] => [r.name, r.plural]) : [[ALL_RECORDINGS, 'Gottesdienste'] as [string, string]]),
     ...(facets?.other ? [['sonstiges', 'Sonstiges'] as [string, string]] : []),
-    ...(facets?.playlists ? [[PLAYLISTS, 'Playlists'] as [string, string]] : []),
+    ...(facets?.playlists || params.get('art') === PLAYLISTS ? [[PLAYLISTS, 'Playlists'] as [string, string]] : []),
   ];
   // Ohne Auswahl nur Musik (gibt es keine, alles); kommt man über eine Suche oder ein Jahrzehnt, alles, damit nichts fehlt.
   const kind = params.get('art') || (q || filter.decade || facets?.music === 0 ? 'alle' : 'musik');
@@ -69,24 +69,32 @@ export function Albums({ params }: { params: URLSearchParams }) {
           </select>
         </label>
       </div>
-      <div class="segmented segmented-kinds" role="radiogroup" aria-label="Art">
+      {/* Wie unter "Datum": Chips in einer Zeile, auf dem Handy seitlich wischbar */}
+      <nav class="chips-row" aria-label="Art">
         {kinds.map(([key, label]) => (
           <button
             key={key}
             type="button"
-            role="radio"
-            aria-checked={kind === key}
-            class={kind === key ? 'is-on' : ''}
+            class={`chip${kind === key ? ' is-on' : ''}`}
+            aria-pressed={kind === key}
             onClick={() => update({ art: key, sort: undefined })}
           >
             {label}
           </button>
         ))}
-      </div>
-      <Filters value={filter} onChange={(next: FilterValue) => update({ decade: next.decade })} />
-      {total !== undefined && <p class="count">{playlists ? plural(total, 'Playlist', 'Playlists') : plural(total, 'Album', 'Alben')}</p>}
+      </nav>
+      {/* Jahrzehnte gibt es bei Playlists nicht */}
+      {!playlists && <Filters value={filter} onChange={(next: FilterValue) => update({ decade: next.decade })} />}
+      {total !== undefined && total > 0 && (
+        <p class="count">{playlists ? plural(total, 'Playlist', 'Playlists') : plural(total, 'Album', 'Alben')}</p>
+      )}
       {error && <ErrorNote message={error} />}
-      {total === 0 && <Empty title="Keine Alben gefunden">Entferne einen Filter, um mehr zu sehen.</Empty>}
+      {total === 0 &&
+        (playlists && !q ? (
+          <Empty title="Noch keine Playlists">Playlists stellt die Verwaltung aus einzelnen Titeln zusammen.</Empty>
+        ) : (
+          <Empty title="Keine Alben gefunden">Entferne einen Filter, um mehr zu sehen.</Empty>
+        ))}
       <AlbumGrid albums={items} />
       {loading && <Loading />}
       <div ref={sentinel} />

@@ -16,6 +16,8 @@ export interface Track {
   albumDate?: string | null;
   /** Sprecher aus dem Dateinamen ("Predigt - Titel - Name") oder aus der Verwaltung */
   speaker?: string | null;
+  /** Bibelstellen des Titels, mehrere durch "; " getrennt */
+  passage?: string | null;
   /** Inhalt einer Aufnahme ("Lied", "Predigt") aus dem Regelwerk */
   content?: string | null;
   /** Player laut Policies im Regelwerk: Predigt-Player oder Musik-Player; null: nach Länge */
@@ -79,7 +81,7 @@ export interface Facets {
   decades: Facet<number>[];
   totals: { tracks: number; albums: number; duration: number };
   /** Arten von Aufnahmen aus dem Regelwerk, mit Anzahl */
-  recordings?: Array<{ name: string; plural: string; count: number }>;
+  recordings?: Array<{ name: string; plural: string; count: number; /** jüngstes Datum (JJJJ-MM-TT) */ latest?: string | null }>;
   /** Automatische Alben, die Musik sind, und solche ohne Zuordnung (Sonstiges) */
   music?: number;
   other?: number;

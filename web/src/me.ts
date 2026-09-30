@@ -25,9 +25,27 @@ interface State {
   albumIds: Set<number>;
   /** Gespeicherte Stellen langer Titel mit ihrer Länge (vom Browser gemessen), je trackId */
   progress: Map<number, Progress>;
+  /** Neu, angefangen, gehört je Gottesdienst (Liste unter "Datum") */
+  dated: Map<number, DatedState>;
+  /** Gottesdienste, die seit dem letzten Besuch unter "Datum" dazugekommen sind (Punkt am Tab) */
+  freshDates: number;
 }
 
-let state: State = { favorites: undefined, trackIds: new Set(), albumIds: new Set(), progress: new Map() };
+export interface DatedState {
+  albumId: number;
+  state: 'new' | 'started' | 'heard';
+  progress?: number;
+}
+
+const empty = (): State => ({
+  favorites: undefined,
+  trackIds: new Set(),
+  albumIds: new Set(),
+  progress: new Map(),
+  dated: new Map(),
+  freshDates: 0,
+});
+let state: State = empty();
 const listeners = new Set<() => void>();
 
 function set(next: Partial<State>): void {
@@ -61,6 +79,7 @@ export async function loadMe(): Promise<void> {
   const [favorites, progress] = await Promise.all([
     fetchJson<Favorites>('/api/me/favorites').catch(() => undefined),
     fetchJson<{ items: Array<Progress & { trackId: number }> }>('/api/me/progress').catch(() => undefined),
+    loadDates(),
   ]);
   set({
     ...(favorites ? { favorites } : {}),
@@ -72,7 +91,7 @@ export async function loadMe(): Promise<void> {
 
 /** Nach dem Abmelden nichts vom vorigen Hörer stehen lassen. */
 export function resetMe(): void {
-  state = { favorites: undefined, trackIds: new Set(), albumIds: new Set(), progress: new Map() };
+  state = empty();
   listeners.forEach((listener) => listener());
 }
 
@@ -165,4 +184,35 @@ export function countPlay(track: Pick<Track, 'id'>): void {
 /** Suchbegriff, aus dem ein Treffer geöffnet wurde; der Server zählt ihn für "Häufig gesucht". */
 export function countSearch(q: string): void {
   void send('POST', '/api/me/searches', { q }).catch(() => undefined);
+}
+
+/** Gerade unter "Datum": dann ist nichts mehr neu für den Punkt am Tab */
+let onDates = false;
+
+/** Hörstand der Gottesdienste neu vom Server; Fehler: bleibt beim alten Stand */
+export async function loadDates(): Promise<void> {
+  const data = await fetchJson<{ items: DatedState[]; fresh: number }>('/api/me/dates').catch(() => undefined);
+  if (!data || !Array.isArray(data.items)) return;
+  set({ dated: new Map(data.items.map((item) => [item.albumId, item])), freshDates: onDates ? 0 : data.fresh || 0 });
+  if (onDates && data.fresh) void send('POST', '/api/me/dates/seen').catch(() => undefined);
+}
+
+/**
+ * Unter "Datum" angekommen: Hörstand frisch holen, der Punkt am Tab verschwindet. Die Kennzeichen "neu" bleiben bis
+ * zum nächsten Besuch stehen, damit man sieht, was dazukam. Gibt die Funktion zum Verlassen zurück.
+ */
+export function enterDates(): () => void {
+  onDates = true;
+  set({ freshDates: 0 });
+  void loadDates();
+  return () => {
+    onDates = false;
+  };
+}
+
+/** "Als gehört markieren" bzw. zurück; danach Hörstand und Weiterhören neu laden */
+export async function markAlbumHeard(albumId: number, heard: boolean): Promise<void> {
+  await send('PUT', `/api/me/albums/${albumId}/heard`, { heard });
+  clearCache();
+  await loadMe();
 }

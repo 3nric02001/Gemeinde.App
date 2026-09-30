@@ -8,6 +8,8 @@ import { navigate } from '../router';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
+import { shareLink } from '../share';
+import { useEffect, useRef } from 'preact/hooks';
 
 interface Props {
   tracks: Track[];
@@ -19,6 +21,8 @@ interface Props {
   ordinal?: boolean;
   /** Playlist, aus der abgespielt wird; "Jetzt läuft" führt dann dorthin zurück */
   from?: PlaybackContext;
+  /** Titel aus einem geteilten Link: hervorheben und hinscrollen */
+  highlight?: number;
 }
 
 export function trackMenu(track: Track) {
@@ -32,11 +36,17 @@ export function trackMenu(track: Track) {
   const offline = getOffline();
   if (offline.ids.has(track.id)) items.push({ label: 'Offline-Kopie löschen', onSelect: () => void removeDownloads([track.id]) });
   else if (offline.enabled && !offline.progress.has(track.id)) items.push({ label: 'Herunterladen', onSelect: () => download([track]) });
-  if (track.albumId) items.push({ label: 'Zum Album', onSelect: () => navigate(`/album/${track.albumId}`) });
+  if (track.albumId) {
+    const link = `/album/${track.albumId}?titel=${track.id}`;
+    items.push({ label: track.albumDate ? 'Zum Gottesdienst' : 'Zum Album', onSelect: () => navigate(`/album/${track.albumId}`) });
+    items.push({ label: 'Teilen', onSelect: () => void shareLink(track.title, link) });
+  }
   return items;
 }
 
-export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, from }: Props) {
+export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, from, highlight }: Props) {
+  const linked = useRef<HTMLLIElement>(null);
+  useEffect(() => linked.current?.scrollIntoView({ block: 'center' }), [highlight]);
   const currentId = usePlayerSelect((s) => s.current?.id);
   const playing = usePlayerSelect((s) => s.playing);
   useMe(); // Herzen und Fortschritt aktuell halten
@@ -63,7 +73,8 @@ export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, f
           <Fragment key={`${track.id}-${index}`}>
             {showDisc && <li class="disc-head">CD {disc}</li>}
             <li
-              class={`track${isCurrent ? ' is-current' : ''}`}
+              ref={track.id === highlight ? linked : undefined}
+              class={`track${isCurrent ? ' is-current' : ''}${track.id === highlight ? ' is-linked' : ''}`}
               onClick={() => play(index)}
             >
               <span class="track-lead">
@@ -100,7 +111,7 @@ export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, f
               <span class="track-time">
                 {resume ? `noch ${formatTime(resume.duration - resume.position)}` : formatTime(track.duration)}
               </span>
-              <Menu label={`Weitere Aktionen für ${track.title}`} items={trackMenu(track)} />
+              <Menu label={`Weitere Aktionen für ${track.title}`} title={track.title} items={trackMenu(track)} />
             </li>
           </Fragment>
         );

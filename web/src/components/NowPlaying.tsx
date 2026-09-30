@@ -8,6 +8,8 @@ import { Cover } from './Cover';
 import { FavoriteButton } from './FavoriteButton';
 import { Icon } from './Icon';
 import { Seek } from './Seek';
+import { PassageLink } from './SermonInfo';
+import { splitPassages } from '../bible';
 
 /** Vollbild "Jetzt läuft" mit großem Cover, wie bei Apple Music; nach unten wischen schließt. */
 export function NowPlaying({ onClose }: { onClose: () => void }) {
@@ -85,6 +87,14 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
             {track.title}
           </button>
           {track.speaker && <span class="now-artist">{track.speaker}</span>}
+          {/* Zum Mitlesen: die Bibelstelle öffnet den Text in einem neuen Tab */}
+          {splitPassages(track.passage).length > 0 && (
+            <span class="now-passages">
+              {splitPassages(track.passage).map((p) => (
+                <PassageLink key={p} passage={p} book />
+              ))}
+            </span>
+          )}
           {album && track.albumId && (
             <a class="now-album" href={`/album/${track.albumId}`} onClick={(event) => (event.preventDefault(), go(`/album/${track.albumId}`))}>
               {album}

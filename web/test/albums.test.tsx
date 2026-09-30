@@ -26,7 +26,7 @@ describe('Albenseite', () => {
     expect(urls()[0]).not.toContain('dated=');
     expect(urls()[0]).toContain('sort=title');
     expect(screen.queryByRole('option', { name: 'Interpret' })).toBeNull();
-    expect(screen.getByRole('radio', { name: 'Musik' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Musik' }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('zeigt Sonstiges nur, wenn es Alben ohne Zuordnung gibt', async () => {
@@ -37,8 +37,8 @@ describe('Albenseite', () => {
       return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
     });
     render(<Albums params={new URLSearchParams('art=sonstiges')} />);
-    expect(await screen.findByRole('radio', { name: 'Sonstiges' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: 'Sonstiges' }).getAttribute('aria-checked')).toBe('true');
+    expect(await screen.findByRole('button', { name: 'Sonstiges' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sonstiges' }).getAttribute('aria-pressed')).toBe('true');
     const url = fetch.mock.calls.map(([u]) => String(u)).find((u) => u.startsWith('/api/albums'))!;
     expect(url).toContain('section=other');
     expect(url).toContain('sort=title');
@@ -54,7 +54,7 @@ describe('Albenseite', () => {
     const urls = renderAlbums('decade=2020');
     await vi.waitFor(() => expect(urls()[0]).toContain('decade=2020'));
     expect(urls()[0]).not.toContain('dated=');
-    expect(screen.getByRole('radio', { name: 'Alle' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Alle' }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('filtert Aufnahmen je Art aus der Zuordnung', async () => {
@@ -68,9 +68,9 @@ describe('Albenseite', () => {
       return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
     });
     render(<Albums params={new URLSearchParams('art=Bibelstunde')} />);
-    expect(await screen.findByRole('radio', { name: 'Bibelstunden' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: 'Bibelstunden' }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByRole('radio', { name: 'Gottesdienste' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Bibelstunden' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Bibelstunden' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Gottesdienste' })).toBeTruthy();
     const url = fetch.mock.calls.map(([u]) => String(u)).find((u) => u.startsWith('/api/albums'))!;
     expect(url).toContain('recording=Bibelstunde');
     // Die Art grenzt ein; ohne "mit Datum", damit Playlists dieser Art mit auftauchen

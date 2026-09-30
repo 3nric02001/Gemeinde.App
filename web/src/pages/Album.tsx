@@ -12,9 +12,13 @@ import { useApi } from '../hooks';
 import { albumContext, player } from '../player';
 import { coverUrl, kindLabel, query, type Album as AlbumType, type Page } from '../api';
 import { BackButton, ErrorNote, Loading } from './common';
+import { markAlbumHeard, useMe } from '../me';
+import { shareLink, showToast } from '../share';
 
-export function Album({ id }: { id: number }) {
+/** `track`: Titel aus einem geteilten Link, wird hervorgehoben */
+export function Album({ id, track }: { id: number; track?: number }) {
   const { data: album, error } = useApi<AlbumDetail>(`/api/albums/${id}`);
+  const heard = useMe().dated.get(id)?.state === 'heard';
   // Weitere Aufnahmen derselben Art (Gottesdienste, Bibelstunden), neueste zuerst
   const more = useApi<Page<AlbumType>>(
     album?.recording ? `/api/albums${query({ recording: album.recording, sort: 'date', limit: 13 })}` : undefined,
@@ -63,9 +67,24 @@ export function Album({ id }: { id: number }) {
         <DownloadButton tracks={album.tracks} />
         <Menu
           label="Weitere Aktionen für das Album"
+          title={albumTitle(album.title, album.date, kindLabel(album))}
           items={[
             { label: 'Als Nächstes spielen', onSelect: () => player.playNext(album.tracks, from) },
             { label: 'Zur Warteschlange hinzufügen', onSelect: () => player.append(album.tracks, from) },
+            // Gottesdienste: Hörstand von Hand, für die Liste unter "Datum"
+            ...(album.date && album.kind !== 'manual'
+              ? [
+                  {
+                    label: heard ? 'Als ungehört markieren' : 'Als gehört markieren',
+                    onSelect: () =>
+                      void markAlbumHeard(album.id, !heard).then(
+                        () => showToast(heard ? 'Als ungehört markiert' : 'Als gehört markiert'),
+                        () => showToast('Das hat nicht geklappt'),
+                      ),
+                  },
+                ]
+              : []),
+            { label: 'Teilen', onSelect: () => void shareLink(albumTitle(album.title, album.date, kindLabel(album)), `/album/${album.id}`) },
           ]}
         />
       </div>
@@ -77,6 +96,7 @@ export function Album({ id }: { id: number }) {
         variant="album"
         ordinal={!!from}
         from={from}
+        highlight={track}
       />
 
       {others.length > 0 && (

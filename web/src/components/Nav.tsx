@@ -4,11 +4,13 @@ import { hasRole, logout, ROLE_LABELS, useAuth } from '../auth';
 import { AdminNav } from '../admin/Access';
 import { appReturnPath, sectionPath } from '../router';
 import { Icon, type IconName } from './Icon';
+import { useMe } from '../me';
+import { useLive } from '../live';
 
 type NavItem = { href: string; label: string; icon: IconName; match: (path: string) => boolean };
 
 const start: NavItem = { href: '/', label: 'Start', icon: 'home', match: (p) => p === '/' };
-const search: NavItem = { href: '/suche', label: 'Suche', icon: 'search', match: (p) => p.startsWith('/suche') };
+const search: NavItem = { href: '/suche', label: 'Suche', icon: 'search', match: (p) => p.startsWith('/suche') || p.startsWith('/stoebern') };
 const albums: NavItem = { href: '/alben', label: 'Alben', icon: 'albums', match: (p) => p.startsWith('/alben') || p.startsWith('/album/') };
 
 /** Menüpunkt aktiv? Album-Seiten zählen zu dem Bereich, aus dem man sie geöffnet hat (etwa Datum). */
@@ -25,7 +27,7 @@ const items: NavItem[] = [
 ];
 
 /** Tab-Leiste auf dem Handy: die vier wichtigsten Ziele, der Rest unter "Mehr" */
-const MORE_PATHS = ['/mehr', '/titel', '/favoriten', '/kategorie', '/warteschlange', '/admin'];
+const MORE_PATHS = ['/mehr', '/live', '/titel', '/favoriten', '/kategorie', '/warteschlange', '/admin'];
 const tabs: NavItem[] = [
   start,
   search,
@@ -34,10 +36,19 @@ const tabs: NavItem[] = [
   { href: '/mehr', label: 'Mehr', icon: 'menu', match: (p) => MORE_PATHS.some((prefix) => p.startsWith(prefix)) },
 ];
 
+/** Punkt am Eintrag: unter "Datum" ist seit dem letzten Besuch etwas dazugekommen */
+function NavDot({ label }: { label: string }) {
+  return (
+    <i class="nav-dot" role="img" aria-label={label} />
+  );
+}
+
 export function Sidebar({ path }: { path: string }) {
   // Eigene Kategorien aus der Verwaltung stehen nach den festen Einträgen.
   const categories = useCategories(path).filter((c) => c.inNav);
-  const { user, branding } = useAuth();
+  const { user, branding, livestream } = useAuth();
+  const fresh = useMe().freshDates;
+  const live = useLive();
   // In der Verwaltung ersetzt am Rechner deren Navigation die der App (Umschalten per CSS, damit Tablets die App-Leiste behalten)
   const manage = path.startsWith('/admin') && hasRole(user, 'manager');
   return (
@@ -66,9 +77,19 @@ export function Sidebar({ path }: { path: string }) {
               <a href={item.href} class={active(item, path) ? 'is-active' : ''} aria-current={active(item, path) ? 'page' : undefined}>
                 <Icon name={item.icon} size={22} />
                 <span>{item.label}</span>
+                {item === dates && fresh > 0 && <NavDot label={`${fresh} neu`} />}
               </a>
             </li>
           ))}
+          {livestream && (
+            <li>
+              <a href="/live" class={path === '/live' ? 'is-active' : ''} aria-current={path === '/live' ? 'page' : undefined}>
+                <Icon name="live" size={22} />
+                <span>{livestream.title}</span>
+                {live && <NavDot label="sendet gerade" />}
+              </a>
+            </li>
+          )}
           {categories.map((category) => {
             const href = categoryUrl(category.slug);
             const section = sectionPath(path);
@@ -114,6 +135,7 @@ export function Sidebar({ path }: { path: string }) {
 
 /** Tab-Leiste am unteren Rand auf dem Handy */
 export function TabBar({ path }: { path: string }) {
+  const fresh = useMe().freshDates;
   return (
     <nav class="tabbar" aria-label="Hauptnavigation">
       {tabs.map((item) => (
@@ -126,7 +148,10 @@ export function TabBar({ path }: { path: string }) {
             if (path === item.href) onActiveTab(event, item.href);
           }}
         >
-          <Icon name={item.icon} size={22} />
+          <span class="tab-icon">
+            <Icon name={item.icon} size={22} />
+            {item === dates && fresh > 0 && <NavDot label={`${fresh} neu`} />}
+          </span>
           <span>{item.label}</span>
         </a>
       ))}

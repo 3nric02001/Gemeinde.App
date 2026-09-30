@@ -186,6 +186,8 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
         livestream: user ? publicLivestream(db) : null,
         // Ohne Policy läuft ein Titel ab dieser Länge im Predigt-Player (Verwaltung → Zuordnung)
         sermonMinutes: librarySettings().sermonMinutes,
+        // Ein Tipp auf eine Bibelstelle öffnet den Text in dieser Übersetzung (Verwaltung → Zuordnung)
+        bibleTranslation: librarySettings().bibleTranslation,
       };
     });
 

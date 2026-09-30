@@ -128,8 +128,8 @@ describe('Aufnahmen nach dem Regelwerk', () => {
     expect((await dated('&recording=Bibelstunde')).map((a) => a.date)).toEqual(['2026-01-14']);
     expect((await get('/api/dates?recording=Gottesdienst')).items.map((a: any) => a.date)).toEqual(['2026-09-06', '2026-08-30']);
     expect((await get('/api/facets')).recordings).toEqual([
-      { name: 'Bibelstunde', plural: 'Bibelstunden', count: 1 },
-      { name: 'Gottesdienst', plural: 'Gottesdienste', count: 2 },
+      { name: 'Bibelstunde', plural: 'Bibelstunden', count: 1, latest: '2026-01-14' },
+      { name: 'Gottesdienst', plural: 'Gottesdienste', count: 2, latest: '2026-09-06' },
     ]);
   });
 

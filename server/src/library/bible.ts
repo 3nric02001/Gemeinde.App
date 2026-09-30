@@ -71,3 +71,98 @@ export function joinPassages(values: Array<string | null | undefined>): string |
   }
   return seen.size ? [...seen.values()].join(PASSAGE_SEPARATOR) : null;
 }
+
+/**
+ * Die 66 Bücher in Bibel-Reihenfolge mit ihren Schreibweisen aus BOOKS, für "Stöbern nach Bibelbuch".
+ * Nummerierte Bücher ("1. Korinther") stehen einzeln; ein Buch mit Nummer, aber ohne eigenen Eintrag
+ * ("1. Johannes") ist der Brief, ohne Nummer das Evangelium.
+ */
+const CANON: Array<{ name: string; testament: 'at' | 'nt'; spellings: string[]; number?: number }> = [
+  ...[1, 2, 3, 4, 5].map((n) => ({
+    name: `${n}. Mose`,
+    testament: 'at' as const,
+    number: n,
+    spellings: ['Mose', ...[['Genesis', 'Gen'], ['Exodus', 'Ex'], ['Levitikus', 'Lev'], ['Numeri', 'Num'], ['Deuteronomium', 'Dtn']][n - 1]!],
+  })),
+  { name: 'Josua', testament: 'at', spellings: ['Josua', 'Jos'] },
+  { name: 'Richter', testament: 'at', spellings: ['Richter'] },
+  { name: 'Rut', testament: 'at', spellings: ['Rut', 'Ruth'] },
+  ...[1, 2].map((n) => ({ name: `${n}. Samuel`, testament: 'at' as const, number: n, spellings: ['Samuel', 'Sam'] })),
+  ...[1, 2].map((n) => ({ name: `${n}. Könige`, testament: 'at' as const, number: n, spellings: ['Könige', 'Kön', 'Koenige'] })),
+  ...[1, 2].map((n) => ({ name: `${n}. Chronik`, testament: 'at' as const, number: n, spellings: ['Chronik', 'Chr'] })),
+  { name: 'Esra', testament: 'at', spellings: ['Esra', 'Esr'] },
+  { name: 'Nehemia', testament: 'at', spellings: ['Nehemia', 'Neh'] },
+  { name: 'Ester', testament: 'at', spellings: ['Ester', 'Esther', 'Est'] },
+  { name: 'Hiob', testament: 'at', spellings: ['Hiob', 'Ijob'] },
+  { name: 'Psalmen', testament: 'at', spellings: ['Psalmen', 'Psalm', 'Ps'] },
+  { name: 'Sprüche', testament: 'at', spellings: ['Sprüche', 'Spr'] },
+  { name: 'Prediger', testament: 'at', spellings: ['Prediger', 'Pred', 'Kohelet', 'Koh'] },
+  { name: 'Hoheslied', testament: 'at', spellings: ['Hoheslied', 'Hld'] },
+  { name: 'Jesaja', testament: 'at', spellings: ['Jesaja', 'Jes'] },
+  { name: 'Jeremia', testament: 'at', spellings: ['Jeremia', 'Jer'] },
+  { name: 'Klagelieder', testament: 'at', spellings: ['Klagelieder', 'Klgl'] },
+  { name: 'Hesekiel', testament: 'at', spellings: ['Hesekiel', 'Hes', 'Ezechiel', 'Ez'] },
+  { name: 'Daniel', testament: 'at', spellings: ['Daniel', 'Dan'] },
+  { name: 'Hosea', testament: 'at', spellings: ['Hosea', 'Hos'] },
+  { name: 'Joel', testament: 'at', spellings: ['Joel'] },
+  { name: 'Amos', testament: 'at', spellings: ['Amos'] },
+  { name: 'Obadja', testament: 'at', spellings: ['Obadja', 'Obd'] },
+  { name: 'Jona', testament: 'at', spellings: ['Jona'] },
+  { name: 'Micha', testament: 'at', spellings: ['Micha'] },
+  { name: 'Nahum', testament: 'at', spellings: ['Nahum', 'Nah'] },
+  { name: 'Habakuk', testament: 'at', spellings: ['Habakuk', 'Hab'] },
+  { name: 'Zefanja', testament: 'at', spellings: ['Zefanja', 'Zef'] },
+  { name: 'Haggai', testament: 'at', spellings: ['Haggai', 'Hag'] },
+  { name: 'Sacharja', testament: 'at', spellings: ['Sacharja', 'Sach'] },
+  { name: 'Maleachi', testament: 'at', spellings: ['Maleachi', 'Mal'] },
+  { name: 'Matthäus', testament: 'nt', spellings: ['Matthäus', 'Matthaeus', 'Mt'] },
+  { name: 'Markus', testament: 'nt', spellings: ['Markus', 'Mk'] },
+  { name: 'Lukas', testament: 'nt', spellings: ['Lukas', 'Lk'] },
+  { name: 'Johannes', testament: 'nt', spellings: ['Johannes', 'Joh'] },
+  { name: 'Apostelgeschichte', testament: 'nt', spellings: ['Apostelgeschichte', 'Apg'] },
+  { name: 'Römer', testament: 'nt', spellings: ['Römer', 'Roemer', 'Röm'] },
+  ...[1, 2].map((n) => ({ name: `${n}. Korinther`, testament: 'nt' as const, number: n, spellings: ['Korinther', 'Kor'] })),
+  { name: 'Galater', testament: 'nt', spellings: ['Galater', 'Gal'] },
+  { name: 'Epheser', testament: 'nt', spellings: ['Epheser', 'Eph'] },
+  { name: 'Philipper', testament: 'nt', spellings: ['Philipper', 'Phil'] },
+  { name: 'Kolosser', testament: 'nt', spellings: ['Kolosser', 'Kol'] },
+  ...[1, 2].map((n) => ({ name: `${n}. Thessalonicher`, testament: 'nt' as const, number: n, spellings: ['Thessalonicher', 'Thess'] })),
+  ...[1, 2].map((n) => ({ name: `${n}. Timotheus`, testament: 'nt' as const, number: n, spellings: ['Timotheus', 'Tim'] })),
+  { name: 'Titus', testament: 'nt', spellings: ['Titus', 'Tit'] },
+  { name: 'Philemon', testament: 'nt', spellings: ['Philemon', 'Phlm'] },
+  { name: 'Hebräer', testament: 'nt', spellings: ['Hebräer', 'Hebr', 'Heb'] },
+  { name: 'Jakobus', testament: 'nt', spellings: ['Jakobus', 'Jak'] },
+  ...[1, 2].map((n) => ({ name: `${n}. Petrus`, testament: 'nt' as const, number: n, spellings: ['Petrus', 'Petr'] })),
+  ...[1, 2, 3].map((n) => ({ name: `${n}. Johannes`, testament: 'nt' as const, number: n, spellings: ['Johannes', 'Joh'] })),
+  { name: 'Judas', testament: 'nt', spellings: ['Judas', 'Jud'] },
+  { name: 'Offenbarung', testament: 'nt', spellings: ['Offenbarung', 'Offb'] },
+];
+
+export interface BibleBook {
+  name: string;
+  testament: 'at' | 'nt';
+  /** Stelle in der Bibel, 0 = 1. Mose */
+  order: number;
+}
+
+const fold = (value: string) => value.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue');
+/** "nummer|schreibweise" (ohne Nummer: "|schreibweise") -> Buch */
+const BOOK_INDEX = new Map<string, BibleBook>();
+CANON.forEach((book, order) => {
+  for (const spelling of book.spellings) BOOK_INDEX.set(`${book.number ?? ''}|${fold(spelling)}`, { name: book.name, testament: book.testament, order });
+});
+/** Ohne Nummer gemeint, aber nur mit Nummer bekannt ("Mose 3" statt "1. Mose 3"): das erste Buch */
+CANON.forEach((book, order) => {
+  for (const spelling of book.spellings) {
+    const key = `|${fold(spelling)}`;
+    if (!BOOK_INDEX.has(key)) BOOK_INDEX.set(key, { name: book.name, testament: book.testament, order });
+  }
+});
+
+/** Buch einer Bibelstelle ("Joh 3,16" -> Johannes, "1. Kor 13" -> 1. Korinther); unbekannte Schreibweisen: undefined */
+export function passageBook(passage: string): BibleBook | undefined {
+  const match = REFERENCE.exec(passage);
+  if (!match) return undefined;
+  const [, number, book] = match;
+  return BOOK_INDEX.get(`${number ?? ''}|${fold(book!)}`) ?? BOOK_INDEX.get(`|${fold(book!)}`);
+}

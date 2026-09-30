@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Album, Facets, Page, Track } from '../api';
 import { categoryUrl, getJson, query } from '../api';
-import { Shelf } from '../components/AlbumCard';
+import { AlbumGrid, Shelf } from '../components/AlbumCard';
 import { TrackList } from '../components/TrackList';
 import { plural } from '../format';
 import { useAuth } from '../auth';
@@ -71,6 +71,7 @@ function Results({ q, user }: { q: string; user: number | undefined }) {
   const tracks = useApi<Page<Track>>(`/api/tracks${query({ q, limit: TRACKS_MORE })}`);
   const albums = useApi<Page<Album>>(`/api/albums${query({ q, limit: SHELF, sort: 'date', kind: 'auto' })}`);
   const playlists = useApi<Page<Album>>(`/api/albums${query({ q, limit: SHELF, sort: 'title', kind: 'manual' })}`);
+  const facets = useApi<Facets>('/api/facets').data;
   const [expanded, setExpanded] = useState(false);
   useEffect(() => setExpanded(false), [q]);
 
@@ -83,6 +84,14 @@ function Results({ q, user }: { q: string; user: number | undefined }) {
     const all = await getJson<Page<Track>>(`/api/tracks${query({ q, limit: 500 })}`);
     player.playList(all.items, index, { shuffle: false });
   };
+  const albumHits = albums.data?.items ?? [];
+  const dated = albumHits.filter((album) => album.date);
+  const undated = albumHits.filter((album) => !album.date);
+  const datedMore = dated.length > DATED || (albums.data?.total ?? 0) > albumHits.length;
+  // Überschrift nach Art: nur Gottesdienste heißen so, gemischt "Aufnahmen"
+  const kinds = new Set(dated.map((album) => album.recording));
+  const only = kinds.size === 1 ? facets?.recordings?.find((kind) => kinds.has(kind.name)) : undefined;
+  const datedTitle = only?.plural ?? 'Aufnahmen';
   const loaded = tracks.data?.items ?? [];
   const shown = expanded ? loaded : loaded.slice(0, TRACKS_FIRST);
   const more = (page: Page<Album> | undefined, href: string) => (page && page.total > page.items.length ? href : undefined);
@@ -107,7 +116,21 @@ function Results({ q, user }: { q: string; user: number | undefined }) {
           )}
         </section>
       )}
-      <Shelf title="Alben" href={more(albums.data, `/alben${query({ q, art: 'alle' })}`)} albums={albums.data?.items ?? []} />
+      {/* Gottesdienste und andere Aufnahmen mit Datum als kompakte Zeilen wie unter "Datum", Musik als Karten */}
+      {dated.length > 0 && (
+        <section class="shelf">
+          <div class="section-head">
+            <h2>{datedTitle}</h2>
+            {datedMore ? (
+              <a class="more-link" href={`/alben${query({ q, art: 'alle', sort: 'date' })}`}>
+                Alle anzeigen
+              </a>
+            ) : null}
+          </div>
+          <AlbumGrid albums={dated.slice(0, DATED)} list />
+        </section>
+      )}
+      <Shelf title="Alben" href={more(albums.data, `/alben${query({ q, art: 'alle' })}`)} albums={undated} />
       <Shelf
         title="Playlists"
         href={more(playlists.data, `/alben${query({ q, art: 'playlists' })}`)}
@@ -122,6 +145,8 @@ const TRACKS_FIRST = 5;
 const TRACKS_MORE = 20;
 /** Alben und Playlists je als eine Reihe */
 const SHELF = 12;
+/** Aufnahmen mit Datum als Zeilen, so viele */
+const DATED = 5;
 
 interface Suggestions {
   searches: string[];
@@ -173,7 +198,7 @@ function Browse({ user, onPick }: { user: number | undefined; onPick: (value: st
           </div>
         </section>
       )}
-      {data?.recordings && data.recordings.length > 0 && <Kinds facets={data} />}
+      {data && <Kinds facets={data} />}
     </>
   );
 }
@@ -191,18 +216,32 @@ function SearchChips({ items, onPick }: { items: string[]; onPick: (value: strin
   );
 }
 
-/** Gottesdienste, Bibelstunden … aus der Zuordnung, jeweils nach Datum */
+/**
+ * Gottesdienste, Bibelstunden … aus der Zuordnung, jeweils nach Datum; dazu Predigten nach Bibelbuch und Sprecher,
+ * Musik und Playlists.
+ */
 function Kinds({ facets: data }: { facets: Facets }) {
+  const tiles: Array<{ href: string; label: string; sub?: string; icon?: 'book' | 'mic' }> = [
+    ...(data.recordings ?? []).map((kind) => ({
+      href: `/datum${query({ art: kind.name })}`,
+      label: kind.plural,
+      sub: plural(kind.count, 'Aufnahme', 'Aufnahmen'),
+    })),
+    { href: '/stoebern/bibel', label: 'Nach Bibelbuch', icon: 'book' as const },
+    { href: '/stoebern/sprecher', label: 'Nach Sprecher', icon: 'mic' as const },
+    ...(data.music ? [{ href: '/alben?art=musik', label: 'Musik', sub: plural(data.music, 'Album', 'Alben') }] : []),
+    ...(data.playlists ? [{ href: '/alben?art=playlists', label: 'Playlists', sub: plural(data.playlists, 'Playlist', 'Playlists') }] : []),
+  ];
   return (
     <section class="shelf">
       <div class="section-head">
         <h2>Stöbern</h2>
       </div>
       <div class="browse">
-        {data.recordings!.map((kind) => (
-          <a key={kind.name} class="browse-tile" href={`/datum${query({ art: kind.name })}`}>
-            <span>{kind.plural}</span>
-            <small>{plural(kind.count, 'Aufnahme', 'Aufnahmen')}</small>
+        {tiles.map((tile) => (
+          <a key={tile.href} class="browse-tile" href={tile.href}>
+            <span>{tile.label}</span>
+            {tile.icon ? <Icon name={tile.icon} size={22} class="browse-icon" /> : <small>{tile.sub}</small>}
           </a>
         ))}
       </div>

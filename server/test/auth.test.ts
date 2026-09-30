@@ -128,6 +128,7 @@ describe('Lokaler Admin', () => {
       branding: { name: 'Gemeinde.App', welcome: '' },
       livestream: null,
       sermonMinutes: 10,
+      bibleTranslation: 'LUT',
     });
 
     expect((await localLogin('falsch')).statusCode).toBe(401);

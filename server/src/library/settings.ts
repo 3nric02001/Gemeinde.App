@@ -24,7 +24,21 @@ export interface LibrarySettings {
   passagePrefixes: string[];
   /** Weitere Schreibweisen von Bibelbüchern, die als Bibelstelle erkannt werden ("Kollosser") */
   bookSpellings: string[];
+  /** Übersetzung, in der ein Tipp auf eine Bibelstelle den Text bei bibleserver.com öffnet */
+  bibleTranslation: string;
 }
+
+/** Übersetzungen bei bibleserver.com (Kürzel in der Adresse) */
+export const BIBLE_TRANSLATIONS: Record<string, string> = {
+  LUT: 'Luther 2017',
+  ELB: 'Elberfelder',
+  SLT: 'Schlachter 2000',
+  HFA: 'Hoffnung für alle',
+  NGU: 'Neue Genfer Übersetzung',
+  EU: 'Einheitsübersetzung',
+  GNB: 'Gute Nachricht',
+  NLB: 'Neues Leben',
+};
 
 /** Platzhalter für Musik und Sonstiges */
 export const LIBRARY_PLACEHOLDERS = ['ordner', 'jahr', 'titel', 'datei', 'nr'] as const;
@@ -39,6 +53,7 @@ export const DEFAULT_LIBRARY: LibrarySettings = {
   sermonMinutes: 10,
   passagePrefixes: ['Text', 'Predigttext', 'Bibeltext'],
   bookSpellings: ['Kollosser'],
+  bibleTranslation: 'LUT',
 };
 
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
