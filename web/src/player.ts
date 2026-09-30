@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { streamUrl, trackCoverUrl, type Track } from './api';
 import { countPlay, isLong, resumePosition, saveProgress } from './me';
 import { isDownloaded, readDownload, ready as offlineReady } from './offline';
+import { PRELOAD_LEAD_SECONDS, Preloader } from './preload';
 import { Queue, type QueueState, type RepeatMode } from './queue';
 
 /** Jeder Eintrag ist ein eigenes Objekt, damit derselbe Titel mehrfach in der Warteschlange stehen kann. */
@@ -60,6 +61,8 @@ export class Player {
   private blobUrl: string | undefined;
   private sourceToken = 0;
   private offlineChecked = false;
+  /** Nächster Titel, kurz vor dem Ende des aktuellen schon im Speicher */
+  private readonly preloader = new Preloader({ isDownloaded, readDownload });
   /** Titel, der gerade im Audio-Element steckt, und wann sein Hörstand zuletzt gespeichert wurde */
   private loaded:
     | {
@@ -210,6 +213,7 @@ export class Player {
     this.audio.removeAttribute('src');
     this.audio.load();
     this.releaseBlob();
+    this.preloader.clear();
     this.loaded = undefined;
     this.queue.set([]);
     this.queueDirty = true;
@@ -348,6 +352,12 @@ export class Player {
   private setSource(track: Track): Promise<boolean> | undefined {
     const token = ++this.sourceToken;
     this.releaseBlob();
+    // Vorgeladen (aus dem Netz oder schon entschlüsselt): sofort, auch für play() direkt nach 'ended'.
+    const preloaded = this.preloader.take(track.id);
+    if (preloaded) {
+      this.audio.src = this.blobUrl = URL.createObjectURL(preloaded);
+      return undefined;
+    }
     if (this.offlineChecked && !isDownloaded(track.id)) {
       this.audio.src = streamUrl(track.id);
       return undefined;
@@ -361,6 +371,26 @@ export class Player {
       else this.audio.src = streamUrl(track.id);
       return true;
     })();
+  }
+
+  /**
+   * Kurz vor dem Ende den nächsten Titel vorladen; ändert sich die Warteschlange, wird ein
+   * vorgeladener Titel, der nicht mehr als Nächstes dran ist, verworfen.
+   */
+  private preloadNext(): void {
+    const current = this.queue.current;
+    const next = this.queue.peekNext(true);
+    // Wiederholen eines Titels spielt dieselbe Quelle erneut, da gibt es nichts vorzuladen.
+    const nextId = next && current && next.track.id !== current.track.id ? next.track.id : undefined;
+    if (this.preloader.trackId === nextId) return;
+    if (this.preloader.trackId !== undefined || nextId === undefined) {
+      this.preloader.want(undefined);
+      if (nextId === undefined) return;
+    }
+    const duration = this.audio.duration;
+    if (this.audio.paused || !Number.isFinite(duration) || duration <= 0) return;
+    const left = (duration - this.audio.currentTime) / (this.audio.playbackRate || 1);
+    if (left <= PRELOAD_LEAD_SECONDS) this.preloader.want(nextId);
   }
 
   private releaseBlob(): void {
@@ -405,6 +435,7 @@ export class Player {
   private emit(patch: Partial<PlayerState> = {}): void {
     this.state = this.compute(patch);
     this.queueDirty = false;
+    this.preloadNext();
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = this.state.playing ? 'playing' : 'paused';
     for (const listener of this.listeners) listener();
     this.scheduleSave();
