@@ -329,7 +329,7 @@ html[data-text='xlarge'] .now-playing {
 }
 
 .segmented-kinds {
-  /* Musik, je Art von Aufnahmen ein Feld, Alle: Anzahl hängt von der Zuordnung ab */
+  /* Alle, Musik, je Art von Aufnahmen ein Feld: Anzahl hängt von der Zuordnung ab */
   grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   max-width: 640px;
   margin-bottom: 12px;
@@ -488,9 +488,53 @@ html[data-text='xlarge'] .now-playing {
   font-size: 14px;
 }
 
+.latest-resume {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.latest-resume .track-progress {
+  margin-top: 0;
+  max-width: 240px;
+}
+
 .latest-play {
   position: relative;
   flex-shrink: 0;
+}
+
+/* Pfeile an Reihen: nur am Rechner, auf dem Handy wischt man */
+.section-head > h2 {
+  margin-right: auto;
+}
+
+.shelf-arrows {
+  display: flex;
+  gap: 2px;
+  align-self: center;
+}
+
+.shelf-arrows .icon-button {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.shelf-row.has-more {
+  mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+}
+
+@media (max-width: 760px), (hover: none) {
+  .shelf-arrows {
+    display: none;
+  }
+
+  .shelf-row.has-more {
+    mask-image: none;
+  }
 }
 
 @media (max-width: 760px) {
@@ -850,6 +894,29 @@ button.more-link {
   background: transparent;
 }
 
+.select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-label {
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+/* Jahrzehnte als zweite, leisere Filterebene unter der Art */
+.filters .chip {
+  height: 30px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.filters .chip.is-on {
+  background: var(--accent);
+  box-shadow: none;
+}
+
 .select select {
   appearance: none;
   height: 36px;
@@ -905,6 +972,27 @@ button.more-link {
 }
 
 /* ---------- Albumkopf ---------- */
+
+.back-button {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .back-button {
+    position: sticky;
+    top: 12px;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin: -24px 0 -16px;
+    border-radius: 50%;
+    background: var(--elevated);
+    color: var(--text);
+    box-shadow: var(--shadow), 0 0 0 1px var(--line);
+  }
+}
 
 .hero {
   display: flex;
@@ -2526,6 +2614,51 @@ button.more-link {
 
   .artist-list {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Datum auf dem Handy: Liste mit kleinem Kalenderblatt statt großer Kacheln, doppelt so viele je Bildschirm */
+.card-extra {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .grid-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .grid-list .card + .card {
+    border-top: 1px solid var(--line);
+  }
+
+  .grid-list .card-link {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 14px;
+    align-items: center;
+    padding: 10px 0;
+  }
+
+  .grid-list .card-link .cover {
+    grid-row: 1 / span 2;
+    width: 56px;
+    margin: 0;
+    border-radius: 8px;
+  }
+
+  .grid-list .card-title {
+    align-self: end;
+    font-size: 16px;
+  }
+
+  .grid-list .card-sub {
+    align-self: start;
+  }
+
+  .grid-list .card-extra {
+    display: inline;
   }
 }
 

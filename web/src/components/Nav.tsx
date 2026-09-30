@@ -1,6 +1,7 @@
 import { categoryUrl } from '../api';
 import { useCategories } from '../hooks';
 import { hasRole, logout, ROLE_LABELS, useAuth } from '../auth';
+import { sectionPath } from '../router';
 import { Icon, type IconName } from './Icon';
 
 type NavItem = { href: string; label: string; icon: IconName; match: (path: string) => boolean };
@@ -8,6 +9,9 @@ type NavItem = { href: string; label: string; icon: IconName; match: (path: stri
 const start: NavItem = { href: '/', label: 'Start', icon: 'home', match: (p) => p === '/' };
 const search: NavItem = { href: '/suche', label: 'Suche', icon: 'search', match: (p) => p.startsWith('/suche') };
 const albums: NavItem = { href: '/alben', label: 'Alben', icon: 'albums', match: (p) => p.startsWith('/alben') || p.startsWith('/album/') };
+
+/** Menüpunkt aktiv? Album-Seiten zählen zu dem Bereich, aus dem man sie geöffnet hat (etwa Datum). */
+const active = (item: NavItem, path: string) => item.match(sectionPath(path));
 const dates: NavItem = { href: '/datum', label: 'Datum', icon: 'calendar', match: (p) => p.startsWith('/datum') };
 
 /** Seitenleiste am Rechner: Platz für alles */
@@ -45,7 +49,7 @@ export function Sidebar({ path }: { path: string }) {
       <ul>
         {items.map((item) => (
           <li key={item.href}>
-            <a href={item.href} class={item.match(path) ? 'is-active' : ''} aria-current={item.match(path) ? 'page' : undefined}>
+            <a href={item.href} class={active(item, path) ? 'is-active' : ''} aria-current={active(item, path) ? 'page' : undefined}>
               <Icon name={item.icon} size={22} />
               <span>{item.label}</span>
             </a>
@@ -53,7 +57,8 @@ export function Sidebar({ path }: { path: string }) {
         ))}
         {categories.map((category) => {
           const href = categoryUrl(category.slug);
-          const active = path === href || path.startsWith(`${href}/`);
+          const section = sectionPath(path);
+          const active = section === href || section.startsWith(`${href}/`);
           return (
             <li key={category.id}>
               <a href={href} class={active ? 'is-active' : ''} aria-current={active ? 'page' : undefined}>
@@ -100,8 +105,8 @@ export function TabBar({ path }: { path: string }) {
         <a
           key={item.href}
           href={item.href}
-          class={item.match(path) ? 'is-active' : ''}
-          aria-current={item.match(path) ? 'page' : undefined}
+          class={active(item, path) ? 'is-active' : ''}
+          aria-current={active(item, path) ? 'page' : undefined}
           onClick={(event) => {
             if (path === item.href) onActiveTab(event, item.href);
           }}

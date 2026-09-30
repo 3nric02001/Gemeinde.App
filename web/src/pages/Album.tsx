@@ -11,7 +11,7 @@ import { albumTitle, formatLongDate, formatDuration, plural, serviceEyebrow } fr
 import { useApi } from '../hooks';
 import { albumContext, player } from '../player';
 import { coverUrl, query, type Album as AlbumType, type Page } from '../api';
-import { ErrorNote, Loading } from './common';
+import { BackButton, ErrorNote, Loading } from './common';
 
 export function Album({ id }: { id: number }) {
   const { data: album, error } = useApi<AlbumDetail>(`/api/albums/${id}`);
@@ -36,6 +36,7 @@ export function Album({ id }: { id: number }) {
   );
   return (
     <div class="page">
+      <BackButton fallback={album.date ? '/datum' : '/alben'} />
       <header class="hero">
         <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-hero" eager />
         <div class="hero-text">

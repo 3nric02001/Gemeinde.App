@@ -6,7 +6,7 @@ import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
 import { TrackList } from '../components/TrackList';
-import { decadeLabel, formatDuration, formatLongDate, plural, withoutDate } from '../format';
+import { decadeLabel, formatDuration, formatLongDate, formatTime, plural, withoutDate } from '../format';
 import { useApi } from '../hooks';
 import { useMe } from '../me';
 import { Empty } from './common';
@@ -50,6 +50,10 @@ export function Home() {
   const service = latest.data?.items[0];
   // Nur Titel, die noch nicht fertig gehört sind (die Liste vom Server kann ein paar Sekunden alt sein)
   const resume = (personal.data?.resume ?? []).filter((track) => me.progress.has(track.id));
+  // Ist der aktuelle Gottesdienst angefangen, zeigt ihn die große Karte zum Weiterhören; darunter nicht noch einmal
+  const serviceResume = service ? resume.find((track) => track.albumId === service.id) : undefined;
+  const otherResume = resume.filter((track) => track !== serviceResume);
+  const recentAlbums = (personal.data?.recent ?? []).filter((album) => album.id !== service?.id);
 
   return (
     <div class="page">
@@ -57,18 +61,18 @@ export function Home() {
 
       <InstallHint />
 
-      {service && <LatestService album={service} />}
+      {service && <LatestService album={service} resume={serviceResume} />}
 
-      {resume.length > 0 && (
+      {otherResume.length > 0 && (
         <section class="shelf">
           <div class="section-head">
             <h2>Weiterhören</h2>
           </div>
-          <TrackList tracks={resume} />
+          <TrackList tracks={otherResume} />
         </section>
       )}
 
-      <Shelf title="Zuletzt gehört" albums={personal.data?.recent ?? []} />
+      <Shelf title="Zuletzt gehört" albums={recentAlbums} />
 
       {/* Je Art aus dem Regelwerk eine Reihe (Gottesdienste, Bibelstunden …), ohne die große Karte oben */}
       {(facets.data?.recordings ?? []).map((kind, index) => (
@@ -108,7 +112,7 @@ export function Home() {
 }
 
 /** Große Karte ganz oben: der neueste Gottesdienst zum direkten Abspielen */
-function LatestService({ album }: { album: DatedAlbum }) {
+function LatestService({ album, resume }: { album: DatedAlbum; resume?: Track & { position: number } }) {
   const occasion = withoutDate(album.title) || (album.recording && album.recording !== 'Gottesdienst' ? album.recording : '');
   return (
     <section class="latest">
@@ -126,15 +130,23 @@ function LatestService({ album }: { album: DatedAlbum }) {
           <span class="latest-sub">
             {[occasion ? formatLongDate(album.date) : undefined, album.passage].filter(Boolean).join(' · ')}
           </span>
+          {resume && resume.duration ? (
+            <span class="latest-resume">
+              <span class="track-progress" aria-hidden="true">
+                <i style={{ width: `${Math.min(100, (resume.position / resume.duration) * 100)}%` }} />
+              </span>
+              {resume.title} · noch {formatTime(resume.duration - resume.position)}
+            </span>
+          ) : null}
         </span>
       </a>
       <button
         type="button"
         class="button-primary latest-play"
-        onClick={() => void playAlbum(album.id)}
-        aria-label={`${occasion || formatLongDate(album.date)} abspielen`}
+        onClick={() => void playAlbum(album.id, resume ? { trackId: resume.id } : {})}
+        aria-label={`${occasion || formatLongDate(album.date)} ${resume ? 'weiterhören' : 'abspielen'}`}
       >
-        <Icon name="play" size={20} /> Abspielen
+        <Icon name="play" size={20} /> {resume ? 'Weiterhören' : 'Abspielen'}
       </button>
     </section>
   );
