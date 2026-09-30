@@ -3,7 +3,7 @@ import type { InjectOptions } from 'fastify';
 import { requiredRole } from '../src/api/auth.js';
 import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
-import { compilePattern, DEFAULT_STRUCTURE, fillTemplate, matchPattern } from '../src/library/structure.js';
+import { compilePattern, compileStructure, DEFAULT_STRUCTURE, fillTemplate, matchPattern, readFileName } from '../src/library/structure.js';
 import { mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
 import { sessionCookie } from './helpers/session.js';
@@ -30,6 +30,18 @@ describe('Muster', () => {
     const withSpeaker = compilePattern('{inhalt} - {sprecher} - {titel}', contents, { leadingNumber: true });
     expect(matchPattern(withSpeaker, 'Predigt - Meier - Der gute Hirte')).toEqual({ inhalt: 'Predigt', sprecher: 'Meier', titel: 'Der gute Hirte' });
     expect(matchPattern(withSpeaker, 'Predigt_Anna Schulz_Psalm 23')).toEqual({ inhalt: 'Predigt', sprecher: 'Anna Schulz', titel: 'Psalm 23' });
+  });
+
+  it('nimmt bei mehr Teilen als Platzhaltern den letzten als Namen, den Rest als Titel', () => {
+    const service = compileStructure(DEFAULT_STRUCTURE).kinds.find((k) => k.kind.name === 'Gottesdienst')!;
+    expect(readFileName(service, '1. Predigt - Kollosser 1 - Apg. 3,7 - Niko Krahn')).toEqual({
+      lead: '1',
+      inhalt: 'Predigt',
+      titel: 'Kollosser 1 - Apg. 3,7',
+      sprecher: 'Niko Krahn',
+    });
+    expect(readFileName(service, 'Predigt - Kolosser 1 - Niko Krahn')).toEqual({ inhalt: 'Predigt', titel: 'Kolosser 1', sprecher: 'Niko Krahn' });
+    expect(readFileName(service, 'Lied - Großer Gott')).toEqual({ inhalt: 'Lied', titel: 'Großer Gott' });
   });
 
   it('kennt Inhalte aus mehreren Wörtern, wenn sie in der Liste stehen', () => {
@@ -238,6 +250,15 @@ describe('Uneinheitliche Dateinamen', () => {
       ['Predigt: Bergpredigt (Matthäus 7,7-14)', 'Jakob Rauschenberger', 'Predigt'],
       ['Schlusslied: Chor', null, 'Schlusslied'],
     ]);
+  });
+
+  it('liest zwei Teile zwischen Inhalt und Name als Titel, mit beiden Bibelstellen', async () => {
+    const other = 'Audio Aufnahmen/2026/2026_09_27';
+    cloud.put(`${other}/1. Predigt - Kollosser 1 - Apg. 3,7 - Niko Krahn.mp3`, mp3({}, 90));
+    await ctx.scanner.scan();
+    const album = (await dated()).find((a) => a.date === '2026-09-27');
+    expect(album).toMatchObject({ speaker: 'Niko Krahn', passage: 'Kollosser 1; Apg 3,7' });
+    expect((await albumTracks(album.id)).map((t) => [t.title, t.speaker])).toEqual([['Predigt: Kollosser 1 - Apg. 3,7', 'Niko Krahn']]);
   });
 
   it('behält eine Korrektur aus der Verwaltung, wenn die Datei umbenannt wird', async () => {
