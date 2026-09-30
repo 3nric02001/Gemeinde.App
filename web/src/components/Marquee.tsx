@@ -50,6 +50,8 @@ export function Marquee({ text }: { text: string }) {
       ],
       { duration: total, iterations: Infinity },
     );
+    // Abbrechen beim Titelwechsel lässt "finished" scheitern; das ist gewollt.
+    animation.finished.catch(() => {});
     return () => animation.cancel();
   }, [shift]);
 
