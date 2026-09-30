@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { clearCache, getJson, type Album, type Track } from './api';
 import { sessionExpired } from './auth';
+import { sermonMinSeconds } from './playerSettings';
 
 /**
  * Das Persönliche des angemeldeten Hörers: Favoriten und die Stelle zum Weiterhören.
@@ -110,12 +111,11 @@ export async function toggleFavorite(kind: 'track' | 'album', item: Track | Albu
   }
 }
 
-/** Ab dieser Länge (Sekunden) merkt sich die App die Stelle, wie der Server, wenn keine Policy den Player festlegt. */
-export const RESUME_MIN_DURATION = 10 * 60;
 /** So nah am Ende gilt ein Titel als fertig gehört. */
 const FINISHED_MARGIN = 30;
 
-export const isLong = (duration: number | null | undefined) => (duration ?? 0) >= RESUME_MIN_DURATION;
+/** Ab dieser Länge merkt sich die App die Stelle, wie der Server, wenn keine Policy den Player festlegt. */
+export const isLong = (duration: number | null | undefined) => (duration ?? 0) >= sermonMinSeconds();
 
 type PlayerTrack = Pick<Track, 'id' | 'duration' | 'player'>;
 

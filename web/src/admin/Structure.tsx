@@ -48,7 +48,29 @@ export interface Structure {
   /** Inhalte ohne Titel: ein einzelner Teil danach ist der Name ("Begrüßung - Jakob Rauschenberger") */
   untitled: string[];
   policies: Policy[];
+  /** Albumbildung, Namen für Musik und Sonstiges, Predigt-Player nach Länge, Bibelstellen */
+  library: Library;
 }
+
+export interface Library {
+  discFolders: string[];
+  mergeDatedSubfolders: boolean;
+  splitByFileDate: boolean;
+  albumTitle: string;
+  trackTitle: string;
+  looseTitle: string;
+  sermonMinutes: number;
+  passagePrefixes: string[];
+  bookSpellings: string[];
+}
+
+const LIBRARY_PLACEHOLDER_HELP: Array<[string, string]> = [
+  ['{ordner}', 'Name des Albumordners ohne Jahr, z. B. Chorlieder'],
+  ['{jahr}', 'Jahr aus dem Ordnernamen, z. B. 2021 aus „Chorlieder (2021)“'],
+  ['{titel}', 'Dateiname ohne Nummer und Endung'],
+  ['{datei}', 'ganzer Dateiname ohne Endung'],
+  ['{nr}', 'Nummer am Anfang des Dateinamens'],
+];
 
 /** Felder für „Art bestimmen“: Ordner, Pfad und Dateiname; Inhalt und Titel nach dem Muster hängen erst von der Art ab */
 const KIND_FIELDS: Record<string, string> = {
@@ -94,6 +116,8 @@ interface Preview {
       tracks: Array<{ file: string; title: string; content: string | null; matched: boolean; sermon: boolean; player: Player }>;
     }>;
   }>;
+  /** Beispiele für Musik und Sonstiges nach den Vorlagen */
+  others?: Array<{ folder: string; section: 'music' | 'other'; title: string; tracks: Array<{ file: string; title: string }> }>;
 }
 
 const PLACEHOLDER_HELP: Array<[string, string]> = [
@@ -607,6 +631,8 @@ export function StructurePanel() {
         </label>
       </section>
 
+      <LibrarySection library={draft.library} onChange={(library) => change({ ...draft, library })} />
+
       {/* Immer sichtbar am unteren Rand, damit Änderungen oben auf der Seite nicht verloren gehen */}
       <div class={`structure-bar${dirty ? ' is-dirty' : ''}`}>
         <p class="structure-bar-state">
@@ -639,6 +665,99 @@ export function StructurePanel() {
 
       {preview && <PreviewList preview={preview} />}
     </form>
+  );
+}
+
+/** Eine Zeile je Eintrag; leere Zeilen verwirft der Server */
+const lines = (value: string) => value.split('\n').map((line) => line.trimStart());
+
+/**
+ * Albumbildung und Namen: welche Unterordner zum Album gehören, wie Musik und Sonstiges heißen, ab wann der
+ * Predigt-Player läuft und woran Bibelstellen erkannt werden.
+ */
+function LibrarySection({ library, onChange }: { library: Library; onChange: (library: Library) => void }) {
+  const set = (patch: Partial<Library>) => onChange({ ...library, ...patch });
+  const list = (key: 'discFolders' | 'passagePrefixes' | 'bookSpellings', label: string, hint: string, rows = 4) => (
+    <label class="field">
+      <span>{label}</span>
+      <textarea id={`library-${key}`} rows={rows} value={library[key].join('\n')} onInput={(e) => set({ [key]: lines((e.target as HTMLTextAreaElement).value) })} />
+      <small class="field-hint">{hint}</small>
+    </label>
+  );
+  const text = (key: 'albumTitle' | 'trackTitle' | 'looseTitle', label: string, hint: string) => (
+    <label class="field">
+      <span>{label}</span>
+      <input id={`library-${key}`} value={library[key]} maxLength={200} onInput={(e) => set({ [key]: (e.target as HTMLInputElement).value })} />
+      <small class="field-hint">{hint}</small>
+    </label>
+  );
+  return (
+    <section class="shelf admin-panel structure-library">
+      <h2>Albumbildung und Namen</h2>
+      <p class="admin-hint">
+        Gilt für alle Ordner, auch für Musik und Sonstiges. Änderungen wirken nach „Speichern und anwenden“ sofort, ohne neuen
+        Scan.
+      </p>
+
+      <h3>Alben aus Ordnern</h3>
+      {list('discFolders', 'Unterordner, die zum Album darüber gehören', 'Mit Nummer dahinter, z. B. „CD 2“ oder „Teil 1“; eine Zeile je Wort.', 6)}
+      <label class="admin-check">
+        <input
+          type="checkbox"
+          checked={library.mergeDatedSubfolders}
+          onChange={(e) => set({ mergeDatedSubfolders: (e.target as HTMLInputElement).checked })}
+        />
+        Unterordner eines Ordners mit Datum gehören zu dessen Album („2026-09-27/Predigt“ und „2026-09-27/Lobpreis“ sind ein
+        Gottesdienst)
+      </label>
+      <label class="admin-check">
+        <input type="checkbox" checked={library.splitByFileDate} onChange={(e) => set({ splitByFileDate: (e.target as HTMLInputElement).checked })} />
+        Ordner ohne Datum, in denen die meisten Dateien ein Datum im Namen tragen, je Datum in eigene Alben teilen
+        („Predigten/2026-08-02 Meier - Psalm 23.mp3“)
+      </label>
+
+      <h3>Namen für Musik und Sonstiges</h3>
+      <div class="admin-fields admin-fields-2">
+        {text('albumTitle', 'Name des Albums', 'Vorgabe {ordner}; z. B. „{ordner} ({jahr})“')}
+        {text('trackTitle', 'Titel', 'Vorgabe {titel}; z. B. „{nr}. {titel}“')}
+      </div>
+      <dl class="structure-placeholders">
+        {LIBRARY_PLACEHOLDER_HELP.map(([name, help]) => (
+          <div key={name}>
+            <dt>
+              <code>{name}</code>
+            </dt>
+            <dd>{help}</dd>
+          </div>
+        ))}
+      </dl>
+      {text('looseTitle', 'Name für Dateien direkt im Musikordner', 'Vorgabe „Einzeltitel“')}
+
+      <h3>Predigt-Player</h3>
+      <label class="field structure-minutes">
+        <span>Ohne passende Policy ab so vielen Minuten</span>
+        <input
+          id="library-sermonMinutes"
+          type="number"
+          min={0}
+          max={600}
+          step={1}
+          value={library.sermonMinutes}
+          onInput={(e) => set({ sermonMinutes: Number((e.target as HTMLInputElement).value) })}
+        />
+        <small class="field-hint">Solche Titel bekommen Sprünge, Tempo und Weiterhören. Policies gehen vor.</small>
+      </label>
+
+      <h3>Bibelstellen</h3>
+      <div class="admin-fields admin-fields-2">
+        {list(
+          'passagePrefixes',
+          'Wörter vor einer Bibelstelle im Dateinamen',
+          '„Text_Richter 7,1-4“ wird „Richter 7,1-4“, „Bergpredigt Text_Matthäus 7“ wird „Bergpredigt (Matthäus 7)“.',
+        )}
+        {list('bookSpellings', 'Weitere Schreibweisen von Bibelbüchern', 'Zusätzlich zu den üblichen Namen und Abkürzungen, z. B. „Kollosser“.')}
+      </div>
+    </section>
   );
 }
 
@@ -684,6 +803,28 @@ function PreviewList({ preview }: { preview: Preview }) {
           ))}
         </div>
       ))}
+      {preview.others && preview.others.length > 0 && (
+        <div class="admin-panel">
+          <h3>Musik und Sonstiges</h3>
+          {preview.others.map((example) => (
+            <div key={example.folder} class="structure-example">
+              <p class="track-title">
+                {example.title} <span class="badge badge-muted">{example.section === 'music' ? 'Musik' : 'Sonstiges'}</span>
+              </p>
+              <p class="track-sub">{example.folder}</p>
+              <ul class="structure-files">
+                {example.tracks.map((track) => (
+                  <li key={track.file}>
+                    <span class="structure-file">{track.file}</span>
+                    <span aria-hidden="true">→</span>
+                    <span>{track.title}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

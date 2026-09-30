@@ -1,7 +1,7 @@
 import { getMeta, setMeta, type DB } from '../db.js';
 import { findPassage } from './bible.js';
 import { findDate } from './dateText.js';
-import { albumFolderOf, basename, dirname, fileStem, folderDate, folderYear } from './pathMeta.js';
+import { albumFolderOf, basename, dirname, fileStem, folderDate, folderYear, parsePath } from './pathMeta.js';
 import {
   compilePolicies,
   KIND_FIELDS,
@@ -20,6 +20,15 @@ import {
   type PolicySubject,
 } from './policies.js';
 import { foldValue } from './text.js';
+import {
+  compiledLibrary,
+  DEFAULT_LIBRARY,
+  librarySettings,
+  LIBRARY_PLACEHOLDERS,
+  sermonSeconds,
+  useLibrarySettings,
+  type LibrarySettings,
+} from './settings.js';
 
 /**
  * Regelwerk für Aufnahmen (Gottesdienste, Bibelstunden …), in der Verwaltung einstellbar:
@@ -95,10 +104,9 @@ export interface Structure {
   untitled: string[];
   /** Was als Predigt gilt und welcher Player läuft, von oben nach unten */
   policies: Policy[];
+  /** Albumbildung, Namen für Musik und Sonstiges, Predigt-Player nach Länge, Bibelstellen (settings.ts) */
+  library: LibrarySettings;
 }
-
-/** Ohne passende Policy bekommen Titel ab dieser Länge den Predigt-Player (wie web/src/me.ts) */
-export const LONG_TRACK_SECONDS = 10 * 60;
 
 export const DEFAULT_STRUCTURE: Structure = {
   kinds: [
@@ -146,6 +154,7 @@ export const DEFAULT_STRUCTURE: Structure = {
     },
     { name: 'Bibelstunden', enabled: true, when: { field: 'kind', op: 'equals', value: 'Bibelstunde' }, sermon: true, player: 'sermon' },
   ],
+  library: DEFAULT_LIBRARY,
 };
 
 const META_KEY = 'structure';
@@ -184,12 +193,12 @@ const text = (value: unknown, field: string, max = MAX_TEXT): string => {
   return trimmed;
 };
 
-function checkPattern(pattern: string, field: string): void {
+function checkPattern(pattern: string, field: string, allowed: readonly string[] = PLACEHOLDERS): void {
   const seen = new Set<string>();
   for (const match of pattern.matchAll(/\{([^}]*)\}/g)) {
     const name = match[1]!.trim().toLowerCase();
-    if (!PLACEHOLDERS.includes(name as Placeholder)) {
-      throw new StructureError(`${field}: Unbekannter Platzhalter {${match[1]}}. Möglich: ${PLACEHOLDERS.map((p) => `{${p}}`).join(', ')}`);
+    if (!allowed.includes(name)) {
+      throw new StructureError(`${field}: Unbekannter Platzhalter {${match[1]}}. Möglich: ${allowed.map((p) => `{${p}}`).join(', ')}`);
     }
     if (seen.has(name)) throw new StructureError(`${field}: {${name}} kommt doppelt vor`);
     seen.add(name);
@@ -281,7 +290,43 @@ export function parseStructure(input: unknown): Structure {
     });
     defaultKind = kindName(body.defaultKind, 'Übrige Ordner mit Datum');
   }
-  return { kinds, kindRules, defaultKind, contents, untitled, policies };
+  return { kinds, kindRules, defaultKind, contents, untitled, policies, library: parseLibrary((body as { library?: unknown }).library) };
+}
+
+/** Albumbildung und Namen; fehlende Werte (ältere Regelwerke) aus den Vorgaben */
+function parseLibrary(input: unknown): LibrarySettings {
+  if (input === undefined || input === null) return DEFAULT_LIBRARY;
+  if (typeof input !== 'object') throw new StructureError('Albumbildung und Namen: ungültig');
+  const raw = input as Record<string, unknown>;
+  const words = (key: keyof LibrarySettings, label: string): string[] => {
+    const value = raw[key];
+    if (value === undefined) return DEFAULT_LIBRARY[key] as string[];
+    if (!Array.isArray(value)) throw new StructureError(`${label}: Liste erwartet`);
+    const items = value.map((v) => text(v, label, 40)).filter(Boolean);
+    if (items.length > MAX_CONTENTS) throw new StructureError(`Höchstens ${MAX_CONTENTS} Einträge in „${label}“`);
+    if (items.some((item) => !/^[\p{L}\p{N} .'-]+$/u.test(item))) throw new StructureError(`${label}: nur Buchstaben, Ziffern und Leerzeichen`);
+    return [...new Map(items.map((v) => [foldValue(v), v])).values()];
+  };
+  const flag = (key: 'mergeDatedSubfolders' | 'splitByFileDate') =>
+    raw[key] === undefined ? DEFAULT_LIBRARY[key] : raw[key] === true;
+  const template = (key: 'albumTitle' | 'trackTitle', label: string) => {
+    const value = raw[key] === undefined ? DEFAULT_LIBRARY[key] : text(raw[key], label);
+    checkPattern(value, label, LIBRARY_PLACEHOLDERS);
+    return value || DEFAULT_LIBRARY[key];
+  };
+  const minutes = raw.sermonMinutes === undefined ? DEFAULT_LIBRARY.sermonMinutes : Number(raw.sermonMinutes);
+  if (!Number.isFinite(minutes) || minutes < 0 || minutes > 600) throw new StructureError('Predigt-Player ab: Minuten zwischen 0 und 600');
+  return {
+    discFolders: words('discFolders', 'Disc-Unterordner'),
+    mergeDatedSubfolders: flag('mergeDatedSubfolders'),
+    splitByFileDate: flag('splitByFileDate'),
+    albumTitle: template('albumTitle', 'Name des Albums (Musik und Sonstiges)'),
+    trackTitle: template('trackTitle', 'Titel (Musik und Sonstiges)'),
+    looseTitle: (raw.looseTitle === undefined ? DEFAULT_LIBRARY.looseTitle : text(raw.looseTitle, 'Name für lose Dateien', 60)) || DEFAULT_LIBRARY.looseTitle,
+    sermonMinutes: Math.round(minutes * 10) / 10,
+    passagePrefixes: words('passagePrefixes', 'Wörter vor Bibelstellen'),
+    bookSpellings: words('bookSpellings', 'Weitere Schreibweisen von Bibelbüchern'),
+  };
 }
 
 export function getStructure(db: DB): Structure {
@@ -319,6 +364,14 @@ export function getStructure(db: DB): Structure {
 
 export function saveStructure(db: DB, structure: Structure): void {
   setMeta(db, META_KEY, JSON.stringify(structure));
+  useLibrarySettings(structure.library);
+}
+
+/** Einstellungen des gespeicherten Regelwerks gelten machen (beim Öffnen der Datenbank und vor jedem Neuaufbau) */
+export function applyLibrarySettings(db: DB): Structure {
+  const structure = getStructure(db);
+  useLibrarySettings(structure.library);
+  return structure;
 }
 
 // ---------- Muster ----------
@@ -678,9 +731,11 @@ export function withManual(
  * "Bergpredigt Text_Matthäus 7,7-14" -> "Bergpredigt (Matthäus 7,7-14)"; übrige Unterstriche werden Leerzeichen.
  */
 export function tidy(value: string): string {
-  return value
-    .replace(/^\s*(?:Text|Predigttext|Bibeltext)_\s*/i, '')
-    .replace(/^(.+?)\s+(?:Text|Predigttext|Bibeltext)_\s*(.+)$/i, '$1 ($2)')
+  const { leadingPrefix, innerPrefix } = compiledLibrary();
+  let result = value;
+  if (leadingPrefix) result = result.replace(leadingPrefix, '');
+  if (innerPrefix) result = result.replace(innerPrefix, '$1 ($2)');
+  return result
     .replace(/_+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -719,12 +774,32 @@ export interface PreviewAlbum {
   tracks: Array<{ file: string; title: string; content: string | null; matched: boolean; sermon: boolean; player: Player }>;
 }
 
+/** Beispiel für Musik oder Sonstiges: Name des Albums und der Titel nach den Vorlagen */
+export interface PreviewOther {
+  folder: string;
+  section: 'music' | 'other';
+  title: string;
+  tracks: Array<{ file: string; title: string }>;
+}
+
 export interface Preview {
   kinds: Array<{ name: string; albums: number; unmatchedFiles: number; examples: PreviewAlbum[] }>;
+  others: PreviewOther[];
 }
 
 /** Was das Regelwerk aus der aktuellen Bibliothek machen würde: je Art Anzahl und die neuesten Beispiele. */
 export function previewStructure(db: DB, structure: Structure, examples = 4): Preview {
+  // Albumbildung und Namen der Vorschau gelten nur für die Vorschau
+  const previous = librarySettings();
+  useLibrarySettings(structure.library);
+  try {
+    return preview(db, structure, examples);
+  } finally {
+    useLibrarySettings(previous);
+  }
+}
+
+function preview(db: DB, structure: Structure, examples: number): Preview {
   const compiled = compileStructure(structure);
   const rows = db.prepare('SELECT path, title, duration FROM tracks').all() as Array<{
     path: string;
@@ -737,10 +812,22 @@ export function previewStructure(db: DB, structure: Structure, examples = 4): Pr
     byFolder.set(folder, [...(byFolder.get(folder) ?? []), row]);
   }
   const result = compiled.kinds.map((k) => ({ name: k.kind.name, albums: 0, unmatchedFiles: 0, examples: [] as PreviewAlbum[] }));
+  const others: PreviewOther[] = [];
   const folders = [...byFolder].sort((a, b) => (folderDate(b[0]) ?? '').localeCompare(folderDate(a[0]) ?? ''));
   for (const [folder, files] of folders) {
-    const { kind } = kindOfFolder(compiled, folder, files);
-    if (!kind) continue;
+    const { kind, section } = kindOfFolder(compiled, folder, files);
+    if (!kind) {
+      if (others.length < examples && folder) {
+        const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path, 'de', { numeric: true }));
+        others.push({
+          folder,
+          section: section === 'music' ? 'music' : 'other',
+          title: libraryAlbumTitle(folder),
+          tracks: sorted.slice(0, 5).map((f) => ({ file: basename(f.path), title: libraryTrackTitle(f.path) })),
+        });
+      }
+      continue;
+    }
     const entry = result[compiled.kinds.indexOf(kind)]!;
     const applied = applyToFolder(kind, folder, files);
     entry.albums++;
@@ -769,9 +856,37 @@ export function previewStructure(db: DB, structure: Structure, examples = 4): Pr
       });
     }
   }
-  return { kinds: result };
+  return { kinds: result, others };
 }
+
+// ---------- Musik und Sonstiges ----------
+
+/** Werte für die Vorlagen von Musik und Sonstigem aus Ordner und Dateiname */
+function libraryValues(path: string): Record<(typeof LIBRARY_PLACEHOLDERS)[number], string | undefined> {
+  const parsed = parsePath(path);
+  return {
+    ordner: parsed.album ?? basename(parsed.albumFolder),
+    jahr: parsed.year ? String(parsed.year) : undefined,
+    titel: parsed.title,
+    datei: fileStem(path),
+    nr: parsed.trackNo !== undefined ? String(parsed.trackNo) : undefined,
+  };
+}
+
+/** Name eines Albums, das Musik oder Sonstiges ist, nach der Vorlage (Vorgabe: der Ordnername ohne Jahr) */
+export function libraryAlbumTitle(folder: string): string {
+  if (!folder) return librarySettings().looseTitle;
+  const values = libraryValues(`${folder}/x`);
+  return fillAny(librarySettings().albumTitle, { ...values, titel: undefined, datei: undefined, nr: undefined }) || basename(folder);
+}
+
+/** Titel einer Datei in Musik oder Sonstigem nach der Vorlage (Vorgabe: der Dateiname ohne Nummer) */
+export function libraryTrackTitle(path: string): string {
+  return fillAny(librarySettings().trackTitle, libraryValues(path)) || fileStem(path);
+}
+
+const fillAny = (template: string, values: Record<string, string | undefined>) => fillTemplate(template, values as Values);
 
 /** Player eines Titels: laut Policy, sonst nach Länge */
 export const playerOf = (player: Player | undefined | null, duration: number | null | undefined): Player =>
-  player ?? ((duration ?? 0) >= LONG_TRACK_SECONDS ? 'sermon' : 'music');
+  player ?? ((duration ?? 0) >= sermonSeconds() ? 'sermon' : 'music');

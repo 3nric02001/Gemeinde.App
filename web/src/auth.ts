@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { connectOffline, offlineProfile, wipeOffline } from './offline';
+import { setSermonMinutes } from './playerSettings';
 import { clearSearches } from './searchHistory';
 
 export type Role = 'listener' | 'manager' | 'admin';
@@ -48,7 +49,7 @@ export function getAuth(): AuthState {
 }
 
 export async function loadAuth(): Promise<void> {
-  let data: { user: CurrentUser | null; oidc: { label: string } | null; branding?: Branding };
+  let data: { user: CurrentUser | null; oidc: { label: string } | null; branding?: Branding; sermonMinutes?: number };
   try {
     const res = await fetch('/api/auth/status', { headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`Fehler ${res.status}`);
@@ -61,6 +62,7 @@ export async function loadAuth(): Promise<void> {
     document.title = state.branding.name;
     return;
   }
+  setSermonMinutes(data.sermonMinutes);
   set({ user: data.user, oidc: data.oidc, offline: false, ...(data.branding ? { branding: data.branding } : {}) });
   document.title = state.branding.name;
   // Der Server kennt die Sitzung nicht (mehr): Offline-Kopien gehören niemandem mehr.

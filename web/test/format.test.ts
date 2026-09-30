@@ -50,7 +50,9 @@ describe('Formatierung', () => {
     expect(withoutDate('13.09.2026 Taufgottesdienst')).toBe('Taufgottesdienst');
     expect(withoutDate('Feiert Jesus! 20')).toBe('Feiert Jesus! 20');
     expect(albumTitle('2026-09-27 Erntedank', '2026-09-27')).toBe('Erntedank');
-    expect(albumTitle('2026-09-20', '2026-09-20')).toBe('Gottesdienst');
+    // Ohne Anlass heißt die Aufnahme wie ihre Art aus der Zuordnung
+    expect(albumTitle('2026-09-20', '2026-09-20', 'Gottesdienst')).toBe('Gottesdienst');
+    expect(albumTitle('2026-09-20', '2026-09-20')).toBe('Aufnahme');
     expect(albumTitle('Adventskonzert', null)).toBe('Adventskonzert');
     expect(albumLabel('2026-09-27 Erntedank', '2026-09-27')).toBe('Erntedank, So., 27.09.2026');
     expect(albumLabel('2026-09-20', '2026-09-20')).toBe('So., 20.09.2026');

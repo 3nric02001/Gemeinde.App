@@ -1,4 +1,5 @@
 import { findDate, yearIn } from './dateText.js';
+import { compiledLibrary, librarySettings } from './settings.js';
 
 /**
  * Leitet Titel, Album, Nummer und Jahr aus Ordner und Dateiname ab (Tags in den Dateien zählen nicht):
@@ -24,7 +25,6 @@ export const AUDIO_EXTENSIONS = new Set(['mp3', 'flac', 'm4a', 'aac', 'ogg', 'og
 export const COVER_NAMES = ['cover', 'folder', 'front', 'album', 'albumart'];
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 
-const DISC_FOLDER = /^(?:cd|disc|disk|dvd|seite|side)[\s._-]*(\d{1,2})$/i;
 const YEAR_SUFFIX = /^(.*?)[\s._-]*[([]((?:19|20)\d{2})[)\]]$/;
 // Nicht bei einem Datum wie "2026-09-27 Erntedank": das bleibt als Ganzes der Albumname.
 const YEAR_PREFIX = /^((?:19|20)\d{2})[\s._-]+(?!\d)(.+)$/;
@@ -81,16 +81,30 @@ export function dateOfPath(path: string): string | undefined {
   return folderDate(albumFolderOf(path)) ?? findDate(fileStem(path), folderYear(dirname(path)))?.date;
 }
 
+/** Nummer eines Disc-Unterordners ("CD 2" -> 2); welche Namen zählen, steht in der Verwaltung (settings.ts) */
+function discNumber(folder: string): number | undefined {
+  const match = compiledLibrary().discFolder?.exec(folder);
+  return match ? Number(match[1]) : undefined;
+}
+
 /**
- * Ordner, dessen Inhalt als ein Album gilt: Disc-Unterordner zählen zum Elternordner, ebenso
+ * Ordner, dessen Inhalt als ein Album gilt: Disc-Unterordner zählen zum Elternordner, ebenso (einstellbar)
  * Unterordner eines Gottesdienstes ("2026-09-27/Predigt", "2026-09-27/Lobpreis"), solange sie
  * selbst kein Datum und kein Jahr im Namen tragen.
  */
 export function albumFolderOf(path: string): string {
   let dir = dirname(path);
-  if (DISC_FOLDER.test(basename(dir))) dir = dirname(dir);
+  if (discNumber(basename(dir)) !== undefined) dir = dirname(dir);
   const parent = dirname(dir);
-  if (parent && !findDate(basename(dir)) && !yearIn(basename(dir)) && folderDate(parent)) return parent;
+  if (
+    librarySettings().mergeDatedSubfolders &&
+    parent &&
+    !findDate(basename(dir)) &&
+    !yearIn(basename(dir)) &&
+    folderDate(parent)
+  ) {
+    return parent;
+  }
   return dir;
 }
 
@@ -111,8 +125,8 @@ export function parsePath(path: string): PathMeta {
   const albumFolder = albumFolderOf(path);
   const result: PathMeta = { title: '', albumFolder };
 
-  const discMatch = DISC_FOLDER.exec(basename(dir));
-  if (discMatch) result.discNo = Number(discMatch[1]);
+  const disc = discNumber(basename(dir));
+  if (disc !== undefined) result.discNo = disc;
 
   // Dateiname: [Datum] [Disc-]Track, Titel
   let stem = clean(basename(path).replace(/\.[^.]+$/, ''));

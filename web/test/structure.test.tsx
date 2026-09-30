@@ -27,7 +27,10 @@ const structure: Structure = {
       name: 'Predigt im Gottesdienst', enabled: true, sermon: true, player: 'sermon',
       when: { match: 'all', conditions: [{ field: 'kind', op: 'equals', value: 'Gottesdienst' }, { field: 'content', op: 'equals', value: 'Predigt' }] },
     },
-  ],
+  ],  library: {
+    discFolders: ['CD', 'Disc'], mergeDatedSubfolders: true, splitByFileDate: true, albumTitle: '{ordner}', trackTitle: '{titel}',
+    looseTitle: 'Einzeltitel', sermonMinutes: 10, passagePrefixes: ['Text'], bookSpellings: [],
+  },
 };
 
 const preview = {
@@ -164,5 +167,33 @@ describe('Zuordnung in der Verwaltung', () => {
     render(<StructurePanel />);
     fireEvent.click(await screen.findByRole('button', { name: 'Speichern und anwenden' }));
     expect((await screen.findByRole('alert')).textContent).toContain('Unbekannter Platzhalter {teil}');
+  });
+
+  it('stellt Albumbildung und Namen ein und zeigt Musik in der Vorschau', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (init?.method === 'PUT') return json({ structure: JSON.parse(String(init.body)) });
+      if (String(input).endsWith('/preview')) {
+        return json({
+          kinds: [],
+          others: [{ folder: 'Musik/Chorlieder (2021)', section: 'music', title: 'Chorlieder (2021)', tracks: [{ file: '01 - Stille Nacht.mp3', title: '1. Stille Nacht' }] }],
+        });
+      }
+      return json({ structure, defaults: structure });
+    });
+    render(<StructurePanel />);
+    await screen.findByText('Albumbildung und Namen');
+    const byId = (id: string) => document.getElementById(id) as HTMLInputElement;
+    const discs = byId('library-discFolders');
+    expect(discs.value).toBe('CD\nDisc');
+    fireEvent.input(discs, { target: { value: 'CD\nTeil' } });
+    fireEvent.input(byId('library-albumTitle'), { target: { value: '{ordner} ({jahr})' } });
+    fireEvent.input(byId('library-sermonMinutes'), { target: { value: '15' } });
+    fireEvent.click(screen.getByLabelText(/je Datum in eigene Alben teilen/));
+    fireEvent.click(screen.getByRole('button', { name: 'Vorschau' }));
+    expect(await screen.findByText('1. Stille Nacht')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern und anwenden' }));
+    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true));
+    const body = JSON.parse(String(fetch.mock.calls.find(([, init]) => init?.method === 'PUT')![1]!.body));
+    expect(body.library).toMatchObject({ discFolders: ['CD', 'Teil'], albumTitle: '{ordner} ({jahr})', sermonMinutes: 15, splitByFileDate: false });
   });
 });

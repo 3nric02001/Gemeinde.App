@@ -63,7 +63,7 @@ mbg-bielefeld-brake.de (mit Dunkelmodus, der der Systemeinstellung folgt).
   mit „Als Nächstes spielen“ und „Zur Warteschlange hinzufügen“. Auf dem Handy Mini-Player über der
   Tab-Leiste, der sich zu „Jetzt läuft“ aufklappt (nach unten wischen schließt, Link zum Album;
   auf iPhone/iPad ohne Lautstärkeregler, dafür gibt es die Tasten).
-- **Predigt-Player**: Titel ab 10 Minuten bekommen 15 s zurück / 30 s vor statt Zufall und
+- **Predigt-Player**: Titel ab 10 Minuten (einstellbar unter Verwaltung → Zuordnung) bekommen 15 s zurück / 30 s vor statt Zufall und
   Wiederholen, ein Tempo von 1× bis 2× und merken sich je Hörer die Stelle zum Weiterhören
   (auch geräteübergreifend, auf dem Server gespeichert).
 - **Mehr** (Handy-Tab bzw. Name unten in der Seitenleiste): Profil, Favoriten, Kategorien,
@@ -197,7 +197,8 @@ Fehlt der Name am Ende, bleibt es beim Titel.
   und Weiterhören oder Musik-Player) sowie **Inhalt setzen** (etwa „Wenn Pfad enthält Andacht, dann Inhalt Andacht“;
   geht dem Inhalt aus dem Dateinamen vor, gilt auch für Titel ohne Art und wird zuerst entschieden, sodass Bedingungen
   auf den Inhalt in anderen Policies schon den gesetzten Inhalt sehen). Die Liste gilt von oben nach unten, je Wirkung entscheidet die erste passende
-  Policy. Ohne passende Policy ist ein Titel keine Predigt und bekommt ab 10 Minuten Länge den Predigt-Player.
+  Policy. Ohne passende Policy ist ein Titel keine Predigt und bekommt ab 10 Minuten Länge (einstellbar, siehe unten)
+  den Predigt-Player.
   Vorgegeben: „Art ist genau Gottesdienst und Inhalt ist genau Predigt“ und „Art ist genau Bibelstunde“, beide
   Predigt mit Predigt-Player. Regelwerke von vor den Policies werden beim Laden umgerechnet.
 - **Policy je Titel ansehen und korrigieren**: Im Album-Editor zeigt jeder Titel seinen Player samt Quelle
@@ -215,8 +216,21 @@ Fehlt der Name am Ende, bleibt es beim Titel.
   Der Inhalt jeder Aufnahme steht in der Kategorie „Inhalt“ (vorgegeben, zunächst nicht im Menü) und in der Suche.
 - **Keine Tags**: Es gilt immer der Dateiname, auch wenn die Datei Tags hat. Gespeicherte Bedingungen auf Tags
   (Interpret, Album, Genre) aus älteren Versionen entfallen beim Laden; der Rest des Regelwerks bleibt.
+- **Albumbildung und Namen** (gilt für alle Ordner, auch Musik und Sonstiges):
+  - **Unterordner, die zum Album darüber gehören**: Wörter mit Nummer dahinter, Vorgabe `CD`, `Disc`, `Disk`, `DVD`,
+    `Seite`, `Side` („CD 2“ ist CD 2 des Albums darüber); eigene wie `Teil` möglich.
+  - **Unterordner eines Ordners mit Datum** gehören zu dessen Album (abschaltbar).
+  - **Aufteilen nach Datum im Dateinamen**: Ein Ordner ohne Datum, in dem die meisten Dateien ein Datum tragen, wird je
+    Datum ein Album (abschaltbar).
+  - **Namen für Musik und Sonstiges**: Vorlagen für Album und Titel mit `{ordner}` (Ordnername ohne Jahr), `{jahr}`,
+    `{titel}` (Dateiname ohne Nummer), `{datei}` (ganzer Dateiname) und `{nr}`, Vorgabe `{ordner}` bzw. `{titel}`;
+    dazu der Name für Dateien direkt im Musikordner (Vorgabe „Einzeltitel“).
+  - **Predigt-Player** ohne passende Policy ab einer Länge in Minuten (Vorgabe 10); gilt auch für Weiterhören.
+  - **Bibelstellen**: Wörter vor einer Bibelstelle im Dateinamen, die wegfallen (Vorgabe `Text`, `Predigttext`,
+    `Bibeltext`: „Text_Richter 7,1-4“), und weitere Schreibweisen von Bibelbüchern (Vorgabe „Kollosser“).
 - **Vorschau** zeigt vor dem Speichern je Art die Anzahl, die neuesten Beispiele und Dateien, die nicht zum
-  Muster passen. **Speichern und anwenden** bildet die Alben sofort neu, ohne neuen Scan.
+  Muster passen, dazu Beispiele für Musik und Sonstiges nach den Vorlagen. **Speichern und anwenden** bildet die Alben
+  sofort neu, ohne neuen Scan, auch nach geänderter Albumbildung.
 
 ## Verwaltung: Schreibweisen
 
@@ -238,7 +252,8 @@ Jede Kategorie mit „Im Menü anzeigen“ steht in der Seitenleiste und unter S
 
 - **Felder**: Eine Kategorie nimmt ihre Werte aus einem oder mehreren Feldern, die die Zuordnung aus Ordner- und
   Dateinamen liest: **Art** (Gottesdienst, Bibelstunde …), **Inhalt** (Lied, Predigt …), **Sprecher** (wer predigt),
-  **Anlass** (Zusatz im Ordnernamen, z. B. „Einschulung“) und **Jahr** (aus dem Datum). Tags in den Dateien zählen
+  **Anlass** (Zusatz im Ordnernamen, z. B. „Einschulung“), **Jahr** (aus dem Datum), **Bibelstelle** (aus Titel und
+  Ordnername, auch mehrere) und **Ordner** (die Ordner über dem Album, z. B. „2026“ oder „Bibelstunden“). Tags in den Dateien zählen
   nicht. „Inhalt anzeigen“ listet alle aktuellen Werte eines Felds mit Anzahl Titel und Filter; ein Klick auf einen
   Wert übernimmt ihn in die letzte Zusammenfassung.
 - **Werte zusammenfassen**: Mehrere Werte erscheinen unter einem Namen, z. B. „Musik“ aus Lied, Chor.
@@ -332,7 +347,7 @@ kein Einbetten in fremde Seiten, `nosniff`, bei https HSTS).
   ohne die Dateien erneut zu lesen.
 - **Alben**: ein Album je Albumordner. Disc-Ordner (`CD 1`, `Disc 2`) und Unterordner eines Gottesdienstes werden
   zusammengefasst; ein Ordner ohne Datum, in dem die meisten Dateien ein Datum im Namen tragen, wird je Datum ein
-  Album. Als Albumcover dient `cover.jpg`,
+  Album. Alles davon ist unter Verwaltung → Zuordnung („Albumbildung und Namen“) einstellbar. Als Albumcover dient `cover.jpg`,
   `folder.jpg`, `front.jpg` o. ä. im Albumordner, sonst das in die Dateien eingebettete Bild.
 - **Titelbilder**: In MP3 (ID3) und FLAC eingebettete Cover werden beim Scan gelesen und in der
   Datenbank abgelegt (gleiche Bilder nur einmal). Jeder Titel zeigt sein eigenes Bild, ohne eigenes

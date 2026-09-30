@@ -2,6 +2,7 @@ import fastifyCookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { DB } from '../db.js';
 import { getBranding } from '../branding.js';
+import { librarySettings } from '../library/settings.js';
 import { OidcService } from '../auth/oidc.js';
 import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_MS, sessionUser, type SessionUser } from '../auth/sessions.js';
 import { AuthError, changePassword, checkLocalLogin, hasRole, recordDeniedLogin, upsertOidcUser, type Role } from '../auth/users.js';
@@ -179,6 +180,8 @@ export async function registerAuth(app: FastifyInstance, deps: AuthDeps): Promis
         user: user ? { id: user.id, name: user.name, role: user.role, kind: user.kind } : null,
         oidc: oidc.isReady(settings) ? { label: settings.label } : null,
         branding: getBranding(db),
+        // Ohne Policy läuft ein Titel ab dieser Länge im Predigt-Player (Verwaltung → Zuordnung)
+        sermonMinutes: librarySettings().sermonMinutes,
       };
     });
 

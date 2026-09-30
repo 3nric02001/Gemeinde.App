@@ -85,9 +85,14 @@ describe('Kategorien', () => {
       ['sprecher', 'Sprecher', 2],
       ['anlass', 'Anlass', 1],
       ['jahr', 'Jahr', 4],
+      ['bibelstelle', 'Bibelstelle', 2],
+      ['ordner', 'Ordner', 5],
     ]);
     expect(items.find((f) => f.tag === 'art')!.samples).toEqual(['Gottesdienst', 'Bibelstunde']);
     expect(items.find((f) => f.tag === 'anlass')!.samples).toEqual(['Erntedank']);
+    // Bibelstelle aus dem Titel der Predigt bzw. dem Ordner der Bibelstunde, Ordner über dem Album
+    expect(items.find((f) => f.tag === 'bibelstelle')!.samples.sort()).toEqual(['Johannes 3', 'Psalm 23']);
+    expect(items.find((f) => f.tag === 'ordner')!.samples.sort()).toEqual(['2024', 'Audio Aufnahmen', 'Bibelstunden', 'Musik']);
   });
 
   it('zeigt den aktuellen Inhalt eines Felds', async () => {

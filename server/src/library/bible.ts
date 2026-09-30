@@ -1,7 +1,8 @@
 /**
  * Erkennt Bibelstellen in Titeln und Dateinamen ("Psalm 23", "Joh 3,16", "1. Kor 13,1-13"),
- * damit Predigten auch ohne Tag-Feld "Bibelstelle" eine bekommen.
+ * damit Predigten eine Bibelstelle bekommen. Weitere Schreibweisen stehen in der Verwaltung (settings.ts).
  */
+import { librarySettings, onLibrarySettings } from './settings.js';
 
 // Deutsche Buchnamen (Luther, Elberfelder, Einheitsübersetzung) und die üblichen Abkürzungen. Ohne "Mo", "Mi",
 // "Am", "Hi" und "Ri": "Mi 18 Uhr" oder "Am 27." sollen keine Bibelstelle werden.
@@ -14,16 +15,28 @@ const BOOKS = [
   'Jona', 'Micha', 'Nahum', 'Nah', 'Habakuk', 'Hab', 'Zefanja', 'Zef', 'Haggai', 'Hag', 'Sacharja', 'Sach',
   'Maleachi', 'Mal', 'Matthäus', 'Matthaeus', 'Mt', 'Markus', 'Mk', 'Lukas', 'Lk', 'Johannes', 'Joh',
   'Apostelgeschichte', 'Apg', 'Römer', 'Roemer', 'Röm', 'Korinther', 'Kor', 'Galater', 'Gal', 'Epheser', 'Eph',
-  'Philipper', 'Phil', 'Kolosser', 'Kollosser', 'Kol', 'Thessalonicher', 'Thess', 'Timotheus', 'Tim', 'Titus', 'Tit',
+  'Philipper', 'Phil', 'Kolosser', 'Kol', 'Thessalonicher', 'Thess', 'Timotheus', 'Tim', 'Titus', 'Tit',
   'Philemon', 'Phlm', 'Hebräer', 'Hebr', 'Heb', 'Jakobus', 'Jak', 'Petrus', 'Petr', 'Judas', 'Jud', 'Offenbarung', 'Offb',
 ];
 
-// Längere Namen zuerst, damit "Psalmen" nicht als "Ps" + Rest endet.
-const BOOK = [...BOOKS].sort((a, b) => b.length - a.length).join('|');
-const REFERENCE = new RegExp(
-  String.raw`(?<![\p{L}\d])(?:([1-5])\.?\s*)?(${BOOK})\.?\s+(\d{1,3})(?:\s*[,:]\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?(?![\p{L}\d])`,
-  'u',
-);
+const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Buchnamen samt weiteren Schreibweisen aus der Verwaltung; längere zuerst, damit "Psalmen" nicht als "Ps" + Rest endet. */
+function reference(extra: string[]): RegExp {
+  const book = [...new Set([...BOOKS, ...extra.map((b) => b.trim()).filter(Boolean)])]
+    .sort((a, b) => b.length - a.length)
+    .map(escape)
+    .join('|');
+  return new RegExp(
+    String.raw`(?<![\p{L}\d])(?:([1-5])\.?\s*)?(${book})\.?\s+(\d{1,3})(?:\s*[,:]\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?(?![\p{L}\d])`,
+    'u',
+  );
+}
+
+let REFERENCE = reference(librarySettings().bookSpellings);
+onLibrarySettings(() => {
+  REFERENCE = reference(librarySettings().bookSpellings);
+});
 
 const format = ([, number, book, chapter, verse, to]: RegExpMatchArray) =>
   `${number ? `${number}. ` : ''}${book} ${chapter}${verse ? `,${verse}${to ? `-${to}` : ''}` : ''}`;
