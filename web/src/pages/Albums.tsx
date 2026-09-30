@@ -8,7 +8,6 @@ import { navigate } from '../router';
 import { Empty, ErrorNote, Loading } from './common';
 
 const SORTS = [
-  ['artist', 'Interpret'],
   ['title', 'Titel'],
   ['year', 'Jahr'],
   ['date', 'Datum'],
@@ -31,15 +30,15 @@ export function Albums({ params }: { params: URLSearchParams }) {
     ...(recordings.length ? recordings.map((r): [string, string] => [r.name, r.plural]) : [[ALL_RECORDINGS, 'Gottesdienste'] as [string, string]]),
     ['alle', 'Alle'],
   ];
-  // Ohne Auswahl nur Musik; kommt man über eine Suche, ein Genre oder Jahrzehnt, alles, damit nichts fehlt.
-  const kind = params.get('art') || (q || filter.genre || filter.decade ? 'alle' : 'musik');
+  // Ohne Auswahl nur Musik; kommt man über eine Suche oder ein Jahrzehnt, alles, damit nichts fehlt.
+  const kind = params.get('art') || (q || filter.decade ? 'alle' : 'musik');
   const recording = kind !== 'musik' && kind !== 'alle' && kind !== ALL_RECORDINGS ? kind : undefined;
-  const defaultSort = kind === 'musik' || kind === 'alle' ? 'artist' : 'date';
+  const defaultSort = kind === 'musik' || kind === 'alle' ? 'title' : 'date';
   const sort = SORTS.some(([key]) => key === params.get('sort')) ? params.get('sort')! : defaultSort;
   const dated = kind === 'musik' ? 'false' : kind === 'alle' ? undefined : 'true';
   const { items, total, loading, error, sentinel } = usePaged<Album>(`/api/albums${query({ ...filter, q, sort, dated, recording })}`);
 
-  const update = (next: { sort?: string; genre?: string; decade?: number; art?: string }) =>
+  const update = (next: { sort?: string; decade?: number; art?: string }) =>
     navigate(`/alben${query({ q, sort: params.get('sort') ?? undefined, art: params.get('art') ?? undefined, ...filter, ...next })}`, {
       replace: true,
     });
@@ -73,7 +72,7 @@ export function Albums({ params }: { params: URLSearchParams }) {
           </button>
         ))}
       </div>
-      <Filters value={filter} onChange={(next: FilterValue) => update({ genre: next.genre, decade: next.decade })} />
+      <Filters value={filter} onChange={(next: FilterValue) => update({ decade: next.decade })} />
       {total !== undefined && <p class="count">{plural(total, 'Album', 'Alben')}</p>}
       {error && <ErrorNote message={error} />}
       {total === 0 && <Empty title="Keine Alben gefunden">Entferne einen Filter, um mehr zu sehen.</Empty>}

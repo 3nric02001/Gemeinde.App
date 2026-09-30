@@ -12,7 +12,7 @@ afterEach(() => {
 function renderAlbums(search: string) {
   const fetch = vi
     .spyOn(globalThis, 'fetch')
-    .mockImplementation(async () => new Response(JSON.stringify({ items: [], total: 0, limit: 50, offset: 0, genres: [], decades: [] }), {
+    .mockImplementation(async () => new Response(JSON.stringify({ items: [], total: 0, limit: 50, offset: 0, decades: [] }), {
       headers: { 'content-type': 'application/json' },
     }));
   render(<Albums params={new URLSearchParams(search)} />);
@@ -20,10 +20,11 @@ function renderAlbums(search: string) {
 }
 
 describe('Albenseite', () => {
-  it('zeigt ohne Auswahl nur Musik, nach Interpret sortiert', async () => {
+  it('zeigt ohne Auswahl nur Musik, nach Titel sortiert', async () => {
     const urls = renderAlbums('');
     await vi.waitFor(() => expect(urls()[0]).toContain('dated=false'));
-    expect(urls()[0]).toContain('sort=artist');
+    expect(urls()[0]).toContain('sort=title');
+    expect(screen.queryByRole('option', { name: 'Interpret' })).toBeNull();
     expect(screen.getByRole('radio', { name: 'Musik' }).getAttribute('aria-checked')).toBe('true');
   });
 
@@ -33,9 +34,9 @@ describe('Albenseite', () => {
     expect(urls()[0]).toContain('sort=date');
   });
 
-  it('zeigt bei einem Genre alles, damit nichts fehlt', async () => {
-    const urls = renderAlbums('genre=Predigt');
-    await vi.waitFor(() => expect(urls()[0]).toContain('genre=Predigt'));
+  it('zeigt bei einem Jahrzehnt alles, damit nichts fehlt', async () => {
+    const urls = renderAlbums('decade=2020');
+    await vi.waitFor(() => expect(urls()[0]).toContain('decade=2020'));
     expect(urls()[0]).not.toContain('dated=');
     expect(screen.getByRole('radio', { name: 'Alle' }).getAttribute('aria-checked')).toBe('true');
   });
@@ -43,7 +44,7 @@ describe('Albenseite', () => {
   it('filtert Aufnahmen je Art aus der Zuordnung', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const body = String(input).startsWith('/api/facets')
-        ? { genres: [], decades: [], totals: { tracks: 0, albums: 0, duration: 0 }, recordings: [
+        ? { decades: [], totals: { tracks: 0, albums: 0, duration: 0 }, recordings: [
             { name: 'Bibelstunde', plural: 'Bibelstunden', count: 2 },
             { name: 'Gottesdienst', plural: 'Gottesdienste', count: 5 },
           ] }

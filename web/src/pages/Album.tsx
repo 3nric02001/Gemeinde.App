@@ -15,12 +15,15 @@ import { ErrorNote, Loading } from './common';
 
 export function Album({ id }: { id: number }) {
   const { data: album, error } = useApi<AlbumDetail>(`/api/albums/${id}`);
-  const more = useApi<Page<AlbumType>>(album ? `/api/albums${query({ artist: album.artist, limit: 13 })}` : undefined);
+  // Weitere Aufnahmen derselben Art (Gottesdienste, Bibelstunden), neueste zuerst
+  const more = useApi<Page<AlbumType>>(
+    album?.recording ? `/api/albums${query({ recording: album.recording, sort: 'date', limit: 13 })}` : undefined,
+  );
   if (error) return <ErrorNote message={error} />;
   if (!album || album.id !== id) return <Loading />;
 
   const others = (more.data?.items ?? []).filter((a) => a.id !== album.id).slice(0, 12);
-  const artistHref = `/interpret/${encodeURIComponent(album.artist)}`;
+  const moreHref = `/datum${query({ art: album.recording ?? undefined })}`;
   const from = albumContext(album);
   const eyebrowText = album.date ? serviceEyebrow(albumTitle(album.title, album.date, album.recording), album.recording) : undefined;
   // Ohne Anlass heißt der Gottesdienst wie seine Art; eine Zeile "Datum" darüber wäre doppelt.
@@ -39,15 +42,7 @@ export function Album({ id }: { id: number }) {
           {eyebrow && <span class="eyebrow">{eyebrow}</span>}
           <h1>{albumTitle(album.title, album.date, album.recording)}</h1>
           <p class="hero-sub">
-            {album.date && `${formatLongDate(album.date)} · `}
-            <a href={artistHref}>{album.artist}</a>
-            {album.year && !album.date && ` · ${album.year}`}
-            {album.genre && (
-              <>
-                {' · '}
-                <a href={`/alben${query({ genre: album.genre })}`}>{album.genre}</a>
-              </>
-            )}
+            {[album.date ? formatLongDate(album.date) : album.year, album.speaker].filter(Boolean).join(' · ')}
           </p>
           <p class="hero-meta">
             {plural(album.trackCount, 'Titel', 'Titel')}, {formatDuration(album.duration)}
@@ -78,8 +73,6 @@ export function Album({ id }: { id: number }) {
       <TrackList
         tracks={album.tracks}
         variant="album"
-        albumArtist={album.artist}
-        hideArtist={album.recording ?? undefined}
         ordinal={!!from}
         from={from}
       />
@@ -87,8 +80,8 @@ export function Album({ id }: { id: number }) {
       {others.length > 0 && (
         <section class="shelf">
           <div class="section-head">
-            <h2>Mehr von {album.artist}</h2>
-            <a class="more-link" href={artistHref}>
+            <h2>Weitere Aufnahmen</h2>
+            <a class="more-link" href={moreHref}>
               Alle anzeigen
             </a>
           </div>

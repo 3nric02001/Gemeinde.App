@@ -10,6 +10,8 @@ import {
   parsePolicyCondition,
   PolicyError,
   policyMatcher,
+  REMOVED_POLICY_FIELDS,
+  withoutFields,
   type Decision,
   type ManualDecision,
   type Player,
@@ -53,15 +55,13 @@ export interface RecordingKind {
   albumTitle: string;
   /** Vorlage für den Titel einer Aufnahme */
   trackTitle: string;
-  /** Titel aus den Tags der Datei behalten, wenn es welche gibt */
-  preferTags: boolean;
 }
 
 /** "Art bestimmen": Wenn ein Albumordner passt, dann ist er diese Art (oder keine, also Musik). */
 export interface KindRule {
   name: string;
   enabled: boolean;
-  /** Bedingung auf Ordner, Pfad und Tags; passt, wenn der Ordner oder eine Datei darin passt */
+  /** Bedingung auf Ordner, Pfad und Dateiname; passt, wenn der Ordner oder eine Datei darin passt */
   when: PolicyCondition;
   /** Name der Art; "": keine Art (Musik) */
   kind: string;
@@ -98,7 +98,6 @@ export const DEFAULT_STRUCTURE: Structure = {
       filePattern: '{datum}_{nr}',
       albumTitle: '{bibelstelle}',
       trackTitle: 'Teil {nr}',
-      preferTags: false,
     },
     {
       name: 'Gottesdienst',
@@ -107,7 +106,6 @@ export const DEFAULT_STRUCTURE: Structure = {
       filePattern: '{inhalt} - {titel} - {sprecher}',
       albumTitle: '{anlass}',
       trackTitle: '{inhalt}: {titel}',
-      preferTags: false,
     },
   ],
   kindRules: [{ name: 'Bibelstunden', enabled: true, when: folderCondition('Bibelstunden'), kind: 'Bibelstunde', datedOnly: true }],
@@ -205,7 +203,6 @@ export function parseStructure(input: unknown): Structure {
       filePattern: text(k.filePattern, 'Muster für Dateien'),
       albumTitle: text(k.albumTitle, 'Name des Albums'),
       trackTitle: text(k.trackTitle, 'Titel einer Aufnahme'),
-      preferTags: k.preferTags === true,
     };
     checkPattern(kind.folderPattern, `${name}, Ordner`);
     checkPattern(kind.filePattern, `${name}, Dateien`);
@@ -274,6 +271,19 @@ export function getStructure(db: DB): Structure {
     const raw = JSON.parse(stored) as Record<string, unknown>;
     // Gespeichert, bevor es "Inhalte ohne Titel" gab: Vorgabe übernehmen
     if (!('untitled' in raw)) raw.untitled = DEFAULT_STRUCTURE.untitled;
+    // Bedingungen auf Tags (Interpret, Album, Genre) gibt es nicht mehr: weglassen, Regeln ohne Bedingung entfallen
+    if (Array.isArray(raw.kindRules)) {
+      raw.kindRules = raw.kindRules.flatMap((rule: Record<string, unknown>) => {
+        const when = withoutFields(rule?.when, REMOVED_POLICY_FIELDS);
+        return when ? [{ ...rule, when }] : [];
+      });
+    }
+    if (Array.isArray(raw.policies)) {
+      raw.policies = raw.policies.flatMap((policy: Record<string, unknown>) => {
+        const when = withoutFields(policy?.when, REMOVED_POLICY_FIELDS);
+        return when ? [{ ...policy, when }] : [];
+      });
+    }
     return parseStructure(raw);
   } catch {
     return DEFAULT_STRUCTURE;
@@ -456,7 +466,7 @@ const findKind = (compiled: CompiledStructure, name: string) => {
 
 /**
  * Art eines Albumordners nach "Art bestimmen": die erste passende Regel, sonst bei Ordnern mit Datum die Vorgabe.
- * Eine Regel passt, wenn ihre Bedingung auf den Ordner oder eine Datei darin passt (Tags wie Genre).
+ * Eine Regel passt, wenn ihre Bedingung auf den Ordner oder eine Datei darin passt (Pfad, Dateiname).
  * `manual`: in der Verwaltung für dieses Album gesetzte Art; sie geht allen Regeln vor, "" heißt keine Art.
  */
 export function kindOfFolder(
@@ -480,14 +490,9 @@ export function kindOfFolder(
 
 export interface FileInfo {
   path: string;
-  /** Titel aus Tag oder Pfad, wie gescannt */
+  /** Titel aus dem Dateinamen, wie gescannt */
   title: string;
-  /** Titel steht in einem Tag (nicht aus dem Dateinamen abgeleitet) */
-  titleTagged: boolean;
   duration: number | null;
-  artist?: string | null;
-  album?: string | null;
-  genre?: string | null;
   /** Korrektur aus der Verwaltung; geht den Policies vor */
   manual?: ManualDecision;
 }
@@ -516,6 +521,8 @@ export interface FolderResult {
   kind: RecordingKind;
   /** Name des Albums nach der Vorlage (leer: keiner) */
   title: string;
+  /** Anlass aus dem Ordnernamen ("Einschulung") */
+  occasion?: string;
   passage?: string;
   speaker?: string;
   files: Map<string, FileResult>;
@@ -536,9 +543,6 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
       title: title ?? file.title,
       content: values?.inhalt,
       kind: kind.name,
-      artist: file.artist,
-      album: file.album,
-      genre: file.genre,
       path: file.path,
       duration: file.duration,
     });
@@ -565,8 +569,7 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
     }
     const all: Values = { ...folderValues, ...values, nr: nr !== undefined ? String(nr) : undefined };
     if (all.datum) all.datum = findDate(all.datum, folderYear(dirname(file.path)))?.date ?? all.datum;
-    const template = (inhalt: string | undefined) =>
-      kind.preferTags && file.titleTagged ? undefined : fillTemplate(kind.trackTitle || '{titel}', { ...all, inhalt }) || undefined;
+    const template = (inhalt: string | undefined) => fillTemplate(kind.trackTitle || '{titel}', { ...all, inhalt }) || undefined;
     const decision = decide(file, values, template(values.inhalt));
     // Ein Inhalt aus den Policies ersetzt den aus dem Dateinamen, auch im Titel ("{inhalt}: {titel}")
     const content = decision.content ?? values.inhalt;
@@ -600,6 +603,7 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
   return {
     kind,
     title: fillTemplate(kind.albumTitle, { ...folderValues, sprecher: speaker }),
+    occasion: folderValues.anlass,
     passage: passage ?? undefined,
     speaker: speaker ?? undefined,
     files: results,
@@ -672,13 +676,10 @@ export interface Preview {
 /** Was das Regelwerk aus der aktuellen Bibliothek machen würde: je Art Anzahl und die neuesten Beispiele. */
 export function previewStructure(db: DB, structure: Structure, examples = 4): Preview {
   const compiled = compileStructure(structure);
-  const rows = db.prepare('SELECT path, title, duration, artist, album, genre FROM tracks').all() as Array<{
+  const rows = db.prepare('SELECT path, title, duration FROM tracks').all() as Array<{
     path: string;
     title: string;
     duration: number | null;
-    artist: string;
-    album: string | null;
-    genre: string | null;
   }>;
   const byFolder = new Map<string, typeof rows>();
   for (const row of rows) {
@@ -691,11 +692,7 @@ export function previewStructure(db: DB, structure: Structure, examples = 4): Pr
     const { kind } = kindOfFolder(compiled, folder, files);
     if (!kind) continue;
     const entry = result[compiled.kinds.indexOf(kind)]!;
-    const applied = applyToFolder(
-      kind,
-      folder,
-      files.map((f) => ({ ...f, titleTagged: false })),
-    );
+    const applied = applyToFolder(kind, folder, files);
     entry.albums++;
     const tracks = [...files]
       .sort((a, b) => a.path.localeCompare(b.path, 'de', { numeric: true }))

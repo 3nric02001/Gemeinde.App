@@ -12,7 +12,7 @@ import { sessionCookie } from './helpers/session.js';
 
 describe('Policies', () => {
   const policies: Policy[] = [
-    { name: 'Konzerte', enabled: true, when: { field: 'genre', op: 'contains', value: 'Konzert' }, player: 'music' },
+    { name: 'Konzerte', enabled: true, when: { field: 'folder', op: 'contains', value: 'Konzert' }, player: 'music' },
     { name: 'Aus', enabled: false, when: { field: 'content', op: 'equals', value: 'Lied' }, sermon: true, player: 'sermon' },
     { name: 'Predigt', enabled: true, when: { field: 'content', op: 'equals', value: 'Predigt' }, sermon: true, player: 'sermon' },
     { name: 'Lang', enabled: true, when: { field: 'duration', op: 'at_least', value: '20' }, player: 'sermon' },
@@ -20,14 +20,14 @@ describe('Policies', () => {
   const decide = compilePolicies(policies);
 
   it('entscheidet je Wirkung mit der ersten passenden Policy, abgeschaltete zählen nicht', () => {
-    expect(decide({ content: 'Predigt', genre: 'Gottesdienst' })).toEqual({
+    expect(decide({ content: 'Predigt', path: 'Gottesdienste/2026_09_27/Predigt.mp3' })).toEqual({
       sermon: true,
       sermonBy: 'Predigt',
       player: 'sermon',
       playerBy: 'Predigt',
     });
     // Der Player kommt schon aus "Konzerte", die Predigt trotzdem aus der nächsten passenden Policy
-    expect(decide({ content: 'predigt', genre: 'Konzert-Mitschnitt' })).toEqual({
+    expect(decide({ content: 'predigt', path: 'Konzert-Mitschnitte/Predigt.mp3' })).toEqual({
       sermon: true,
       sermonBy: 'Predigt',
       player: 'music',
@@ -175,7 +175,7 @@ describe('Policies im Regelwerk', () => {
     ];
     await call('PUT', '/api/admin/structure', structure);
     const service = await byDate('2026-08-30');
-    expect(service).toMatchObject({ speaker: 'Anna Schulz', artist: 'Anna Schulz' });
+    expect(service).toMatchObject({ speaker: 'Anna Schulz' });
     expect((await albumTracks(service.id)).map((t) => [t.content, t.player])).toEqual([
       ['Lied', 'music'],
       ['Predigt', 'music'],
@@ -243,7 +243,6 @@ describe('Eigene Arten', () => {
       filePattern: '{inhalt} - {titel}',
       albumTitle: '{anlass}',
       trackTitle: '{titel}',
-      preferTags: false,
     });
     structure.contents.push('Andacht');
     structure.policies.push({ name: 'Andachten', enabled: true, when: { field: 'kind', op: 'equals', value: 'Jugendabend' }, sermon: true, player: 'sermon' });
@@ -258,14 +257,21 @@ describe('Eigene Arten', () => {
     expect((await get(`/api/admin/albums/${youth.id}`)).recordingSource).toEqual({ by: 'rule', rule: 'Jugend' });
   });
 
-  it('richten sich auch nach Tags der Dateien, Gottesdienst ist nur die Vorgabe für übrige Ordner mit Datum', async () => {
-    cloud.put('Audio Aufnahmen/2026/2026_09_13/01.mp3', mp3({ title: 'Teil 1', genre: 'Bibelstunde' }, 30));
+  it('richten sich auch nach Dateinamen, Gottesdienst ist nur die Vorgabe für übrige Ordner mit Datum', async () => {
+    cloud.put('Audio Aufnahmen/2026/2026_09_13/2026_09_13_001 Bibelstunde.mp3', mp3({ genre: 'Gottesdienst' }, 30));
     await ctx.scanner.scan();
     const structure: Structure = structuredClone(getStructure(ctx.db));
+    // Tags gibt es als Bedingung nicht mehr
+    await call(
+      'PUT',
+      '/api/admin/structure',
+      { ...structure, kindRules: [{ name: 'Genre', enabled: true, when: { field: 'genre', op: 'equals', value: 'X' }, kind: 'Bibelstunde', datedOnly: true }] },
+      400,
+    );
     structure.kindRules.push({
-      name: 'Genre Bibelstunde',
+      name: 'Datei Bibelstunde',
       enabled: true,
-      when: { field: 'genre', op: 'equals', value: 'Bibelstunde' },
+      when: { field: 'title', op: 'contains', value: 'Bibelstunde' },
       kind: 'Bibelstunde',
       datedOnly: true,
     });
@@ -332,6 +338,38 @@ describe('Eigene Arten', () => {
     expect(await byDate('2026-08-30')).toMatchObject({ speaker: 'Pastor Meier' });
     expect(ctx.db.prepare('SELECT count(*) AS n FROM track_overrides').get()).toEqual({ n: 0 });
     await call('PATCH', `/api/admin/albums/${service.id}/tracks/${sermon.id}`, { player: 'laut' }, 400);
+  });
+
+  it('übergehen gespeicherte Bedingungen auf Tags, statt das Regelwerk zu verwerfen', () => {
+    const structure: Structure = structuredClone(getStructure(ctx.db));
+    setMeta(
+      ctx.db,
+      'structure',
+      JSON.stringify({
+        ...structure,
+        contents: [...structure.contents, 'Eigener Inhalt'],
+        kindRules: [
+          { name: 'Nur Genre', enabled: true, when: { field: 'genre', op: 'equals', value: 'X' }, kind: 'Bibelstunde', datedOnly: true },
+          {
+            name: 'Gemischt',
+            enabled: true,
+            when: { match: 'all', conditions: [{ field: 'artist', op: 'equals', value: 'X' }, { field: 'folder', op: 'equals', value: 'Bibelstunden' }] },
+            kind: 'Bibelstunde',
+            datedOnly: true,
+          },
+        ],
+        policies: [
+          { name: 'Album', enabled: true, when: { field: 'album', op: 'contains', value: 'X' }, player: 'music' },
+          ...structure.policies,
+        ],
+      }),
+    );
+    const loaded = getStructure(ctx.db);
+    expect(loaded.contents).toContain('Eigener Inhalt');
+    expect(loaded.kindRules).toEqual([
+      { name: 'Gemischt', enabled: true, when: { field: 'folder', op: 'equals', value: 'Bibelstunden' }, kind: 'Bibelstunde', datedOnly: true },
+    ]);
+    expect(loaded.policies.map((p) => p.name)).toEqual(structure.policies.map((p) => p.name));
   });
 
   it('bleiben nach einem Neustart mit altem gespeichertem Regelwerk erhalten', () => {

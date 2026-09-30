@@ -13,10 +13,6 @@ interface Props {
   tracks: Track[];
   /** Albumansicht: Tracknummer statt Cover, Album nicht wiederholen */
   variant?: 'album' | 'list';
-  /** In der Albumansicht wird der Interpret nur gezeigt, wenn er vom Album-Interpreten abweicht */
-  albumArtist?: string;
-  /** Weiterer Interpret, der nicht genannt wird (bei Aufnahmen die Art, z. B. "Gottesdienst") */
-  hideArtist?: string;
   /** Wird statt `tracks` in die Warteschlange gelegt, z. B. alle Treffer statt der sichtbaren */
   onPlay?: (index: number) => void;
   /** Laufende Nummer statt Tracknummer, z. B. in selbst zusammengestellten Alben */
@@ -37,11 +33,10 @@ export function trackMenu(track: Track) {
   if (offline.ids.has(track.id)) items.push({ label: 'Offline-Kopie löschen', onSelect: () => void removeDownloads([track.id]) });
   else if (offline.enabled && !offline.progress.has(track.id)) items.push({ label: 'Herunterladen', onSelect: () => download([track]) });
   if (track.albumId) items.push({ label: 'Zum Album', onSelect: () => navigate(`/album/${track.albumId}`) });
-  items.push({ label: 'Zum Interpreten', onSelect: () => navigate(`/interpret/${encodeURIComponent(track.artist)}`) });
   return items;
 }
 
-export function TrackList({ tracks, variant = 'list', albumArtist, hideArtist, onPlay, ordinal = false, from }: Props) {
+export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, from }: Props) {
   const currentId = usePlayerSelect((s) => s.current?.id);
   const playing = usePlayerSelect((s) => s.playing);
   useMe(); // Herzen und Fortschritt aktuell halten
@@ -62,9 +57,8 @@ export function TrackList({ tracks, variant = 'list', albumArtist, hideArtist, o
         const showDisc = multiDisc && (index === 0 || (tracks[index - 1]!.discNo ?? 1) !== disc);
         const resume = savedProgress(track);
         const album = albumLabel(track.album, track.albumDate);
-        // In der Albumansicht Interpret nur, wenn er abweicht; der Sprecher einer Predigt steht immer da.
-        const who =
-          track.speaker ?? (variant === 'album' && (track.artist === albumArtist || track.artist === hideArtist) ? '' : track.artist);
+        // Sprecher aus dem Dateinamen ("Predigt - Titel - Name"), sonst nichts
+        const who = track.speaker ?? '';
         return (
           <Fragment key={`${track.id}-${index}`}>
             {showDisc && <li class="disc-head">CD {disc}</li>}

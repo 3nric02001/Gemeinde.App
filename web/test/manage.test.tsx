@@ -17,15 +17,13 @@ async function signedInAs(role: 'manager' | 'admin') {
   vi.restoreAllMocks();
 }
 
-const noOverrides = { title: null, artist: null, year: null, genre: null, speaker: null, passage: null, description: null };
-const track = { id: 11, title: 'Predigt_final2', artist: 'MBG', album: '2026-09-27 Erntedank', albumId: 7, duration: 1800, hasCover: false, speaker: null };
+const noOverrides = { title: null, year: null, speaker: null, passage: null, description: null };
+const track = { id: 11, title: 'Predigt_final2', album: '2026-09-27 Erntedank', albumId: 7, duration: 1800, hasCover: false, speaker: null };
 const service = {
   id: 7,
   kind: 'auto',
   title: '2026-09-27 Erntedank',
-  artist: 'MBG',
   year: 2026,
-  genre: 'Gottesdienst',
   date: '2026-09-27',
   speaker: null,
   passage: null,
@@ -82,7 +80,7 @@ describe('Album-Editor', () => {
 
   it('blendet Predigt-Felder bei Musik aus', async () => {
     await signedInAs('manager');
-    const music = { ...service, id: 8, title: 'Let There Be Light', date: null, genre: 'Worship', folder: 'Hillsong/Let There Be Light' };
+    const music = { ...service, id: 8, title: 'Let There Be Light', date: null, folder: 'Hillsong/Let There Be Light' };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(music));
     render(<Admin location={at('/admin/album/8')} />);
     await waitFor(() => expect(screen.getByLabelText('Titel')).toBeTruthy());

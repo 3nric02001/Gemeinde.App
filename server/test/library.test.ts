@@ -4,7 +4,6 @@ import type { InjectOptions } from 'fastify';
 import { buildApp, type AppContext } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { HEAD_BYTES } from '../src/library/scanner.js';
-import { VARIOUS_ARTISTS } from '../src/library/albums.js';
 import { flac, mp3 } from './helpers/audio.js';
 import { FakeNextcloud, PASSWORD, USER } from './helpers/fakeNextcloud.js';
 import { sessionCookie } from './helpers/session.js';
@@ -18,12 +17,10 @@ const inject = (options: InjectOptions) => ctx.app.inject({ ...options, headers:
 interface AlbumJson {
   id: number;
   title: string;
-  artist: string;
   year: number | null;
-  genre: string | null;
   trackCount: number;
   hasCover: boolean;
-  tracks?: Array<{ id: number; title: string; artist: string; trackNo: number | null; discNo: number | null }>;
+  tracks?: Array<{ id: number; title: string; trackNo: number | null; discNo: number | null }>;
 }
 
 async function get<T = any>(url: string): Promise<T> {
@@ -43,25 +40,25 @@ async function albumByTitle(title: string): Promise<AlbumJson> {
 }
 
 function seedLibrary(): void {
-  // Klassisch getaggtes Album mit Cover
-  cloud.put('Hillsong/Let There Be Light/01 Behold.mp3', mp3({ title: 'Behold', artist: 'Hillsong', album: 'Let There Be Light', track: 1, year: 2016, genre: 'worship' }));
-  cloud.put('Hillsong/Let There Be Light/02 What a Beautiful Name.mp3', mp3({ title: 'What a Beautiful Name', artist: 'Hillsong', album: 'Let There Be Light', track: 2, year: 2016, genre: 'Worship' }));
+  // Tags in den Dateien zählen nicht: Album ist der Ordner, Titel der Dateiname
+  cloud.put('Hillsong/Let There Be Light/01 Behold.mp3', mp3({ title: 'Anders', artist: 'Hillsong', album: 'Tag-Album', track: 9, year: 2016, genre: 'worship' }));
+  cloud.put('Hillsong/Let There Be Light/02 What a Beautiful Name.mp3', mp3({ title: 'What a Beautiful Name', artist: 'Hillsong', album: 'Let There Be Light' }));
   cloud.put('Hillsong/Let There Be Light/cover.jpg', Buffer.from('JPEGDATA'));
   cloud.put('Hillsong/Let There Be Light/scan.jpg', Buffer.from('OTHER'));
-  // Sampler ohne Album-Interpret: ein Album, nicht eines pro Interpret
-  cloud.put('Sampler/Feiert Jesus 20/01.mp3', mp3({ title: 'Lied Eins', artist: 'Anna', album: 'Feiert Jesus 20', track: 1, year: 2014 }));
-  cloud.put('Sampler/Feiert Jesus 20/02.mp3', mp3({ title: 'Lied Zwei', artist: 'Bert', album: 'Feiert Jesus 20', track: 2, year: 2014 }));
-  cloud.put('Sampler/Feiert Jesus 20/03.mp3', mp3({ title: 'Lied Drei', artist: 'Clara', album: 'Feiert Jesus 20', track: 3, year: 2014 }));
+  // Titel mit verschiedenen Album-Tags in einem Ordner bleiben ein Album
+  cloud.put('Sampler/Feiert Jesus 20/01 Lied Eins.mp3', mp3({ title: 'Lied Eins', artist: 'Anna', album: 'Feiert Jesus 20' }));
+  cloud.put('Sampler/Feiert Jesus 20/02 Lied Zwei.mp3', mp3({ title: 'Lied Zwei', artist: 'Bert', album: 'Anderes Album' }));
+  cloud.put('Sampler/Feiert Jesus 20/03 Lied Drei.mp3', mp3({ title: 'Lied Drei', artist: 'Clara' }));
   // Doppel-CD in Disc-Ordnern
-  cloud.put('Bach/Weihnachtsoratorium/CD 1/01 Jauchzet.flac', flac({ title: 'Jauchzet, frohlocket', artist: 'J. S. Bach', album: 'Weihnachtsoratorium', track: 1, disc: 1, genre: 'Klassik', year: 1998 }));
-  cloud.put('Bach/Weihnachtsoratorium/CD 2/01 Und es waren Hirten.flac', flac({ title: 'Und es waren Hirten', artist: 'J. S. Bach', album: 'Weihnachtsoratorium', track: 1, disc: 2, genre: 'Klassik', year: 1998 }));
-  cloud.put('Bach/Weihnachtsoratorium/CD 2/folder.jpg', Buffer.from('BACHCOVER'));
-  // Ungetaggt: alles aus dem Pfad
+  cloud.put('Bach/Weihnachtsoratorium (1998)/CD 1/01 Jauchzet, frohlocket.flac', flac({ title: 'Jauchzet', album: 'Weihnachtsoratorium', track: 1, disc: 1 }));
+  cloud.put('Bach/Weihnachtsoratorium (1998)/CD 2/01 Und es waren Hirten.flac', flac({ title: 'Hirten', album: 'Weihnachtsoratorium', track: 1, disc: 2 }));
+  cloud.put('Bach/Weihnachtsoratorium (1998)/CD 2/folder.jpg', Buffer.from('BACHCOVER'));
+  // Ohne Tags
   cloud.put('Gemeindechor/Adventskonzert (2021)/01 - Macht hoch die Tür.mp3', mp3({}));
   cloud.put('Gemeindechor/Adventskonzert (2021)/02 - Tochter Zion.mp3', mp3({}));
-  // Sammelordner mit Titeln aus zwei Alben
-  cloud.put('Downloads/a.mp3', mp3({ title: 'Oceans', artist: 'Hillsong United', album: 'Zion', year: 2013 }));
-  cloud.put('Downloads/b.mp3', mp3({ title: 'Königlich', artist: 'Outbreakband', album: 'Unser Gott', year: 2018 }));
+  // Sammelordner: ein Album, auch wenn die Tags zwei Alben nennen
+  cloud.put('Downloads/Oceans.mp3', mp3({ title: 'Oceans', artist: 'Hillsong United', album: 'Zion', year: 2013 }));
+  cloud.put('Downloads/Königlich.mp3', mp3({ title: 'Königlich', artist: 'Outbreakband', album: 'Unser Gott', year: 2018 }));
   // Wird ignoriert
   cloud.put('.trash/alt.mp3', mp3({ title: 'Alt' }));
   cloud.put('Hillsong/liesmich.txt', Buffer.from('nichts'));
@@ -93,16 +90,17 @@ describe('Scan und automatische Alben', () => {
     expect(status).toMatchObject({ state: 'idle', filesSeen: 11, added: 11, failed: 0 });
   });
 
-  it('bildet sinnvolle Alben', async () => {
-    const titles = (await albums('&sort=title')).map((a) => `${a.artist} – ${a.title} (${a.trackCount})`);
-    expect(titles).toEqual([
-      'Gemeindechor – Adventskonzert (2)',
-      `${VARIOUS_ARTISTS} – Feiert Jesus 20 (3)`,
-      'Hillsong – Let There Be Light (2)',
-      'Outbreakband – Unser Gott (1)',
-      'J. S. Bach – Weihnachtsoratorium (2)',
-      'Hillsong United – Zion (1)',
+  it('bildet ein Album je Ordner, mit Titeln aus den Dateinamen', async () => {
+    const titles = (await albums('&sort=title')).map((a) => `${a.title} (${a.trackCount})`);
+    expect(titles).toEqual(['Adventskonzert (2)', 'Downloads (2)', 'Feiert Jesus 20 (3)', 'Let There Be Light (2)', 'Weihnachtsoratorium (2)']);
+    const light = await albumByTitle('Let There Be Light');
+    expect(light.tracks!.map((t) => [t.trackNo, t.title])).toEqual([
+      [1, 'Behold'],
+      [2, 'What a Beautiful Name'],
     ]);
+    expect(light.year).toBeNull();
+    expect(light).not.toHaveProperty('artist');
+    expect((await albumByTitle('Feiert Jesus 20')).tracks!.map((t) => t.title)).toEqual(['Lied Eins', 'Lied Zwei', 'Lied Drei']);
   });
 
   it('fasst Disc-Ordner zusammen und sortiert nach Disc und Track', async () => {
@@ -111,10 +109,10 @@ describe('Scan und automatische Alben', () => {
       [1, 1, 'Jauchzet, frohlocket'],
       [2, 1, 'Und es waren Hirten'],
     ]);
-    expect(album).toMatchObject({ genre: 'Klassik', year: 1998, hasCover: true });
+    expect(album).toMatchObject({ year: 1998, hasCover: true });
   });
 
-  it('übernimmt Jahr und Titel aus dem Ordner, wenn Tags fehlen', async () => {
+  it('übernimmt Jahr und Titel aus dem Ordner', async () => {
     const album = await albumByTitle('Adventskonzert');
     expect(album.year).toBe(2021);
     expect(album.tracks!.map((t) => t.title)).toEqual(['Macht hoch die Tür', 'Tochter Zion']);
@@ -126,48 +124,30 @@ describe('Scan und automatische Alben', () => {
     const res = await inject({ method: 'GET', url: `/api/albums/${album.id}/cover` });
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe('JPEGDATA');
-    expect((await albumByTitle('Zion')).hasCover).toBe(false);
+    expect((await albumByTitle('Downloads')).hasCover).toBe(false);
   });
 
-  it('findet per Volltext mit Präfix und ohne Umlaute', async () => {
+  it('findet per Volltext mit Präfix und ohne Umlaute, aber nicht über Tags', async () => {
     const titles = async (q: string) =>
       (await get<{ items: Array<{ title: string }> }>(`/api/tracks?q=${encodeURIComponent(q)}`)).items.map((t) => t.title);
     expect(await titles('beautiful nam')).toEqual(['What a Beautiful Name']);
     expect(await titles('konig')).toEqual(['Königlich']);
     expect(await titles('tur')).toEqual(['Macht hoch die Tür']);
+    expect(await titles('outbreakband')).toEqual([]);
     expect(await titles('"; DROP TABLE tracks; --')).toEqual([]);
     expect(await titles('***')).toEqual([]);
   });
 
-  it('filtert Titel und Alben nach Interpret, Genre und Jahrzehnt', async () => {
-    const byArtist = await get<{ total: number }>('/api/tracks?artist=hillsong');
-    expect(byArtist.total).toBe(2);
-    expect((await albums('&genre=worship')).map((a) => a.title)).toEqual(['Let There Be Light']);
-    expect((await albums('&decade=2010&sort=year')).map((a) => a.title)).toEqual([
-      'Unser Gott',
-      'Let There Be Light',
-      'Feiert Jesus 20',
-      'Zion',
-    ]);
-    // Interpret eines Sampler-Titels findet auch das Sampler-Album
-    expect((await albums('&artist=Bert')).map((a) => a.title)).toEqual(['Feiert Jesus 20']);
-    expect((await albums('&q=clara')).map((a) => a.title)).toEqual(['Feiert Jesus 20']);
+  it('filtert nach Jahrzehnt und kennt keine Filter nach Interpret oder Genre', async () => {
+    expect((await albums('&decade=2020&sort=year')).map((a) => a.title)).toEqual(['Adventskonzert']);
+    expect((await inject({ method: 'GET', url: '/api/artists' })).statusCode).toBe(404);
   });
 
-  it('liefert Filterwerte und Interpreten', async () => {
+  it('liefert Filterwerte', async () => {
     const facets = await get('/api/facets');
-    expect(facets.genres).toEqual([
-      { value: 'Klassik', count: 2 },
-      { value: 'Worship', count: 2 },
-    ]);
-    expect(facets.decades.map((d: { value: number }) => d.value)).toEqual([2020, 2010, 1990]);
-    expect(facets.totals).toMatchObject({ tracks: 11, albums: 6 });
-
-    const artists = await get('/api/artists?q=hill');
-    expect(artists.items).toEqual([
-      { name: 'Hillsong', albumCount: 1, trackCount: 2 },
-      { name: 'Hillsong United', albumCount: 1, trackCount: 1 },
-    ]);
+    expect(facets).not.toHaveProperty('genres');
+    expect(facets.decades.map((d: { value: number }) => d.value)).toEqual([2020, 1990]);
+    expect(facets.totals).toMatchObject({ tracks: 11, albums: 5 });
   });
 
   it('prüft Eingaben', async () => {
@@ -188,16 +168,16 @@ describe('Inkrementeller Scan', () => {
     expect(await ctx.scanner.scan()).toMatchObject({ added: 0, updated: 0, removed: 0 });
     expect(cloud.gets().length).toBe(firstGets);
 
-    cloud.put('Hillsong/Let There Be Light/02 What a Beautiful Name.mp3', mp3({ title: 'What A Beautiful Name (Live)', artist: 'Hillsong', album: 'Let There Be Light', track: 2 }));
-    cloud.put('Hillsong/Let There Be Light/03 Neu.mp3', mp3({ title: 'Neu', artist: 'Hillsong', album: 'Let There Be Light', track: 3 }));
-    cloud.delete('Downloads/a.mp3');
+    cloud.put('Hillsong/Let There Be Light/02 What a Beautiful Name.mp3', mp3({ title: 'Geändert' }, 40));
+    cloud.put('Hillsong/Let There Be Light/03 Neu.mp3', mp3({}));
+    cloud.delete('Downloads/Oceans.mp3');
     expect(await ctx.scanner.scan()).toMatchObject({ added: 1, updated: 1, removed: 1 });
     expect(cloud.gets().length).toBe(firstGets + 2);
 
     const after = await albumByTitle('Let There Be Light');
     expect(after.id).toBe(before.id);
-    expect(after.tracks!.map((t) => t.title)).toEqual(['Behold', 'What A Beautiful Name (Live)', 'Neu']);
-    expect((await albums()).some((a) => a.title === 'Zion')).toBe(false);
+    expect(after.tracks!.map((t) => t.title)).toEqual(['Behold', 'What a Beautiful Name', 'Neu']);
+    expect((await albumByTitle('Downloads')).trackCount).toBe(1);
   });
 
   it('löscht keine Titel aus Ordnern, die gerade nicht lesbar sind', async () => {
@@ -214,7 +194,7 @@ describe('Inkrementeller Scan', () => {
     const status = await ctx.scanner.scan();
     expect(status.state).toBe('failed');
     expect(status.lastError).toContain('HTTP 500');
-    expect((await albums()).length).toBe(6);
+    expect((await albums()).length).toBe(5);
   });
 
   it('entfernt bei leerem Musikordner nichts, bis es bestätigt wird', async () => {
@@ -223,7 +203,7 @@ describe('Inkrementeller Scan', () => {
     const held = await ctx.scanner.scan();
     expect(held).toMatchObject({ state: 'failed', removed: 0, heldBack: 11 });
     expect(held.lastError).toContain('Musikordner ist leer');
-    expect((await albums()).length).toBe(6);
+    expect((await albums()).length).toBe(5);
     expect((await get('/api/scan')).lastSuccessAt).not.toBeNull();
 
     const res = await inject({ method: 'POST', url: '/api/scan', payload: { removeMissing: true } });
@@ -238,9 +218,9 @@ describe('Inkrementeller Scan', () => {
     for (let i = 0; i < 25; i++) cloud.delete(`Predigten/${i}.mp3`);
     expect(await ctx.scanner.scan()).toMatchObject({ state: 'failed', removed: 0, heldBack: 25 });
     // Wenige fehlende Titel gehen wie bisher ohne Rückfrage
-    cloud.delete('Downloads/a.mp3');
+    cloud.delete('Downloads/Oceans.mp3');
     expect(await ctx.scanner.scan({ removeMissing: true })).toMatchObject({ state: 'idle', removed: 26 });
-    cloud.delete('Downloads/b.mp3');
+    cloud.delete('Downloads/Königlich.mp3');
     expect(await ctx.scanner.scan()).toMatchObject({ state: 'idle', removed: 1 });
   });
 
@@ -262,10 +242,10 @@ describe('Inkrementeller Scan', () => {
   });
 
   it('zeigt den Fortschritt und die erste Ursache, wenn einzelne Dateien nicht lesbar sind', async () => {
-    cloud.brokenFiles.add('Downloads/a.mp3');
+    cloud.brokenFiles.add('Downloads/Oceans.mp3');
     const status = await ctx.scanner.scan();
     expect(status).toMatchObject({ state: 'idle', filesSeen: 11, toRead: 11, read: 11, added: 10, failed: 1 });
-    expect(status.lastError).toBe('Downloads/a.mp3: GET Downloads/a.mp3 fehlgeschlagen: HTTP 500');
+    expect(status.lastError).toBe('Downloads/Oceans.mp3: GET Downloads/Oceans.mp3 fehlgeschlagen: HTTP 500');
     // Beim nächsten Scan wird nur die fehlende Datei erneut versucht.
     cloud.brokenFiles.clear();
     expect(await ctx.scanner.scan()).toMatchObject({ toRead: 1, read: 1, added: 1, failed: 0, lastError: null });
@@ -282,11 +262,11 @@ describe('Inkrementeller Scan', () => {
       }),
       { logger: false, requestTimeoutMs: 200 },
     );
-    cloud.stalledFiles.add('Downloads/b.mp3');
+    cloud.stalledFiles.add('Downloads/Königlich.mp3');
     const status = await quick.scanner.scan();
     await quick.app.close();
     expect(status).toMatchObject({ state: 'idle', added: 10, failed: 1 });
-    expect(status.lastError).toBe('Downloads/b.mp3: GET Downloads/b.mp3: Nextcloud hat nicht innerhalb von 1 s geantwortet');
+    expect(status.lastError).toBe('Downloads/Königlich.mp3: GET Downloads/Königlich.mp3: Nextcloud hat nicht innerhalb von 1 s geantwortet');
   });
 
   it('bricht einen Stream ab, wenn die Nextcloud gar nicht antwortet', async () => {
@@ -301,8 +281,8 @@ describe('Inkrementeller Scan', () => {
       { logger: false, streamTimeoutMs: 200 },
     );
     await quick.scanner.scan();
-    const { id } = quick.db.prepare("SELECT id FROM tracks WHERE path = 'Downloads/b.mp3'").get() as { id: number };
-    cloud.hangingFiles.add('Downloads/b.mp3');
+    const { id } = quick.db.prepare("SELECT id FROM tracks WHERE path = 'Downloads/Königlich.mp3'").get() as { id: number };
+    cloud.hangingFiles.add('Downloads/Königlich.mp3');
     const res = await quick.app.inject({ method: 'GET', url: `/api/tracks/${id}/stream`, headers: { cookie: sessionCookie(quick.db) } });
     await quick.app.close();
     expect(res.statusCode).toBe(504);

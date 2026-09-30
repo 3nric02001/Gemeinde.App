@@ -7,14 +7,11 @@ import { player } from '../src/player';
 const track = (id: number, title: string, discNo = 1): Track => ({
   id,
   title,
-  artist: 'Gemeindechor',
-  albumArtist: 'Gemeindechor',
   album: 'Adventskonzert',
   albumId: 1,
   trackNo: id,
   discNo,
   year: 2021,
-  genre: 'Chor',
   duration: 185,
   mimeType: 'audio/mpeg',
 });
@@ -28,7 +25,7 @@ describe('Titelliste', () => {
   it('spielt das Album ab dem angeklickten Titel', () => {
     const playList = vi.spyOn(player, 'playList').mockImplementation(() => {});
     const tracks = [track(1, 'Macht hoch die Tür'), track(2, 'Tochter Zion')];
-    render(<TrackList tracks={tracks} variant="album" albumArtist="Gemeindechor" />);
+    render(<TrackList tracks={tracks} variant="album" />);
     fireEvent.click(screen.getByText('Tochter Zion'));
     expect(playList).toHaveBeenCalledWith(tracks, 1, { shuffle: false });
     expect(screen.getAllByText('3:05')).toHaveLength(2);

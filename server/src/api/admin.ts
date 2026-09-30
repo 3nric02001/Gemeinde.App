@@ -39,7 +39,6 @@ import {
   type CategoryInput,
 } from '../library/categories.js';
 import { rebuildAlbums } from '../library/albums.js';
-import { ArtistError, artistOverview, listArtistAliases, mergeArtists, unmergeArtist } from '../library/artists.js';
 import { libraryQuality } from '../library/quality.js';
 import {
   DEFAULT_STRUCTURE,
@@ -75,9 +74,7 @@ const trackIds = { type: 'array', items: { type: 'integer', minimum: 1 }, maxIte
 const nullableText = (max: number) => ({ type: ['string', 'null'], maxLength: max }) as const;
 const albumFields = {
   title: nullableText(200),
-  artist: nullableText(200),
   year: { type: ['integer', 'null'], minimum: 1000, maximum: 2999 },
-  genre: nullableText(100),
   speaker: nullableText(200),
   passage: nullableText(200),
   description: nullableText(2000),
@@ -135,7 +132,6 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
     admin.setErrorHandler((error, request, reply: FastifyReply) => {
       if (error instanceof CurationError) return reply.code(error.status).send({ error: error.message });
       if (error instanceof StructureError) return reply.code(400).send({ error: error.message });
-      if (error instanceof ArtistError) return reply.code(400).send({ error: error.message });
       if ((error as { validation?: unknown }).validation) return reply.code(400).send({ error: (error as Error).message });
       // Von Fastify selbst, z. B. falscher Dateityp oder zu großes Bild beim Hochladen
       const status = (error as { statusCode?: number }).statusCode;
@@ -158,7 +154,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
               dated: { type: 'boolean' },
               hidden: { type: 'boolean' },
               noSpeaker: { type: 'boolean' },
-              sort: { type: 'string', enum: ['title', 'artist', 'year', 'recent', 'date'], default: 'date' },
+              sort: { type: 'string', enum: ['title', 'year', 'recent', 'date'], default: 'date' },
               limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
               offset: { type: 'integer', minimum: 0, default: 0 },
             },
@@ -416,50 +412,6 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: { db: DB }
 
     // Hinweise, wo die automatische Zuordnung vermutlich nicht passt (Verwaltung → Prüfen)
     admin.get('/api/admin/quality', async () => libraryQuality(db));
-
-    // Interpreten zusammenführen (Verwaltung → Interpreten), für Manager und Admins
-    const artistState = () => ({ ...artistOverview(db), aliases: listArtistAliases(db) });
-    admin.get('/api/admin/artists', async () => artistState());
-    admin.post(
-      '/api/admin/artists/merge',
-      {
-        schema: {
-          body: {
-            type: 'object',
-            required: ['sources', 'target'],
-            properties: {
-              sources: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'string', maxLength: 200 } },
-              target: { type: 'string', maxLength: 200 },
-            },
-            additionalProperties: false,
-          },
-        },
-      },
-      async (request) => {
-        const { sources, target } = request.body as { sources: string[]; target: string };
-        mergeArtists(db, sources, target);
-        rebuildAlbums(db);
-        return artistState();
-      },
-    );
-    admin.post(
-      '/api/admin/artists/unmerge',
-      {
-        schema: {
-          body: {
-            type: 'object',
-            required: ['source'],
-            properties: { source: { type: 'string', maxLength: 200 } },
-            additionalProperties: false,
-          },
-        },
-      },
-      async (request) => {
-        unmergeArtist(db, (request.body as { source: string }).source);
-        rebuildAlbums(db);
-        return artistState();
-      },
-    );
 
     // Regelwerk für Aufnahmen (Verwaltung → Zuordnung), für Manager und Admins
     admin.get('/api/admin/structure', async () => ({

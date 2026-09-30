@@ -1,12 +1,12 @@
 import type { DB } from '../db.js';
-import { withArtistGroups } from './artists.js';
 import { CurationError } from './curation.js';
+import { TRACK_FIELD_TAGS, TRACK_FIELDS } from './fields.js';
 import { foldValue } from './text.js';
 
 /**
- * Frei definierbare Kategorien. Eine Kategorie nimmt ihre Werte aus einem oder mehreren Tag-Feldern
- * (z. B. artist + albumartist) und kann Werte unter einem eigenen Namen zusammenfassen
- * ("Musik" <- Musik, Lied). Die Tags selbst stehen je Titel in track_tags.
+ * Frei definierbare Kategorien. Eine Kategorie nimmt ihre Werte aus einem oder mehreren Feldern, die das
+ * Regelwerk aus Ordnern und Dateinamen liest (fields.ts: Art, Inhalt, Sprecher, Anlass, Jahr), und kann Werte
+ * unter einem eigenen Namen zusammenfassen ("Musik" <- Lied, Chor). Die Werte stehen je Titel in track_tags.
  */
 
 export interface CategoryGroup {
@@ -123,12 +123,6 @@ export function getCategory(db: DB, idOrSlug: number | string): Category | undef
   return listCategories(db).find((c) => (typeof idOrSlug === 'number' ? c.id === idOrSlug : c.slug === idOrSlug));
 }
 
-/** Kategorie für Hörer: mit zusammengeführten Interpreten als Gruppen (Verwaltung → Interpreten) */
-export function getListenerCategory(db: DB, idOrSlug: number | string): Category | undefined {
-  const category = getCategory(db, idOrSlug);
-  return category && withArtistGroups(db, category);
-}
-
 function requireCategory(db: DB, id: number): Category {
   const category = getCategory(db, id);
   if (!category) throw new CurationError(404, 'Kategorie nicht gefunden');
@@ -137,8 +131,10 @@ function requireCategory(db: DB, id: number): Category {
 
 function cleanFields(fields: string[]): string[] {
   const clean = [...new Set(fields.map((f) => f.trim().toLowerCase()).filter(Boolean))];
-  if (clean.length === 0) throw new CurationError(400, 'Mindestens ein Tag-Feld auswählen');
-  if (clean.length > MAX_FIELDS) throw new CurationError(400, `Höchstens ${MAX_FIELDS} Tag-Felder je Kategorie`);
+  if (clean.length === 0) throw new CurationError(400, 'Mindestens ein Feld auswählen');
+  if (clean.length > MAX_FIELDS) throw new CurationError(400, `Höchstens ${MAX_FIELDS} Felder je Kategorie`);
+  const unknown = clean.find((field) => !TRACK_FIELD_TAGS.includes(field));
+  if (unknown) throw new CurationError(400, `Unbekanntes Feld „${unknown}“`);
   return clean;
 }
 
@@ -164,7 +160,7 @@ function cleanGroups(groups: CategoryGroup[]): CategoryGroup[] {
       seen.add(key);
       values.push(value);
     }
-    if (values.length === 0) throw new CurationError(400, `„${label}“ braucht mindestens einen Tag-Wert`);
+    if (values.length === 0) throw new CurationError(400, `„${label}“ braucht mindestens einen Wert`);
     if (values.length > MAX_GROUP_VALUES) throw new CurationError(400, `Höchstens ${MAX_GROUP_VALUES} Werte je Eintrag`);
     return { label, values };
   });
@@ -311,19 +307,25 @@ export function categoryFilter(definition: Definition, value: string): CategoryF
   return { fields: definition.fields, vkeys: [key] };
 }
 
-/** Alle Tag-Felder der Bibliothek, für die Auswahl in der Verwaltung */
+/** Die Felder aus Ordnern und Dateinamen, für die Auswahl in der Verwaltung, mit Anzahl und Beispielen */
 export function listTagFields(db: DB) {
-  const fields = db
-    .prepare(
-      `SELECT tag, count(DISTINCT track_id) AS trackCount, count(DISTINCT vkey) AS valueCount
-       FROM track_tags GROUP BY tag ORDER BY trackCount DESC, tag`,
-    )
-    .all() as Array<{ tag: string; trackCount: number; valueCount: number }>;
+  const counts = new Map(
+    (db
+      .prepare(
+        `SELECT tag, count(DISTINCT track_id) AS trackCount, count(DISTINCT vkey) AS valueCount
+         FROM track_tags GROUP BY tag`,
+      )
+      .all() as Array<{ tag: string; trackCount: number; valueCount: number }>).map((row) => [row.tag, row]),
+  );
   const samples = db.prepare(
     `SELECT min(value) AS value FROM track_tags WHERE tag = ? GROUP BY vkey ORDER BY count(*) DESC LIMIT 5`,
   );
-  return fields.map((field) => ({
-    ...field,
+  return TRACK_FIELDS.map((field) => ({
+    tag: field.tag,
+    label: field.label,
+    hint: field.hint,
+    trackCount: counts.get(field.tag)?.trackCount ?? 0,
+    valueCount: counts.get(field.tag)?.valueCount ?? 0,
     samples: (samples.all(field.tag) as Array<{ value: string }>).map((s) => s.value),
   }));
 }

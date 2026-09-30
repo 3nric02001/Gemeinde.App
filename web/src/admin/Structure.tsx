@@ -13,7 +13,6 @@ export interface RecordingKind {
   filePattern: string;
   albumTitle: string;
   trackTitle: string;
-  preferTags: boolean;
 }
 
 export type Player = 'sermon' | 'music';
@@ -50,22 +49,16 @@ export interface Structure {
   policies: Policy[];
 }
 
-/** Felder für „Art bestimmen“: Pfad und Tags; Inhalt und Titel aus dem Dateinamen hängen erst von der Art ab */
+/** Felder für „Art bestimmen“: Ordner, Pfad und Dateiname; Inhalt und Titel nach dem Muster hängen erst von der Art ab */
 const KIND_FIELDS: Record<string, string> = {
   folder: 'Ordner im Pfad',
   path: 'Pfad',
-  genre: 'Genre (Tag)',
-  album: 'Album (Tag)',
-  artist: 'Interpret (Tag)',
-  title: 'Titel (Tag)',
+  title: 'Dateiname',
 };
 const POLICY_FIELDS: Record<string, string> = {
   kind: 'Art',
   content: 'Inhalt',
   title: 'Titel',
-  artist: 'Interpret',
-  album: 'Album (Tag)',
-  genre: 'Genre',
   folder: 'Ordner im Pfad',
   path: 'Pfad',
   duration: 'Dauer (Minuten)',
@@ -79,7 +72,6 @@ const POLICY_PLACEHOLDERS: Record<string, string> = {
   folder: 'z. B. Bibelstunden',
   path: 'z. B. Jugend',
   duration: 'z. B. 20',
-  genre: 'z. B. Predigt',
 };
 const placeholderFor = (field: string) => POLICY_PLACEHOLDERS[field] ?? 'Suchbegriff';
 const newFolderLeaf = (): Leaf => ({ field: 'folder', op: 'equals', value: '' });
@@ -120,7 +112,6 @@ const EMPTY_KIND: RecordingKind = {
   filePattern: '{inhalt} - {titel} - {sprecher}',
   albumTitle: '{anlass}',
   trackTitle: '{inhalt}: {titel}',
-  preferTags: false,
 };
 
 type TextField = 'name' | 'plural' | 'folderPattern' | 'filePattern' | 'albumTitle' | 'trackTitle';
@@ -333,7 +324,7 @@ export function StructurePanel() {
         <h2>1. Art bestimmen</h2>
         <p class="admin-hint">
           Für jeden Albumordner gilt die erste passende Regel. Eine Regel passt, wenn der Ordner oder eine Datei darin passt, etwa
-          über das Genre. Passt keine, bekommen Ordner mit Datum die Vorgabe unten; Ordner ohne Datum bleiben Musik.
+          über den Ordnernamen. Passt keine, bekommen Ordner mit Datum die Vorgabe unten; Ordner ohne Datum bleiben Musik.
         </p>
         {kindRules.map((rule, index) => (
           <RuleCard
@@ -424,14 +415,6 @@ export function StructurePanel() {
             {text(index, 'albumTitle', 'Name des Albums', 'Leer oder ohne Wert: der Name der Art', '{anlass}')}
             {text(index, 'trackTitle', 'Titel einer Aufnahme', 'Leere Platzhalter fallen samt Trennern weg', '{inhalt}: {titel}')}
           </div>
-          <label class="admin-check">
-            <input
-              type="checkbox"
-              checked={kind.preferTags}
-              onChange={(e) => updateKind(index, { preferTags: (e.target as HTMLInputElement).checked })}
-            />
-            Tags der Datei (Titel, Album, Interpret) statt des Dateinamens verwenden, wenn es welche gibt
-          </label>
         </section>
       ))}
 

@@ -14,18 +14,17 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-const track = (id: number, title: string, artist = 'MBG Brake'): Track => ({
-  id, title, artist, albumArtist: null, album: '2026-09-20', albumId: 9, trackNo: id, discNo: null, year: 2026,
-  genre: 'Gottesdienst', duration: 120, mimeType: 'audio/mpeg', hasCover: false, albumDate: '2026-09-20', speaker: null,
+const track = (id: number, title: string, speaker: string | null = null): Track => ({
+  id, title, album: '2026-09-20', albumId: 9, trackNo: id, discNo: null, year: 2026,
+  duration: 120, mimeType: 'audio/mpeg', hasCover: false, albumDate: '2026-09-20', speaker,
 });
 
 describe('Seite eines Gottesdienstes', () => {
   const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 
   it('heißt wie überall nach dem Anlass und wiederholt ihn nicht bei jedem Titel', async () => {
-    // Bei Gottesdiensten ist, wer predigt, der Interpret des Albums
     const detail: AlbumDetail = {
-      id: 9, title: '2026-09-20', artist: 'Pastor Meier', year: 2026, genre: null, trackCount: 2, duration: 240,
+      id: 9, title: '2026-09-20', year: 2026, trackCount: 2, duration: 240,
       hasCover: false, kind: 'auto', date: '2026-09-20', speaker: 'Pastor Meier', passage: 'Psalm 23; Joh 3,16', description: null,
       tracks: [track(1, 'Lobpreis'), track(2, 'Predigt', 'Pastor Meier')],
     };
@@ -34,11 +33,11 @@ describe('Seite eines Gottesdienstes', () => {
     );
     render(<Album id={9} />);
     expect(await screen.findByRole('heading', { level: 1, name: 'Gottesdienst' })).toBeTruthy();
-    expect(screen.getByText('Pastor Meier', { selector: '.hero-sub a' })).toBeTruthy();
+    expect(document.querySelector('.hero-sub')!.textContent).toBe('Sonntag, 20. September 2026 · Pastor Meier');
     // Kein "Datum" über dem Titel: das Datum steht schon darunter
     expect(document.querySelector('.hero .eyebrow')).toBeNull();
-    // Nur der abweichende Interpret, kein "So., 20.09.2026" in jeder Zeile
-    expect([...document.querySelectorAll('.track-sub')].map((el) => el.textContent)).toEqual(['MBG Brake', '']);
+    // Nur der Sprecher aus dem Dateinamen, kein "So., 20.09.2026" in jeder Zeile
+    expect([...document.querySelectorAll('.track-sub')].map((el) => el.textContent)).toEqual(['', 'Pastor Meier']);
     expect(screen.getByLabelText('Zu den Favoriten')).toBeTruthy();
     // Alle Bibelstellen, aber keine Rubrik "Sprecher": ein Gottesdienst hat oft mehrere
     expect([...document.querySelectorAll('.sermon-info dt')].map((el) => el.textContent)).toEqual(['Bibelstellen']);

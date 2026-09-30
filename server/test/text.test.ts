@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findPassage, findPassages, joinPassages } from '../src/library/bible.js';
-import { artistKey, artistNames, sortKey } from '../src/library/text.js';
+import { sortKey } from '../src/library/text.js';
 
 describe('sortKey', () => {
   it('sortiert wie im Telefonbuch', () => {
@@ -8,15 +8,6 @@ describe('sortKey', () => {
     expect([...names].sort((a, b) => (sortKey(a) < sortKey(b) ? -1 : 1))).toEqual([
       '2 Lieder', '10 Gebote', 'abend', 'Ärger', 'The Blessing', 'Der Herr', '„Stille Nacht“', 'Straße', 'Über uns', 'Zion',
     ]);
-  });
-});
-
-describe('artistNames', () => {
-  it('trennt Gäste ab, den Hauptinterpreten aber nicht an "&"', () => {
-    expect(artistNames('Hillsong feat. Anna & Ben')).toEqual(['Hillsong', 'Anna', 'Ben']);
-    expect(artistNames('Chor (ft. Solistin)')).toEqual(['Chor', 'Solistin']);
-    expect(artistNames('Simon & Garfunkel')).toEqual(['Simon & Garfunkel']);
-    expect(artistKey('Hillsong UNITED')).toBe(artistKey('Hillsong  United'));
   });
 });
 

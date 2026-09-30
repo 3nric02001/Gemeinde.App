@@ -14,14 +14,11 @@ const json = (body: unknown, status = 200) =>
 const sermon: Track = {
   id: 41,
   title: 'Predigt: Psalm 23',
-  artist: 'MBG Brake',
-  albumArtist: null,
   album: '2026-09-20',
   albumId: 9,
   trackNo: 2,
   discNo: null,
   year: 2026,
-  genre: 'Gottesdienst',
   duration: 2400,
   mimeType: 'audio/mpeg',
   hasCover: false,
@@ -51,15 +48,14 @@ describe('Gottesdienste in Listen', () => {
   it('zeigen Anlass, Datum und Sprecher statt des Ordnernamens', () => {
     const { container } = render(<TrackList tracks={[sermon, song]} />);
     expect(screen.getByText('Pastor Meier · So., 20.09.2026')).toBeTruthy();
-    expect(screen.getByText('MBG Brake · Erntedank, So., 27.09.2026')).toBeTruthy();
+    expect(screen.getByText('Erntedank, So., 27.09.2026')).toBeTruthy();
     // Ohne Bild ein Kalenderblatt statt "20"
     expect([...container.querySelectorAll('.cover-cal')].map((el) => el.textContent)).toEqual(['Sep20', 'Sep27']);
   });
 
   it('Albumkarten heißen nach dem Anlass', () => {
     const album: Album = {
-      id: 3, title: '2026-09-27 Erntedank', artist: 'MBG Brake', year: 2026, genre: 'Gottesdienst',
-      trackCount: 3, duration: 900, hasCover: false, date: '2026-09-27',
+      id: 3, title: '2026-09-27 Erntedank', year: 2026, trackCount: 3, duration: 900, hasCover: false, date: '2026-09-27',
     };
     render(<AlbumCard album={album} />);
     expect(screen.getByText('Erntedank')).toBeTruthy();

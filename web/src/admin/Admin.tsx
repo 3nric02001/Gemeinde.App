@@ -8,7 +8,6 @@ import { useDebounced } from '../hooks';
 import { match, navigate, type Location } from '../router';
 import { Empty, ErrorNote, Loading } from '../pages/common';
 import { AdminNav, ACCESS_SECTIONS } from './Access';
-import { ArtistsPanel } from './Artists';
 import { adminRequest, type AdminAlbum, type AdminAlbumDetail } from './api';
 import { AlbumEditor } from './AlbumEditor';
 import { CategoriesAdmin, CategoryEditor } from './Categories';
@@ -54,7 +53,6 @@ export function Admin({ location }: { location: Location }) {
   else if (location.path === '/admin/pruefen') content = <QualityPanel />;
   else if (location.path === '/admin/zuordnung') content = <StructurePanel />;
   else if (location.path === '/admin/schreibweisen') content = <ReplacementsPanel />;
-  else if (location.path === '/admin/interpreten') content = <ArtistsPanel />;
   else if (section) content = <section.Component params={location.params} />;
   else content = <AlbumsAdmin params={location.params} onError={onError} />;
 
@@ -174,7 +172,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
                     <span class="track-sub">
                       {[
                         album.date && formatCompactDate(album.date),
-                        album.date ? album.speaker : album.artist,
+                        album.speaker ?? (!album.date && album.year),
                         plural(album.trackCount, 'Titel', 'Titel'),
                       ]
                         .filter(Boolean)
@@ -202,7 +200,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
       <details class="admin-help">
         <summary>Wie funktionieren Alben?</summary>
         <p class="admin-hint">
-          Automatische Alben entstehen beim Abgleich aus Ordnern und Tags in der Nextcloud; Gottesdienste erkennt die App am Datum
+          Automatische Alben entstehen beim Abgleich aus Ordnern und Dateinamen in der Nextcloud (ein Album je Ordner); Gottesdienste erkennt die App am Datum
           im Ordnernamen. Du kannst sie umbenennen, ergänzen, ausblenden oder um einzelne Titel kürzen. Playlists stellst du
           aus beliebigen Titeln zusammen; ein Titel kann in mehreren Playlists stehen. Alle Änderungen bleiben bei neuen Scans
           erhalten.

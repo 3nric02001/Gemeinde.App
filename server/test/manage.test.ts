@@ -37,14 +37,14 @@ function addUser(name: string, role: 'listener' | 'manager'): number {
 /** Album nach Namen oder, bei Aufnahmen, nach Ordner ("2026-09-27 Erntedank") */
 const albumId = (name: string) =>
   (ctx.db.prepare("SELECT id FROM albums WHERE title = ? OR folder LIKE '%/' || ?").get(name, name) as { id: number }).id;
-const service = (folder: string, title: string, custom: Record<string, string> = {}) =>
-  cloud.put(`Gottesdienste/2026/${folder}/01 ${title}.mp3`, mp3({ title, artist: 'MBG', genre: 'Gottesdienst', custom }));
+const service = (folder: string, file: string, custom: Record<string, string> = {}) =>
+  cloud.put(`Gottesdienste/2026/${folder}/01 ${file}.mp3`, mp3({ title: 'Tag', artist: 'MBG', custom }));
 
 beforeEach(async () => {
   cloud = new FakeNextcloud('/Musik');
   await cloud.start();
   service('2026-08-30 Jugendgottesdienst', 'Input');
-  service('2026-09-20', 'Predigt Psalm 23', { Sprecher: 'Pastor Meier', Bibelstelle: 'Psalm 23' });
+  service('2026-09-20', 'Predigt - Psalm 23 - Pastor Meier');
   service('2026-09-27 Erntedank', 'Predigt_final2');
   cloud.put('Hillsong/Let There Be Light/01 Behold.mp3', mp3({ title: 'Behold', artist: 'Hillsong', album: 'Let There Be Light' }));
   const config = loadConfig({

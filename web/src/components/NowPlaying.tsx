@@ -84,9 +84,7 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
             }}>
             {track.title}
           </button>
-          <button type="button" class="now-artist" onClick={() => go(`/interpret/${encodeURIComponent(track.artist)}`)}>
-            {track.speaker ?? track.artist}
-          </button>
+          {track.speaker && <span class="now-artist">{track.speaker}</span>}
           {album && track.albumId && (
             <a class="now-album" href={`/album/${track.albumId}`} onClick={(event) => (event.preventDefault(), go(`/album/${track.albumId}`))}>
               {album}

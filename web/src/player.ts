@@ -511,7 +511,7 @@ export class Player {
     const artwork = trackCoverUrl(track);
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
-      artist: track.artist,
+      artist: track.speaker ?? track.album ?? '',
       album: track.album ?? '',
       artwork: artwork ? [{ src: artwork }] : [],
     });

@@ -45,12 +45,9 @@ export function More() {
         <Row href="/favoriten" icon="heart" label="Favoriten" />
         {(offline.enabled || offline.items.length > 0) && <Row href="/heruntergeladen" icon="download" label="Heruntergeladen" />}
         <Row href="/titel" icon="tracks" label="Alle Titel" />
-        <Row href="/interpreten" icon="artists" label="Interpreten" />
-        {categories
-          .filter((category) => category.slug !== 'interpreten')
-          .map((category) => (
-            <Row key={category.id} href={categoryUrl(category.slug)} icon="tag" label={category.name} />
-          ))}
+        {categories.map((category) => (
+          <Row key={category.id} href={categoryUrl(category.slug)} icon="tag" label={category.name} />
+        ))}
         <Row href="/warteschlange" icon="queue" label="Warteschlange" />
       </ul>
 

@@ -10,14 +10,11 @@ import * as router from '../src/router';
 const track = (id: number, title: string, albumId: number): Track => ({
   id,
   title,
-  artist: 'Gemeindechor',
-  albumArtist: 'Gemeindechor',
   album: `Album ${albumId}`,
   albumId,
   trackNo: 1,
   discNo: 1,
   year: 2021,
-  genre: 'Chor',
   duration: 185,
   mimeType: 'audio/mpeg',
 });

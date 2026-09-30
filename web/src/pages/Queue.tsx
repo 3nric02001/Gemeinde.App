@@ -18,7 +18,7 @@ function Row({ entry, index, current, playing }: { entry: Entry; index: number; 
       </span>
       <span class="track-main">
         <span class="track-title">{track.title}</span>
-        <span class="track-sub">{track.speaker ?? track.artist}</span>
+        <span class="track-sub">{track.speaker ?? track.album}</span>
       </span>
       <span class="track-time">{formatTime(track.duration)}</span>
       {!current && (

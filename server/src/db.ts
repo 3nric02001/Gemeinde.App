@@ -1,9 +1,8 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { fileStem } from './library/pathMeta.js';
-import { aliasOf, loadArtistAliases } from './library/artists.js';
-import { artistKey, artistNames, foldValue, sortKey } from './library/text.js';
+import { fileStem, parsePath, type PathMeta } from './library/pathMeta.js';
+import { foldValue, sortKey } from './library/text.js';
 
 export type DB = Database.Database;
 
@@ -608,6 +607,101 @@ export const migrations: string[] = [
   ALTER TABLE tracks ADD COLUMN raw_artist TEXT;
   UPDATE tracks SET raw_artist = display_artist;
   `,
+  // Ohne Interpreten und ohne Tags: Titel, Album und alle Zuordnungen kommen aus Ordnern und Dateinamen,
+  // Kategorien aus den Feldern, die das Regelwerk daraus liest (library/fields.ts).
+  `
+  DROP TABLE artist_aliases;
+
+  DROP TRIGGER tracks_ai;
+  DROP TRIGGER tracks_ad;
+  DROP TRIGGER tracks_au;
+  DROP TABLE tracks_fts;
+  DROP TRIGGER albums_ai;
+  DROP TRIGGER albums_ad;
+  DROP TRIGGER albums_au;
+  DROP TABLE albums_fts;
+  DROP INDEX tracks_artist;
+  DROP INDEX tracks_genre;
+  DROP INDEX tracks_sort;
+  DROP INDEX albums_artist;
+  DROP INDEX albums_genre;
+  DROP INDEX albums_sort_artist;
+
+  -- Sprecher je Titel aus dem Dateinamen ("Predigt - Titel - Name"), füllt rebuildAlbums
+  ALTER TABLE tracks RENAME COLUMN display_artist TO speaker;
+  UPDATE tracks SET speaker = NULL;
+  ALTER TABLE tracks DROP COLUMN artist;
+  ALTER TABLE tracks DROP COLUMN album_artist;
+  ALTER TABLE tracks DROP COLUMN raw_artist;
+  ALTER TABLE tracks DROP COLUMN genre;
+  ALTER TABLE tracks DROP COLUMN compilation;
+  ALTER TABLE tracks DROP COLUMN sort_artist;
+  ALTER TABLE tracks DROP COLUMN album_sort;
+  ALTER TABLE tracks DROP COLUMN album_artist_sort;
+  ALTER TABLE tracks DROP COLUMN album_tagged;
+  ALTER TABLE tracks DROP COLUMN title_tagged;
+  ALTER TABLE albums DROP COLUMN artist;
+  ALTER TABLE albums DROP COLUMN genre;
+  ALTER TABLE albums DROP COLUMN sort_artist;
+  ALTER TABLE album_overrides DROP COLUMN artist;
+  ALTER TABLE album_overrides DROP COLUMN genre;
+
+  -- Was bisher aus den Tags kam, gleich aus dem Pfad; die Dauer und eingebettete Bilder bleiben.
+  UPDATE tracks SET title = path_meta(path, 'title'), album = path_meta(path, 'album'), track_no = path_meta(path, 'trackNo'),
+    disc_no = path_meta(path, 'discNo'), year = path_meta(path, 'year'),
+    search_extra = (SELECT nullif(trim(coalesce(o.title, '') || ' ' || coalesce(o.speaker, '')), '') FROM track_overrides o WHERE o.path = tracks.path);
+  UPDATE tracks SET sort_title = sort_key(coalesce(display_title, title));
+  CREATE INDEX tracks_sort ON tracks(sort_title);
+  DELETE FROM track_tags WHERE derived = 0;
+
+  CREATE VIRTUAL TABLE tracks_fts USING fts5(
+    title, album, search_extra, structure,
+    content='', contentless_delete=1,
+    tokenize='unicode61 remove_diacritics 2'
+  );
+  CREATE TRIGGER tracks_ai AFTER INSERT ON tracks BEGIN
+    INSERT INTO tracks_fts(rowid, title, album, search_extra, structure)
+    VALUES (new.id, new.title, coalesce(new.album, ''), coalesce(new.search_extra, ''),
+            coalesce(new.display_title, '') || ' ' || coalesce(new.content, '') || ' ' || coalesce(new.speaker, ''));
+  END;
+  CREATE TRIGGER tracks_ad AFTER DELETE ON tracks BEGIN
+    DELETE FROM tracks_fts WHERE rowid = old.id;
+  END;
+  CREATE TRIGGER tracks_au AFTER UPDATE OF title, album, search_extra, display_title, content, speaker ON tracks BEGIN
+    DELETE FROM tracks_fts WHERE rowid = old.id;
+    INSERT INTO tracks_fts(rowid, title, album, search_extra, structure)
+    VALUES (new.id, new.title, coalesce(new.album, ''), coalesce(new.search_extra, ''),
+            coalesce(new.display_title, '') || ' ' || coalesce(new.content, '') || ' ' || coalesce(new.speaker, ''));
+  END;
+  INSERT INTO tracks_fts(rowid, title, album, search_extra, structure)
+    SELECT id, title, coalesce(album, ''), coalesce(search_extra, ''),
+           coalesce(display_title, '') || ' ' || coalesce(content, '') || ' ' || coalesce(speaker, '')
+    FROM tracks;
+
+  -- Alben: Titel und Sprecher durchsuchbar
+  CREATE VIRTUAL TABLE albums_fts USING fts5(
+    title, speaker,
+    content='', contentless_delete=1,
+    tokenize='unicode61 remove_diacritics 2'
+  );
+  CREATE TRIGGER albums_ai AFTER INSERT ON albums BEGIN
+    INSERT INTO albums_fts(rowid, title, speaker) VALUES (new.id, new.title, coalesce(new.speaker, ''));
+  END;
+  CREATE TRIGGER albums_ad AFTER DELETE ON albums BEGIN
+    DELETE FROM albums_fts WHERE rowid = old.id;
+  END;
+  CREATE TRIGGER albums_au AFTER UPDATE OF title, speaker ON albums BEGIN
+    DELETE FROM albums_fts WHERE rowid = old.id;
+    INSERT INTO albums_fts(rowid, title, speaker) VALUES (new.id, new.title, coalesce(new.speaker, ''));
+  END;
+  INSERT INTO albums_fts(rowid, title, speaker) SELECT id, title, coalesce(speaker, '') FROM albums;
+  CREATE INDEX albums_sort_year ON albums(year, sort_title);
+
+  -- Kategorien nur noch aus Feldern des Regelwerks; Kategorien aus Tag-Feldern (Interpreten, Genre) entfallen.
+  UPDATE OR IGNORE category_fields SET tag = 'sprecher' WHERE tag IN ('speaker', 'prediger', 'predigerin', 'referent', 'referentin');
+  DELETE FROM category_fields WHERE tag NOT IN ('art', 'inhalt', 'sprecher', 'anlass', 'jahr');
+  DELETE FROM categories WHERE id NOT IN (SELECT category_id FROM category_fields);
+  `,
 ];
 
 export function openDatabase(path: string): DB {
@@ -621,14 +715,11 @@ export function openDatabase(path: string): DB {
   db.function('fold', { deterministic: true }, (value) => (typeof value === 'string' ? foldValue(value) : value));
   db.function('file_stem', { deterministic: true }, (value) => (typeof value === 'string' ? fileStem(value) : value));
   db.function('sort_key', { deterministic: true }, (value) => (typeof value === 'string' ? sortKey(value) : ''));
-  // 1, wenn einer der Interpreten im Feld ("A feat. B") den Schlüssel hat
-  db.function('has_artist', { deterministic: true }, (value, key) =>
-    typeof value === 'string' && artistNames(value).some((name) => artistKey(name) === key) ? 1 : 0,
+  // Titel, Album, Nummer oder Jahr aus dem Pfad (für die Migration weg von den Tags)
+  db.function('path_meta', { deterministic: true }, (path, field) =>
+    typeof path === 'string' && typeof field === 'string' ? (parsePath(path)[field as keyof PathMeta] ?? null) : null,
   );
   migrate(db);
-  loadArtistAliases(db);
-  // Name, unter dem ein Interpret geführt wird (Verwaltung → Interpreten)
-  db.function('artist_alias', { deterministic: false }, (value) => (typeof value === 'string' ? aliasOf(db, value) : value));
   return db;
 }
 

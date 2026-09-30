@@ -10,8 +10,7 @@ const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200
 const page = (items: unknown[]) => ({ items, total: items.length, limit: 20, offset: 0 });
 
 const album: Album = {
-  id: 3, title: 'Let There Be Light', artist: 'Hillsong', year: 2016, genre: 'Worship',
-  trackCount: 1, duration: 240, hasCover: false, date: null,
+  id: 3, title: 'Let There Be Light', year: 2016, trackCount: 1, duration: 240, hasCover: false, date: null,
 };
 
 let counted: string[] = [];

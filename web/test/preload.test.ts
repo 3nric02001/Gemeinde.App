@@ -118,8 +118,8 @@ describe('Vorladen', () => {
 
 describe('Player mit Vorladen', () => {
   const track = (id: number): Track => ({
-    id, title: `Titel ${id}`, artist: 'MBG', albumArtist: null, album: null, albumId: null, trackNo: null,
-    discNo: null, year: null, genre: null, duration: 200, mimeType: 'audio/mpeg',
+    id, title: `Titel ${id}`, album: null, albumId: null, trackNo: null,
+    discNo: null, year: null, duration: 200, mimeType: 'audio/mpeg',
   });
 
   afterEach(() => vi.restoreAllMocks());

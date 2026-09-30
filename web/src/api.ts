@@ -3,21 +3,18 @@ import { sessionExpired } from './auth';
 export interface Track {
   id: number;
   title: string;
-  artist: string;
-  albumArtist: string | null;
   album: string | null;
   albumId: number | null;
   trackNo: number | null;
   discNo: number | null;
   year: number | null;
-  genre: string | null;
   duration: number | null;
   mimeType: string | null;
   /** Eigenes eingebettetes Bild oder Albumcover vorhanden */
   hasCover?: boolean;
   /** Datum aus dem Ordnernamen des Albums (JJJJ-MM-TT), z. B. bei Gottesdiensten */
   albumDate?: string | null;
-  /** Sprecher aus dem Tag "Sprecher" o. ä. */
+  /** Sprecher aus dem Dateinamen ("Predigt - Titel - Name") oder aus der Verwaltung */
   speaker?: string | null;
   /** Inhalt einer Aufnahme ("Lied", "Predigt") aus dem Regelwerk */
   content?: string | null;
@@ -28,9 +25,7 @@ export interface Track {
 export interface Album {
   id: number;
   title: string;
-  artist: string;
   year: number | null;
-  genre: string | null;
   trackCount: number;
   duration: number;
   hasCover: boolean;
@@ -49,13 +44,7 @@ export interface AlbumDetail extends Album {
   tracks: Track[];
 }
 
-export interface Artist {
-  name: string;
-  albumCount: number;
-  trackCount: number;
-}
-
-/** Frei definierbare Kategorie ("Interpreten", "Musik" ...), in der Verwaltung angelegt */
+/** Frei definierbare Kategorie ("Sprecher", "Inhalt" ...), in der Verwaltung angelegt */
 export interface CategoryInfo {
   id: number;
   name: string;
@@ -67,7 +56,7 @@ export interface CategoryInfo {
 export interface CategoryValue {
   value: string;
   trackCount: number;
-  /** Zusammengefasster Wert, z. B. "Musik" aus den Tag-Werten Musik und Lied */
+  /** Zusammengefasster Wert, z. B. "Musik" aus den Inhalten Lied und Chor */
   grouped: boolean;
   sources?: string[];
 }
@@ -81,7 +70,6 @@ export interface Facet<T = string> {
 }
 
 export interface Facets {
-  genres: Facet[];
   decades: Facet<number>[];
   totals: { tracks: number; albums: number; duration: number };
   /** Arten von Aufnahmen aus dem Regelwerk, mit Anzahl */
@@ -97,8 +85,6 @@ export interface Page<T> {
 
 export interface Filter {
   q?: string;
-  artist?: string;
-  genre?: string;
   decade?: number;
   albumId?: number;
   sort?: string;

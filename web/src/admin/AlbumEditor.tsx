@@ -138,7 +138,7 @@ export function AlbumEditor({ id, onError }: Props) {
         <div class="hero-text">
           <span class="eyebrow">{dated ? album.recording || 'Gottesdienst' : manual ? 'Playlist' : 'Automatisches Album'}</span>
           <h1>{name}</h1>
-          <p class="hero-sub">{dated ? serviceLine(album.date!) : album.artist}</p>
+          <p class="hero-sub">{[dated ? serviceLine(album.date!) : album.year, album.speaker].filter(Boolean).join(' · ')}</p>
           <p class="hero-meta">
             {plural(album.trackCount, 'Titel', 'Titel')}, {formatDuration(album.duration)}
           </p>
@@ -210,8 +210,7 @@ export function AlbumEditor({ id, onError }: Props) {
                         {corrected && <span class="badge badge-muted admin-inline-badge">korrigiert</span>}
                       </span>
                       <span class="track-sub">
-                        {track.speaker ?? track.artist}
-                        {track.album && track.album !== album.title ? ` · ${track.album}` : ''}
+                        {[track.speaker, track.album && track.album !== album.title ? track.album : null].filter(Boolean).join(' · ')}
                       </span>
                     </span>
                     <span class="track-time">
@@ -288,13 +287,12 @@ export function AlbumEditor({ id, onError }: Props) {
           <div class="section-head">
             <h2>Herausgenommen</h2>
           </div>
-          <p class="admin-hint">Diese Titel gehören laut Tags und Ordner zu diesem Album, werden hier aber nicht angezeigt.</p>
+          <p class="admin-hint">Diese Titel gehören laut Ordner zu diesem Album, werden hier aber nicht angezeigt.</p>
           <ul class="admin-tracks">
             {album.excluded.map((track) => (
               <li key={track.id} class="admin-track admin-track-plain">
                 <span class="track-main">
                   <span class="track-title">{track.title}</span>
-                  <span class="track-sub">{track.artist}</span>
                 </span>
                 <span class="track-time">{formatTime(track.duration)}</span>
                 <button
@@ -336,7 +334,6 @@ export function AlbumEditor({ id, onError }: Props) {
               <li key={track.id} class="admin-track admin-track-plain">
                 <span class="track-main">
                   <span class="track-title">{track.title}</span>
-                  <span class="track-sub">{track.artist}</span>
                 </span>
                 <a class="more-link" href={`/admin/album/${track.albumId}`}>
                   {track.albumTitle}
@@ -409,7 +406,7 @@ export function AlbumEditor({ id, onError }: Props) {
 }
 
 // Sprecher gibt es nur je Titel: ein Gottesdienst hat oft mehrere.
-const TEXT_FIELDS = ['title', 'artist', 'genre', 'passage', 'description'] as const;
+const TEXT_FIELDS = ['title', 'passage', 'description'] as const;
 type FieldName = (typeof TEXT_FIELDS)[number] | 'year';
 /** Ohne Anlass heißt eine Aufnahme wie ihre Art, etwa „Gottesdienst“ (siehe albumTitle) */
 const noOccasion = (album: AdminAlbumDetail) => album.recording || 'Gottesdienst';
@@ -421,9 +418,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
   const shown = (name: (typeof TEXT_FIELDS)[number]) => (name === 'title' && dated ? withoutDate(album.title) : (album[name] ?? ''));
   const initial = () => ({
     title: shown('title'),
-    artist: album.artist,
     year: album.year ? String(album.year) : '',
-    genre: album.genre ?? '',
     passage: album.passage ?? '',
     description: album.description ?? '',
   });
@@ -456,7 +451,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
       );
     }
     if (!form[name] || form[name] !== initial()[name]) return null;
-    return <p class="field-source">{name === 'title' && dated ? 'Aus dem Ordnernamen' : 'Aus den Dateien'}</p>;
+    return <p class="field-source">{name === 'title' || name === 'year' ? 'Aus dem Ordnernamen' : 'Aus den Dateinamen'}</p>;
   };
   const field = (name: FieldName, text: string, props: Record<string, unknown> = {}) => (
     <div class="field-wrap">
@@ -512,21 +507,12 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
           </div>
           {passages}
           {description}
-          <details class="admin-more-fields">
-            <summary>Weitere Angaben (Interpret, Genre)</summary>
-            <div class="admin-fields admin-fields-2">
-              {field('artist', 'Interpret', { maxLength: 200, placeholder: 'Automatisch aus den Titeln' })}
-              {field('genre', 'Genre', { maxLength: 100, placeholder: 'Automatisch' })}
-            </div>
-          </details>
         </>
       ) : (
         <>
           <div class="admin-fields">
             {field('title', 'Titel', { maxLength: 200, required: manual })}
-            {field('artist', 'Interpret', { maxLength: 200, placeholder: 'Automatisch aus den Titeln' })}
             {field('year', 'Jahr', { inputMode: 'numeric', maxLength: 4, placeholder: 'Automatisch' })}
-            {field('genre', 'Genre', { maxLength: 100, placeholder: 'Automatisch' })}
           </div>
           {sermon && passages}
           {description}
@@ -547,7 +533,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
             class="button-secondary"
             disabled={busy}
             onClick={() =>
-              onSave({ title: null, artist: null, year: null, genre: null, speaker: null, passage: null, description: null })
+              onSave({ title: null, year: null, speaker: null, passage: null, description: null })
             }
           >
             Alles zurücksetzen
@@ -795,7 +781,7 @@ function AddTracks({
         <input
           type="search"
           value={text}
-          placeholder="Titel, Interpret oder Album suchen"
+          placeholder="Titel, Sprecher oder Album suchen"
           aria-label="Titel zum Hinzufügen suchen"
           autocomplete="off"
           onInput={(e) => setText((e.target as HTMLInputElement).value)}
@@ -823,10 +809,7 @@ function AddTracks({
               <li key={track.id} class="admin-track admin-track-plain">
                 <span class="track-main">
                   <span class="track-title">{track.title}</span>
-                  <span class="track-sub">
-                    {track.artist}
-                    {track.album ? ` · ${track.album}` : ''}
-                  </span>
+                  <span class="track-sub">{[track.speaker, track.album].filter(Boolean).join(' · ')}</span>
                 </span>
                 <span class="track-time">{formatTime(track.duration)}</span>
                 {existing.has(track.id) ? (

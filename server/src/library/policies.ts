@@ -11,13 +11,15 @@ import { foldValue } from './text.js';
  * Dieselben Bedingungen (ohne Inhalt, Art und Dauer) bestimmen in "Art bestimmen" die Art eines Albumordners.
  */
 
-export const POLICY_FIELDS = ['title', 'content', 'kind', 'artist', 'album', 'genre', 'folder', 'path', 'duration'] as const;
+export const POLICY_FIELDS = ['title', 'content', 'kind', 'folder', 'path', 'duration'] as const;
 export const POLICY_OPS = ['contains', 'not_contains', 'starts', 'equals', 'at_least', 'less_than'] as const;
 /**
- * Felder für "Art bestimmen": Pfad und Tags der Dateien. Inhalt und Titel aus dem Dateinamen stehen noch nicht fest,
+ * Felder für "Art bestimmen": Ordner, Pfad und Dateiname. Inhalt und Titel nach dem Muster stehen noch nicht fest,
  * denn die Art bestimmt erst, wie Dateinamen gelesen werden.
  */
-export const KIND_FIELDS = ['folder', 'path', 'title', 'artist', 'album', 'genre'] as const;
+export const KIND_FIELDS = ['folder', 'path', 'title'] as const;
+/** Felder aus Tags, die es in Policies nicht mehr gibt; gespeicherte Bedingungen darauf entfallen (withoutFields) */
+export const REMOVED_POLICY_FIELDS = new Set(['artist', 'album', 'genre']);
 const NUMBER_OPS = new Set<PolicyOp>(['at_least', 'less_than']);
 export const MAX_POLICIES = 50;
 const MAX_DEPTH = 4;
@@ -123,9 +125,6 @@ export interface PolicySubject {
   title?: string | null;
   content?: string | null;
   kind?: string | null;
-  artist?: string | null;
-  album?: string | null;
-  genre?: string | null;
   /** Pfad der Datei oder des Ordners */
   path?: string | null;
   /** Sekunden */
@@ -218,6 +217,20 @@ export function compilePolicies(policies: Policy[]): (subject: PolicySubject) =>
     }
     return decision;
   };
+}
+
+/**
+ * Gespeicherte Bedingung ohne Felder aus den Tags (Interpret, Album, Genre), die es nicht mehr gibt.
+ * Eine Gruppe behält die übrigen Bedingungen; bleibt nichts übrig, kommt undefined.
+ */
+export function withoutFields<T>(condition: T, removed: ReadonlySet<string>): T | undefined {
+  if (!condition || typeof condition !== 'object') return condition;
+  const node = condition as Record<string, unknown>;
+  if (Array.isArray(node.conditions)) {
+    const conditions = node.conditions.map((child) => withoutFields(child, removed)).filter((child) => child !== undefined);
+    return conditions.length ? ({ ...node, conditions } as T) : undefined;
+  }
+  return removed.has(String(node.field)) ? undefined : condition;
 }
 
 /** Bedingung "Ordner heißt …" aus dem früheren Feld "Erkennen am Ordner" */
