@@ -150,7 +150,7 @@ function LatestService({ album }: { album: DatedAlbum }) {
           <span class="eyebrow">Aktuell · {album.recording ?? 'Gottesdienst'}</span>
           <span class="latest-title">{occasion || formatLongDate(album.date)}</span>
           <span class="latest-sub">
-            {[occasion ? formatLongDate(album.date) : undefined, album.speaker, album.passage].filter(Boolean).join(' · ')}
+            {[occasion ? formatLongDate(album.date) : undefined, album.passage].filter(Boolean).join(' · ')}
           </span>
         </span>
       </a>

@@ -106,15 +106,15 @@ export function albumTitle(title: string, date: string | null | undefined, recor
   return withoutDate(title) || recording || 'Gottesdienst';
 }
 
-/** Überschrift über einer Aufnahme (ihre Art); heißt sie selbst schon so, führt sie als "Datum" zurück zur Übersicht */
+/** Überschrift über einer Aufnahme (ihre Art); heißt sie selbst schon so, keine (das Datum steht unter dem Titel) */
 export const serviceEyebrow = (title: string, recording?: string | null) => {
   const kind = recording || 'Gottesdienst';
-  return title === kind ? 'Datum' : kind;
+  return title === kind ? undefined : kind;
 };
 
-/** Zeile unter einem Gottesdienst: "So., 20.09.2026 · Pastor Meier" */
-export function serviceLine(date: string, speaker?: string | null): string {
-  return [formatCompactDate(date), speaker].filter(Boolean).join(' · ');
+/** Zeile unter einem Gottesdienst: das Datum, ohne Sprecher (ein Gottesdienst hat oft mehrere) */
+export function serviceLine(date: string): string {
+  return formatCompactDate(date);
 }
 
 /** Album eines Titels in Listen: "Erntedank, So., 27.09.2026" bzw. nur das Datum */
@@ -124,8 +124,8 @@ export function albumLabel(album: string | null, date: string | null | undefined
   return rest ? `${rest}, ${formatCompactDate(date)}` : formatCompactDate(date);
 }
 
-/** Zeile unter einem Albumtitel: bei Gottesdiensten Datum und Sprecher, sonst Interpret · Jahr */
-export function albumSubtitle(album: { artist: string; year: number | null; date?: string | null; speaker?: string | null }): string {
-  if (album.date) return serviceLine(album.date, album.speaker);
+/** Zeile unter einem Albumtitel: bei Gottesdiensten das Datum, sonst Interpret · Jahr */
+export function albumSubtitle(album: { artist: string; year: number | null; date?: string | null }): string {
+  if (album.date) return serviceLine(album.date);
   return [album.artist, album.year].filter(Boolean).join(' · ');
 }

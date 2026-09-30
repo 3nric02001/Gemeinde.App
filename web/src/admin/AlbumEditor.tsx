@@ -137,7 +137,7 @@ export function AlbumEditor({ id, onError }: Props) {
         <div class="hero-text">
           <span class="eyebrow">{dated ? album.recording || 'Gottesdienst' : manual ? 'Playlist' : 'Automatisches Album'}</span>
           <h1>{name}</h1>
-          <p class="hero-sub">{dated ? serviceLine(album.date!, album.speaker) : album.artist}</p>
+          <p class="hero-sub">{dated ? serviceLine(album.date!) : album.artist}</p>
           <p class="hero-meta">
             {plural(album.trackCount, 'Titel', 'Titel')}, {formatDuration(album.duration)}
           </p>
@@ -398,7 +398,8 @@ export function AlbumEditor({ id, onError }: Props) {
   );
 }
 
-const TEXT_FIELDS = ['title', 'artist', 'genre', 'speaker', 'passage', 'description'] as const;
+// Sprecher gibt es nur je Titel: ein Gottesdienst hat oft mehrere.
+const TEXT_FIELDS = ['title', 'artist', 'genre', 'passage', 'description'] as const;
 type FieldName = (typeof TEXT_FIELDS)[number] | 'year';
 /** Ohne Anlass heißt eine Aufnahme wie ihre Art, etwa „Gottesdienst“ (siehe albumTitle) */
 const noOccasion = (album: AdminAlbumDetail) => album.recording || 'Gottesdienst';
@@ -413,7 +414,6 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
     artist: album.artist,
     year: album.year ? String(album.year) : '',
     genre: album.genre ?? '',
-    speaker: album.speaker ?? '',
     passage: album.passage ?? '',
     description: album.description ?? '',
   });
@@ -430,7 +430,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
   const dirty = Object.keys(changes).length > 0;
   const overridden = Object.values(album.overrides).some((value) => value !== null);
   // Predigt-Felder bei Musik nur, wenn dort schon etwas steht
-  const sermon = dated || Boolean(album.speaker || album.passage);
+  const sermon = dated || Boolean(album.passage);
 
   /** Woher ein Wert kommt; bei automatischen Alben mit „Zurücksetzen“ für Korrekturen */
   const source = (name: FieldName) => {
@@ -461,6 +461,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
       {source(name)}
     </div>
   );
+  const passages = field('passage', 'Bibelstellen', { maxLength: 200, placeholder: 'z. B. Psalm 23; Joh 3,16' });
   const description = (
     <div class="field-wrap">
       <label class="field">
@@ -498,9 +499,8 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
                 Aus dem Ordner „{album.folder.split('/').pop()}“. Zum Ändern den Ordner in der Nextcloud umbenennen.
               </p>
             </div>
-            {field('speaker', 'Sprecher', { maxLength: 200, placeholder: 'z. B. Pastor Meier' })}
-            {field('passage', 'Bibelstelle', { maxLength: 200, placeholder: 'z. B. Psalm 23' })}
           </div>
+          {passages}
           {description}
           <details class="admin-more-fields">
             <summary>Weitere Angaben (Interpret, Genre)</summary>
@@ -518,12 +518,7 @@ function DetailsForm({ album, busy, onSave }: { album: AdminAlbumDetail; busy: b
             {field('year', 'Jahr', { inputMode: 'numeric', maxLength: 4, placeholder: 'Automatisch' })}
             {field('genre', 'Genre', { maxLength: 100, placeholder: 'Automatisch' })}
           </div>
-          {sermon && (
-            <div class="admin-fields admin-fields-2">
-              {field('speaker', 'Sprecher', { maxLength: 200 })}
-              {field('passage', 'Bibelstelle', { maxLength: 200 })}
-            </div>
-          )}
+          {sermon && passages}
           {description}
         </>
       )}

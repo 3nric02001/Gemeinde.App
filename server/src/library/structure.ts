@@ -351,6 +351,8 @@ export interface FileResult {
   speaker?: string;
   /** Name aus {sprecher} bei jeder Aufnahme: bei der Predigt der Prediger, bei einem Lied z. B. der Chor */
   performer?: string;
+  /** Bibelstelle aus {bibelstelle} im Dateinamen */
+  passage?: string;
   nr?: number;
   matched: boolean;
 }
@@ -395,6 +397,7 @@ export function applyToFolder(compiled: CompiledKind, folder: string, files: Fil
       content: values.inhalt,
       speaker: isSermon(values) ? values.sprecher : undefined,
       performer: values.sprecher,
+      passage: values.bibelstelle,
       nr,
     });
   }

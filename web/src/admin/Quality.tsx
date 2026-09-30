@@ -90,7 +90,7 @@ export function QualityPanel() {
       <Section
         title="Gottesdienste ohne Sprecher"
         count={report.servicesWithoutSpeaker.total}
-        hint="Sprecher kommt aus dem Tag „Sprecher“ (oder Speaker, Prediger, Referent), aus Dateinamen wie „2026-09-27 Meier - Psalm 23“ oder aus der Verwaltung am Album."
+        hint="Sprecher kommt aus dem Tag „Sprecher“ (oder Speaker, Prediger, Referent), aus Dateinamen wie „2026-09-27 Meier - Psalm 23“ oder aus der Verwaltung am einzelnen Titel."
       >
         <AlbumLinks albums={report.servicesWithoutSpeaker.items} />
       </Section>

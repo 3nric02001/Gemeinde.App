@@ -9,9 +9,9 @@ import { Empty, ErrorNote, Loading } from './common';
 /** Gottesdienst bzw. Aufnahme mit Datum; ein Album wie jedes andere */
 export type DatedAlbum = Album & { date: string };
 
-/** Zeile unter dem Anlass: Datum und Sprecher */
+/** Zeile unter dem Anlass: das Datum */
 export function folderSubtitle(album: DatedAlbum): string {
-  return serviceLine(album.date, album.speaker);
+  return serviceLine(album.date);
 }
 
 /** Alle Aufnahmen nach Datum, neueste zuerst, mit Monatsüberschriften */

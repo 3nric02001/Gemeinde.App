@@ -26,7 +26,7 @@ describe('Seite eines Gottesdienstes', () => {
     // Bei Gottesdiensten ist, wer predigt, der Interpret des Albums
     const detail: AlbumDetail = {
       id: 9, title: '2026-09-20', artist: 'Pastor Meier', year: 2026, genre: null, trackCount: 2, duration: 240,
-      hasCover: false, kind: 'auto', date: '2026-09-20', speaker: 'Pastor Meier', passage: 'Psalm 23', description: null,
+      hasCover: false, kind: 'auto', date: '2026-09-20', speaker: 'Pastor Meier', passage: 'Psalm 23; Joh 3,16', description: null,
       tracks: [track(1, 'Lobpreis'), track(2, 'Predigt', 'Pastor Meier')],
     };
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
@@ -35,10 +35,14 @@ describe('Seite eines Gottesdienstes', () => {
     render(<Album id={9} />);
     expect(await screen.findByRole('heading', { level: 1, name: 'Gottesdienst' })).toBeTruthy();
     expect(screen.getByText('Pastor Meier', { selector: '.hero-sub a' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Datum' }).getAttribute('href')).toBe('/datum');
+    // Kein "Datum" über dem Titel: das Datum steht schon darunter
+    expect(document.querySelector('.hero .eyebrow')).toBeNull();
     // Nur der abweichende Interpret, kein "So., 20.09.2026" in jeder Zeile
     expect([...document.querySelectorAll('.track-sub')].map((el) => el.textContent)).toEqual(['MBG Brake', '']);
     expect(screen.getByLabelText('Zu den Favoriten')).toBeTruthy();
+    // Alle Bibelstellen, aber keine Rubrik "Sprecher": ein Gottesdienst hat oft mehrere
+    expect([...document.querySelectorAll('.sermon-info dt')].map((el) => el.textContent)).toEqual(['Bibelstellen']);
+    expect([...document.querySelectorAll('.sermon-info dd')].map((el) => el.textContent)).toEqual(['Psalm 23', 'Joh 3,16']);
   });
 
   it('führt ältere Links auf einen Datumsordner zum Album', async () => {

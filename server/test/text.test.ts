@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findPassage } from '../src/library/bible.js';
+import { findPassage, findPassages, joinPassages } from '../src/library/bible.js';
 import { artistKey, artistNames, sortKey } from '../src/library/text.js';
 
 describe('sortKey', () => {
@@ -32,5 +32,19 @@ describe('findPassage', () => {
     expect(findPassage('Mi 18 Uhr Bibelstunde')).toBeUndefined();
     expect(findPassage('Am 27. September')).toBeUndefined();
     expect(findPassage('Johannes Meier')).toBeUndefined();
+  });
+});
+
+describe('findPassages', () => {
+  it('findet alle Bibelstellen im Text', () => {
+    expect(findPassages('Lesung Psalm 23 und Joh 3, 16')).toEqual(['Psalm 23', 'Joh 3,16']);
+    expect(findPassages('Mi 18 Uhr Bibelstunde')).toEqual([]);
+  });
+});
+
+describe('joinPassages', () => {
+  it('fasst Bibelstellen ohne Doppelte zusammen', () => {
+    expect(joinPassages(['Joh 3, 16', undefined, 'Psalm 23; Joh 3,16', ' ', 'psalm 23', 'Römer 8'])).toBe('Joh 3, 16; Psalm 23; Römer 8');
+    expect(joinPassages([null, ''])).toBeNull();
   });
 });

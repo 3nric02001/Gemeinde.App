@@ -1,5 +1,5 @@
 import type { DB } from '../db.js';
-import { findPassage } from './bible.js';
+import { findPassages, joinPassages } from './bible.js';
 import { parseFolderDate } from './dateText.js';
 import { PASSAGE_TAGS, SPEAKER_TAGS, UNKNOWN_ARTIST } from './metadata.js';
 import { evaluateRules } from './rules.js';
@@ -374,7 +374,13 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
       return values;
     };
     const speakers = sermonTag(SPEAKER_TAGS);
-    const passages = sermonTag(PASSAGE_TAGS);
+    // Bibelstellen dagegen alle: ein Album hat oft mehrere (Lesung, Predigt, Bibelstunde in Teilen).
+    const passages = new Map<number, string[]>();
+    for (const row of db
+      .prepare(`SELECT track_id, value FROM track_tags WHERE tag IN (SELECT value FROM json_each(?)) AND derived = 0 ORDER BY rowid`)
+      .all(JSON.stringify(PASSAGE_TAGS)) as Array<{ track_id: number; value: string }>) {
+      passages.set(row.track_id, [...(passages.get(row.track_id) ?? []), row.value]);
+    }
     // Sprecher, die in der Verwaltung je Titel gesetzt wurden, gehen den Tags vor.
     const pathIds = new Map(tracks.map((t) => [t.path, t.id]));
     for (const row of db.prepare('SELECT path, speaker FROM track_overrides WHERE speaker IS NOT NULL').all() as Array<{
@@ -424,14 +430,21 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         recording?.speaker ??
         (date && !recording ? mostCommon(byLength.map((t) => parsed(t.path).speaker)) : undefined) ??
         null;
+      // Alle Bibelstellen des Albums: zuerst die des Ordners bzw. der Predigt, dann je Titel in Albumreihenfolge
+      // aus den Tags oder dem Dateinamen nach dem Regelwerk, sonst (nur bei Aufnahmen) aus Titel oder Dateiname.
+      const sermonLike = Boolean(date || recording);
       const passage =
         override?.passage ??
-        mostCommon(draft.tracks.map((t) => passages.get(t.id))) ??
-        recording?.passage ??
-        (date && !recording
-          ? [...byLength.map((t) => t.title), ...byLength.map((t) => fileStem(t.path)), title].map(findPassage).find(Boolean)
-          : undefined) ??
-        null;
+        joinPassages([
+          recording?.passage,
+          ...[...draft.tracks].sort(compareTracks).flatMap((t) => {
+            const known = [...(passages.get(t.id) ?? []), recording?.files.get(t.path)?.passage].filter(Boolean);
+            if (known.length || !sermonLike) return known;
+            const inTitle = findPassages(t.display_title ?? t.title);
+            return inTitle.length ? inTitle : findPassages(fileStem(t.path));
+          }),
+          ...(sermonLike ? findPassages(title) : []),
+        ]);
       // Bei Gottesdiensten ist, wer predigt, der Interpret; das Jahr kommt aus dem Datum.
       const artist = override?.artist ?? (date && speaker ? speaker : tracks.length ? albumArtist(tracks) : UNKNOWN_ARTIST);
       const sortTitle = sortKey(override?.title ?? mostCommon(draft.tracks.map((t) => t.album_sort)) ?? title);
