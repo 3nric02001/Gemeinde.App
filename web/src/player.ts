@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { streamUrl, trackCoverUrl, type Track } from './api';
+import { streamUrl, trackCoverUrl, type Album, type Track } from './api';
 import { countPlay, isLong, resumePosition, saveProgress } from './me';
 import { isDownloaded, readDownload, ready as offlineReady } from './offline';
 import { Queue, type QueueState, type RepeatMode } from './queue';
@@ -8,10 +8,30 @@ import { Queue, type QueueState, type RepeatMode } from './queue';
 export interface Entry {
   key: number;
   track: Track;
+  /** Wo die Wiedergabe gestartet wurde, z. B. eine Playlist; führt beim Antippen dorthin zurück */
+  from?: PlaybackContext;
+}
+
+/** Herkunft eines Titels in der Warteschlange, wenn sie vom Album des Titels abweicht */
+export interface PlaybackContext {
+  title: string;
+  href: string;
+}
+
+/** Eigene (zusammengestellte) Alben sind Playlists: Titel darin gehören zu anderen Alben. */
+export function albumContext(album: Pick<Album, 'id' | 'title' | 'kind'>): PlaybackContext | undefined {
+  return album.kind === 'manual' ? { title: album.title, href: `/album/${album.id}` } : undefined;
+}
+
+/** Ziel beim Antippen des laufenden Titels: die Playlist, aus der er läuft, sonst sein Album */
+export function currentHref(track: Track, from: PlaybackContext | undefined): string | undefined {
+  return from?.href ?? (track.albumId ? `/album/${track.albumId}` : undefined);
 }
 
 export interface PlayerState {
   current: Track | undefined;
+  /** Herkunft des laufenden Titels (Playlist), falls vorhanden */
+  from: PlaybackContext | undefined;
   currentKey: number | undefined;
   queue: Entry[];
   index: number;
@@ -36,7 +56,8 @@ const PLAY_COUNT_SECONDS = 30;
 
 const STORAGE_KEY = 'gemeinde.player';
 let nextKey = 1;
-const entry = (track: Track): Entry => ({ key: nextKey++, track });
+const entries = (tracks: Track[], from?: PlaybackContext): Entry[] =>
+  tracks.map((track) => (from ? { key: nextKey++, track, from } : { key: nextKey++, track }));
 
 function load(): { queue?: QueueState<Entry>; volume?: number; muted?: boolean; position?: number; rate?: number } {
   try {
@@ -140,24 +161,24 @@ export class Player {
   }
 
   /** Liste abspielen, beginnend bei `start` */
-  playList(tracks: Track[], start = 0, options: { shuffle?: boolean } = {}): void {
+  playList(tracks: Track[], start = 0, options: { shuffle?: boolean; from?: PlaybackContext } = {}): void {
     if (!tracks.length) return;
-    this.queue.set(tracks.map(entry), start, options.shuffle ?? this.queue.shuffle);
+    this.queue.set(entries(tracks, options.from), start, options.shuffle ?? this.queue.shuffle);
     this.queueDirty = true;
     this.loadCurrent(true);
   }
 
-  playNext(tracks: Track[]): void {
+  playNext(tracks: Track[], from?: PlaybackContext): void {
     const wasEmpty = !this.queue.current;
-    this.queue.playNext(tracks.map(entry));
+    this.queue.playNext(entries(tracks, from));
     this.queueDirty = true;
     if (wasEmpty) this.loadCurrent(true);
     else this.emit();
   }
 
-  append(tracks: Track[]): void {
+  append(tracks: Track[], from?: PlaybackContext): void {
     const wasEmpty = !this.queue.current;
-    this.queue.append(tracks.map(entry));
+    this.queue.append(entries(tracks, from));
     this.queueDirty = true;
     if (wasEmpty) this.loadCurrent(true);
     else this.emit();
@@ -385,6 +406,7 @@ export class Player {
     const audio = this.audio;
     return {
       current: current?.track,
+      from: current?.from,
       currentKey: current?.key,
       queue: this.queueDirty ? (this.queueCopy = [...this.queue.items]) : this.queueCopy,
       index: this.queue.index,

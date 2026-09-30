@@ -193,6 +193,8 @@ interface Override {
   passage: string | null;
   description: string | null;
   hidden: number;
+  /** Hochgeladenes Titelbild (covers.id) */
+  cover_id: number | null;
 }
 
 const COMPARED = [
@@ -349,7 +351,7 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     }
 
     const overrides = new Map(
-      (db.prepare('SELECT key, title, artist, year, genre, speaker, passage, description, hidden FROM album_overrides').all() as Array<
+      (db.prepare('SELECT key, title, artist, year, genre, speaker, passage, description, hidden, cover_id FROM album_overrides').all() as Array<
         Override & { key: string }
       >).map((row) => [row.key, row]),
     );
@@ -373,6 +375,15 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
     };
     const speakers = sermonTag(SPEAKER_TAGS);
     const passages = sermonTag(PASSAGE_TAGS);
+    // Sprecher, die in der Verwaltung je Titel gesetzt wurden, gehen den Tags vor.
+    const pathIds = new Map(tracks.map((t) => [t.path, t.id]));
+    for (const row of db.prepare('SELECT path, speaker FROM track_overrides WHERE speaker IS NOT NULL').all() as Array<{
+      path: string;
+      speaker: string;
+    }>) {
+      const id = pathIds.get(row.path);
+      if (id !== undefined) speakers.set(id, row.speaker);
+    }
 
     // 3. Automatische Alben aus den Gruppen, ohne herausgenommene und per Regel verschobene Titel.
     const drafts = new Map<string, AlbumDraft>();
@@ -437,9 +448,10 @@ export function rebuildAlbums(db: DB, now = Date.now()): void {
         description: override?.description ?? null,
         genre: override?.genre ?? mostCommon(draft.tracks.map((t) => t.genre)) ?? null,
         folder: draft.folder,
-        cover: cover ?? null,
+        // Ein hochgeladenes Titelbild geht dem Ordnerbild und den eingebetteten Bildern vor.
+        cover: override?.cover_id ? null : (cover ?? null),
         // Eingebettetes Bild, das die meisten Titel tragen (bei Gleichstand das des ersten Titels)
-        coverId: mostCommon(draft.tracks.map((t) => t.cover_id)) ?? null,
+        coverId: override?.cover_id ?? mostCommon(draft.tracks.map((t) => t.cover_id)) ?? null,
         count: draft.tracks.length,
         duration: draft.tracks.reduce((sum, t) => sum + (t.duration ?? 0), 0),
         hidden: override?.hidden ? 1 : 0,

@@ -528,6 +528,28 @@ export const migrations: string[] = [
   UPDATE tracks SET etag = '';
   `,
   `
+  -- Korrekturen einzelner Titel aus der Verwaltung (Titelname, Sprecher), je Pfad wie die übrigen
+  -- Korrekturen. Sie gehen allem vor, was Dateien und Regelwerk ergeben (queries.ts TRACK_COLUMNS).
+  CREATE TABLE track_overrides (
+    path    TEXT PRIMARY KEY,
+    title   TEXT,
+    speaker TEXT
+  ) WITHOUT ROWID;
+  -- Hochgeladenes Titelbild eines Albums; liegt wie eingebettete Bilder in covers.
+  ALTER TABLE album_overrides ADD COLUMN cover_id INTEGER REFERENCES covers(id) ON DELETE SET NULL;
+  -- Wer hat in der Verwaltung was geändert (library/changes.ts).
+  CREATE TABLE changes (
+    id        INTEGER PRIMARY KEY,
+    at        INTEGER NOT NULL,
+    user_id   INTEGER,
+    user_name TEXT NOT NULL,
+    action    TEXT NOT NULL,
+    target    TEXT,
+    album_id  INTEGER
+  );
+  CREATE INDEX changes_album ON changes(album_id, id);
+  `,
+  `
   -- Die Dauer von MP3 und Ogg kam bisher nur aus dem gelesenen Dateianfang (wenige Sekunden je Titel); einmal neu lesen.
   UPDATE tracks SET etag = ''
     WHERE mime IN ('audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/opus', 'application/ogg')
