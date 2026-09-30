@@ -282,7 +282,7 @@ export class LibraryScanner {
     await mapLimit(changed, this.concurrency, async (entry) => {
       try {
         const head = await this.readTags(entry.path);
-        pending.push({ entry, meta: await extractMetadata(entry.path, head, entry.contentType) });
+        pending.push({ entry, meta: await extractMetadata(entry.path, head, entry.contentType, entry.size) });
       } catch (error) {
         this.status.failed++;
         // Die erste Ursache reicht für die Anzeige in der Verwaltung; alle stehen im Log.
