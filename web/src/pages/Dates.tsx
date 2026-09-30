@@ -1,8 +1,9 @@
 import { Fragment } from 'preact';
-import type { Album } from '../api';
+import type { Album, Facets } from '../api';
+import { query } from '../api';
 import { AlbumGrid } from '../components/AlbumCard';
 import { formatMonth, serviceLine } from '../format';
-import { usePaged } from '../hooks';
+import { useApi, usePaged } from '../hooks';
 import { Empty, ErrorNote, Loading } from './common';
 
 /** Gottesdienst bzw. Aufnahme mit Datum; ein Album wie jedes andere */
@@ -14,8 +15,11 @@ export function folderSubtitle(album: DatedAlbum): string {
 }
 
 /** Alle Aufnahmen nach Datum, neueste zuerst, mit Monatsüberschriften */
-export function Dates() {
-  const { items, total, loading, error, sentinel } = usePaged<DatedAlbum>('/api/dates', 200);
+export function Dates({ params }: { params: URLSearchParams }) {
+  const art = params.get('art') || undefined;
+  const facets = useApi<Facets>('/api/facets');
+  const kinds = facets.data?.recordings ?? [];
+  const { items, total, loading, error, sentinel } = usePaged<DatedAlbum>(`/api/dates${query({ recording: art })}`, 200);
   const months: Array<{ label: string; albums: DatedAlbum[] }> = [];
   for (const album of items) {
     const label = formatMonth(album.date);
@@ -26,6 +30,24 @@ export function Dates() {
   return (
     <div class="page">
       <h1 class="page-title">Datum</h1>
+      {/* Filter je Art aus dem Regelwerk (Gottesdienste, Bibelstunden …), erst ab zwei Arten */}
+      {kinds.length > 1 && (
+        <nav class="chips-row" aria-label="Art der Aufnahme">
+          <a class={`chip${!art ? ' is-on' : ''}`} href="/datum" aria-current={!art ? 'page' : undefined}>
+            Alle
+          </a>
+          {kinds.map((kind) => (
+            <a
+              key={kind.name}
+              class={`chip${art === kind.name ? ' is-on' : ''}`}
+              href={`/datum${query({ art: kind.name })}`}
+              aria-current={art === kind.name ? 'page' : undefined}
+            >
+              {kind.plural}
+            </a>
+          ))}
+        </nav>
+      )}
       {error && <ErrorNote message={error} />}
       {total === 0 && (
         <Empty title="Noch keine Aufnahmen mit Datum">

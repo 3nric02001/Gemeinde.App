@@ -211,7 +211,8 @@ describe('Hinweise zur Datenqualität', () => {
     ]);
     expect(report.withoutCover.total).toBe(3);
     expect(report.servicesWithoutSpeaker.items.map((a: any) => a.date)).toEqual(['2026-09-27']);
-    expect(report.suspiciousArtists.map((a: any) => a.name).sort()).toEqual(['2019', 'Unbekannter Interpret']);
+    // Die Predigt ohne Interpret steht unter der Art ("Gottesdienst"), nicht als unbekannt
+    expect(report.suspiciousArtists.map((a: any) => a.name).sort()).toEqual(['2019']);
     expect(report.artistVariants).toEqual([{ names: ['Hillsong UNITED', 'Hillsong United'], trackCount: 2 }]);
   });
 });

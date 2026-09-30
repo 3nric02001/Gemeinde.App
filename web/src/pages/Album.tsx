@@ -26,8 +26,16 @@ export function Album({ id }: { id: number }) {
       <header class="hero">
         <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-hero" eager />
         <div class="hero-text">
-          <span class="eyebrow">{album.date ? <a href="/datum">{serviceEyebrow(albumTitle(album.title, album.date))}</a> : 'Album'}</span>
-          <h1>{albumTitle(album.title, album.date)}</h1>
+          <span class="eyebrow">
+            {album.date ? (
+              <a href={`/datum${query({ art: album.recording ?? undefined })}`}>
+                {serviceEyebrow(albumTitle(album.title, album.date, album.recording), album.recording)}
+              </a>
+            ) : (
+              'Album'
+            )}
+          </span>
+          <h1>{albumTitle(album.title, album.date, album.recording)}</h1>
           <p class="hero-sub">
             {album.date && `${formatLongDate(album.date)} · `}
             <a href={artistHref}>{album.artist}</a>
@@ -65,7 +73,13 @@ export function Album({ id }: { id: number }) {
 
       <SermonInfo speaker={album.speaker} passage={album.passage} description={album.description} />
 
-      <TrackList tracks={album.tracks} variant="album" albumArtist={album.artist} ordinal={album.kind === 'manual'} />
+      <TrackList
+        tracks={album.tracks}
+        variant="album"
+        albumArtist={album.artist}
+        hideArtist={album.recording ?? undefined}
+        ordinal={album.kind === 'manual'}
+      />
 
       {others.length > 0 && (
         <section class="shelf">

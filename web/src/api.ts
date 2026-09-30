@@ -19,6 +19,8 @@ export interface Track {
   albumDate?: string | null;
   /** Sprecher aus dem Tag "Sprecher" o. ä. */
   speaker?: string | null;
+  /** Inhalt einer Aufnahme ("Lied", "Predigt") aus dem Regelwerk */
+  content?: string | null;
 }
 
 export interface Album {
@@ -37,6 +39,8 @@ export interface Album {
   speaker?: string | null;
   passage?: string | null;
   description?: string | null;
+  /** Art der Aufnahme aus dem Regelwerk ("Gottesdienst", "Bibelstunde"); bei Musik null */
+  recording?: string | null;
 }
 
 export interface AlbumDetail extends Album {
@@ -78,6 +82,8 @@ export interface Facets {
   genres: Facet[];
   decades: Facet<number>[];
   totals: { tracks: number; albums: number; duration: number };
+  /** Arten von Aufnahmen aus dem Regelwerk, mit Anzahl */
+  recordings?: Array<{ name: string; plural: string; count: number }>;
 }
 
 export interface Page<T> {

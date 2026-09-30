@@ -70,6 +70,7 @@ export function AdminTabs({ path, admin }: { path: string; admin: boolean }) {
   const tabs = [
     { path: '/admin', label: 'Alben' },
     { path: '/admin/kategorien', label: 'Kategorien' },
+    { path: '/admin/zuordnung', label: 'Zuordnung' },
     { path: '/admin/pruefen', label: 'Prüfen' },
     ...(admin ? ACCESS_SECTIONS : []),
   ];

@@ -57,13 +57,15 @@ afterEach(async () => {
 });
 
 describe('Kategorien', () => {
-  it('bringt Interpreten, Genre und Sprecher als Vorgabe mit', async () => {
+  it('bringt Interpreten, Genre, Sprecher und Inhalt als Vorgabe mit', async () => {
     const { items } = await call('GET', '/api/categories');
     expect(items).toEqual([
       { id: 1, name: 'Interpreten', slug: 'interpreten', inNav: true },
       { id: 2, name: 'Genre', slug: 'genre', inNav: false },
       // Im Menü erst, wenn beim Update schon Sprecher in den Tags standen
       { id: 3, name: 'Sprecher', slug: 'sprecher', inNav: false },
+      // Inhalt (Lied, Predigt …) aus dem Regelwerk der Verwaltung
+      { id: 4, name: 'Inhalt', slug: 'inhalt', inNav: false },
     ]);
     // Mehrere Interpreten in einem Tag ("Kirchenchor; Gemeinde") werden einzeln geführt.
     expect((await values('interpreten')).map((v) => v.value)).toEqual(['Gemeinde', 'Hillsong United', 'Kirchenchor', 'Pastor Meier']);
@@ -111,7 +113,7 @@ describe('Kategorien', () => {
       { name: 'Art', fields: ['genre', 'kategorie'], groups: [{ label: 'Musik', values: ['Musik', 'Lied'] }] },
       201,
     );
-    expect(created).toMatchObject({ slug: 'art', inNav: true, fields: ['genre', 'kategorie'], position: 3 });
+    expect(created).toMatchObject({ slug: 'art', inNav: true, fields: ['genre', 'kategorie'], position: 4 });
 
     const list = await values('art');
     expect(list).toEqual([
@@ -136,12 +138,12 @@ describe('Kategorien', () => {
     expect(await values('kunstler-sprecher')).toHaveLength(4);
     await call('GET', '/api/categories/interpreten/values', undefined, 404);
 
-    const { items } = await call('PUT', '/api/admin/categories/order', { ids: [2, 1, 3] });
-    expect(items.map((c: { id: number }) => c.id)).toEqual([2, 1, 3]);
+    const { items } = await call('PUT', '/api/admin/categories/order', { ids: [2, 1, 3, 4] });
+    expect(items.map((c: { id: number }) => c.id)).toEqual([2, 1, 3, 4]);
     await call('PUT', '/api/admin/categories/order', { ids: [2] }, 400);
 
     await call('DELETE', '/api/admin/categories/2', undefined, 204);
-    expect((await call('GET', '/api/categories')).items).toHaveLength(2);
+    expect((await call('GET', '/api/categories')).items).toHaveLength(3);
     await call('DELETE', '/api/admin/categories/2', undefined, 404);
   });
 

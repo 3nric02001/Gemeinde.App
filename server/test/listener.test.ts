@@ -92,7 +92,7 @@ describe('Alben mit Datum', () => {
   });
 
   it('Sprecher, Bibelstelle und Beschreibung lassen sich in der Verwaltung setzen', async () => {
-    const id = albumId('13.09.2026 Taufgottesdienst');
+    const id = albumId('Taufgottesdienst');
     const res = await inject({
       method: 'PATCH',
       url: `/api/admin/albums/${id}`,
@@ -112,7 +112,7 @@ describe('Suche', () => {
   it('findet eigene Felder wie den Sprecher, auch zusammen mit dem Titel', async () => {
     expect((await get('/api/tracks?q=meier')).items.map((t: any) => t.title)).toEqual(['Predigt Psalm 23']);
     expect((await get('/api/tracks?q=psalm%20meier')).total).toBe(1);
-    expect((await get('/api/albums?q=schulz')).items.map((a: any) => a.title)).toEqual(['2026-09-27 Erntedank']);
+    expect((await get('/api/albums?q=schulz')).items.map((a: any) => a.title)).toEqual(['Erntedank']);
   });
 
   it('vergisst alte Werte, wenn sich die Tags ändern', async () => {

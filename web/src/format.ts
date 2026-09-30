@@ -101,13 +101,16 @@ const WEEKDAYS = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
  * Anzeigename eines Gottesdienstes oder Albums: bei Datum im Ordnernamen der Anlass ohne Datum,
  * z. B. "Erntedank"; ohne Anlass einfach "Gottesdienst". Das Datum steht dann in der Zeile darunter.
  */
-export function albumTitle(title: string, date: string | null | undefined): string {
+export function albumTitle(title: string, date: string | null | undefined, recording?: string | null): string {
   if (!date) return title;
-  return withoutDate(title) || 'Gottesdienst';
+  return withoutDate(title) || recording || 'Gottesdienst';
 }
 
-/** Überschrift über einem Gottesdienst; heißt er selbst schon so, führt sie als "Datum" zurück zur Übersicht */
-export const serviceEyebrow = (title: string) => (title === 'Gottesdienst' ? 'Datum' : 'Gottesdienst');
+/** Überschrift über einer Aufnahme (ihre Art); heißt sie selbst schon so, führt sie als "Datum" zurück zur Übersicht */
+export const serviceEyebrow = (title: string, recording?: string | null) => {
+  const kind = recording || 'Gottesdienst';
+  return title === kind ? 'Datum' : kind;
+};
 
 /** Zeile unter einem Gottesdienst: "So., 20.09.2026 · Pastor Meier" */
 export function serviceLine(date: string, speaker?: string | null): string {

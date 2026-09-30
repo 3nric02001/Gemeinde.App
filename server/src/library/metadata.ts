@@ -20,6 +20,8 @@ export interface TrackMeta {
   sort: { title?: string; artist?: string; album?: string; albumArtist?: string };
   /** Albumname steht im Tag (sonst aus dem Ordner abgeleitet) */
   albumTagged: boolean;
+  /** Titel steht im Tag (sonst aus dem Dateinamen abgeleitet) */
+  titleTagged: boolean;
 }
 
 /** Standardfelder, die immer mit den aufbereiteten Werten (inkl. Pfad-Fallback) belegt werden */
@@ -224,6 +226,7 @@ export async function extractMetadata(path: string, head: Buffer, mimeType?: str
     genre,
     tags,
     albumTagged: text(common?.album) !== undefined,
+    titleTagged: text(common?.title) !== undefined,
     sort: {
       title: text(common?.titlesort),
       artist: text(common?.artistsort),

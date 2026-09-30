@@ -13,6 +13,7 @@ import { AlbumEditor } from './AlbumEditor';
 import { CategoriesAdmin, CategoryEditor } from './Categories';
 import { QualityPanel } from './Quality';
 import { ScanPanel } from './Scan';
+import { StructurePanel } from './Structure';
 
 /** Verwaltung unter /admin: Alben für Manager und Admins, Benutzer, Gruppen und Anmeldung nur für Admins. */
 export function Admin({ location }: { location: Location }) {
@@ -40,6 +41,7 @@ export function Admin({ location }: { location: Location }) {
     content = <CategoryEditor key={category.id} id={id} onError={onError} />;
   } else if (location.path === '/admin/kategorien') content = <CategoriesAdmin onError={onError} />;
   else if (location.path === '/admin/pruefen') content = <QualityPanel />;
+  else if (location.path === '/admin/zuordnung') content = <StructurePanel />;
   else if (section) content = <section.Component />;
   else content = <AlbumsAdmin params={location.params} onError={onError} />;
 
@@ -142,7 +144,7 @@ function AlbumsAdmin({ params, onError }: { params: URLSearchParams; onError: (e
                   <Cover src={album.hasCover ? coverUrl(album.id) : undefined} title={album.title} date={album.date} class="cover-sm" />
                   <span class="track-main">
                     {/* Name wie bei den Hörern; bei Gottesdiensten der gespeicherte Name klein dahinter */}
-                    <span class="track-title">{albumTitle(album.title, album.date)}</span>
+                    <span class="track-title">{albumTitle(album.title, album.date, album.recording)}</span>
                     <span class="track-sub">
                       {[album.date && formatCompactDate(album.date), album.artist, plural(album.trackCount, 'Titel', 'Titel')]
                         .filter(Boolean)
