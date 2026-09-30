@@ -74,7 +74,7 @@ export function Album({ id }: { id: number }) {
         />
       </div>
 
-      <SermonInfo speaker={album.speaker} passage={album.passage} description={album.description} />
+      <SermonInfo passage={album.passage} description={album.description} />
 
       <TrackList
         tracks={album.tracks}

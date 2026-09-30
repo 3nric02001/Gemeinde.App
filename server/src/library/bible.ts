@@ -25,10 +25,36 @@ const REFERENCE = new RegExp(
   'u',
 );
 
+const format = ([, number, book, chapter, verse, to]: RegExpMatchArray) =>
+  `${number ? `${number}. ` : ''}${book} ${chapter}${verse ? `,${verse}${to ? `-${to}` : ''}` : ''}`;
+
 /** Die erste Bibelstelle im Text, so geschrieben wie dort, oder undefined */
 export function findPassage(text: string): string | undefined {
   const match = REFERENCE.exec(text);
-  if (!match) return undefined;
-  const [, number, book, chapter, verse, to] = match;
-  return `${number ? `${number}. ` : ''}${book} ${chapter}${verse ? `,${verse}${to ? `-${to}` : ''}` : ''}`;
+  return match ? format(match) : undefined;
+}
+
+/** Alle Bibelstellen im Text ("Psalm 23 und Joh 3,16"), in der Reihenfolge des Textes */
+export function findPassages(text: string): string[] {
+  return [...text.matchAll(new RegExp(REFERENCE.source, 'gu'))].map(format);
+}
+
+/** Trennzeichen, mit dem mehrere Bibelstellen eines Albums in einem Feld stehen */
+export const PASSAGE_SEPARATOR = '; ';
+
+/**
+ * Fasst Bibelstellen zu einem Feld zusammen: leere weg, doppelte ("Joh 3, 16" und "Joh 3,16") nur einmal,
+ * in der Reihenfolge des ersten Auftretens. Ein Wert mit ";" zählt als mehrere Stellen.
+ */
+export function joinPassages(values: Array<string | null | undefined>): string | null {
+  const seen = new Map<string, string>();
+  for (const value of values) {
+    for (const part of value?.split(';') ?? []) {
+      const passage = part.trim();
+      if (!passage) continue;
+      const key = (findPassage(passage) ?? passage).toLowerCase().replace(/[\s.]/g, '');
+      if (!seen.has(key)) seen.set(key, passage);
+    }
+  }
+  return seen.size ? [...seen.values()].join(PASSAGE_SEPARATOR) : null;
 }

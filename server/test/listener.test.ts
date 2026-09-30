@@ -93,6 +93,21 @@ describe('Alben mit Datum', () => {
     ]);
   });
 
+  it('sammeln alle Bibelstellen ihrer Titel, eine Korrektur in der Verwaltung geht vor', async () => {
+    const folder = 'Gottesdienste/2026/2026-10-04 Bibeltag';
+    cloud.put(`${folder}/01 Lesung Römer 8.mp3`, mp3({ title: 'Lesung Römer 8', artist: 'MBG', track: 1 }));
+    cloud.put(`${folder}/02 Predigt.mp3`, mp3({ title: 'Predigt', artist: 'MBG', track: 2, custom: { Sprecher: 'Pastor Meier', Bibelstelle: 'Psalm 23; Joh 3,16' } }));
+    cloud.put(`${folder}/03 Zeugnis.mp3`, mp3({ title: 'Zeugnis', artist: 'MBG', track: 3, custom: { Sprecher: 'Anna Schulz', Bibelstelle: 'Joh 3, 16' } }));
+    await ctx.scanner.scan();
+    const id = albumId('Bibeltag');
+    expect((await get(`/api/albums/${id}`)).passage).toBe('Römer 8; Psalm 23; Joh 3,16');
+
+    const res = await inject({ method: 'PATCH', url: `/api/admin/albums/${id}`, payload: { passage: 'Psalm 23' } });
+    expect(res.statusCode, res.body).toBe(200);
+    await ctx.scanner.scan();
+    expect((await get(`/api/albums/${id}`)).passage).toBe('Psalm 23');
+  });
+
   it('Sprecher, Bibelstelle und Beschreibung lassen sich in der Verwaltung setzen', async () => {
     const id = albumId('Taufgottesdienst');
     const res = await inject({

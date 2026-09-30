@@ -229,7 +229,8 @@ describe('Uneinheitliche Dateinamen', () => {
 
   it('trennt nur an " - ", kennt Inhalte ohne Titel und liest "Text_" als Bibelstelle', async () => {
     const album = await service();
-    expect(album).toMatchObject({ speaker: 'Jakob Rauschenberger', passage: 'Matthäus 7,7-14', artist: 'Jakob Rauschenberger' });
+    // Alle Bibelstellen des Gottesdienstes, die der Predigt zuerst
+    expect(album).toMatchObject({ speaker: 'Jakob Rauschenberger', passage: 'Matthäus 7,7-14; Richter 7,1-4', artist: 'Jakob Rauschenberger' });
     expect((await albumTracks(album.id)).map((t) => [t.title, t.artist, t.content])).toEqual([
       ['Lied: Einst scheint Ewiges Licht', 'Gemeindechor', 'Lied'],
       ['Begrüßung', 'Jakob Rauschenberger', 'Begrüßung'],

@@ -65,6 +65,9 @@ describe('Album-Editor', () => {
     // Datum nur zum Lesen, mit Herkunft; kein Jahr-Feld bei Gottesdiensten
     expect(screen.getByText('Aus dem Ordner „2026-09-27 Erntedank“', { exact: false })).toBeTruthy();
     expect(screen.queryByLabelText('Jahr')).toBeNull();
+    // Sprecher nur je Titel, am Album alle Bibelstellen
+    expect(screen.queryByLabelText('Sprecher')).toBeNull();
+    expect(screen.getByLabelText('Bibelstellen')).toBeTruthy();
     const occasion = screen.getByLabelText('Anlass') as HTMLInputElement;
     expect(occasion.value).toBe('Erntedank');
     expect(screen.getByText('Aus dem Ordnernamen')).toBeTruthy();
@@ -84,7 +87,7 @@ describe('Album-Editor', () => {
     render(<Admin location={at('/admin/album/8')} />);
     await waitFor(() => expect(screen.getByLabelText('Titel')).toBeTruthy());
     expect(screen.queryByLabelText('Sprecher')).toBeNull();
-    expect(screen.queryByLabelText('Bibelstelle')).toBeNull();
+    expect(screen.queryByLabelText('Bibelstellen')).toBeNull();
     expect((screen.getByLabelText('Beschreibung für Hörer') as HTMLTextAreaElement).placeholder).toBe('Ein, zwei Sätze zum Album');
   });
 
