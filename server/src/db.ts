@@ -549,6 +549,12 @@ export const migrations: string[] = [
   );
   CREATE INDEX changes_album ON changes(album_id, id);
   `,
+  `
+  -- Die Dauer von MP3 und Ogg kam bisher nur aus dem gelesenen Dateianfang (wenige Sekunden je Titel); einmal neu lesen.
+  UPDATE tracks SET etag = ''
+    WHERE mime IN ('audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/opus', 'application/ogg')
+       OR lower(path) LIKE '%.mp3' OR lower(path) LIKE '%.ogg' OR lower(path) LIKE '%.oga' OR lower(path) LIKE '%.opus';
+  `,
 ];
 
 export function openDatabase(path: string): DB {

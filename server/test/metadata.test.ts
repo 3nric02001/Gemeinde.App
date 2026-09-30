@@ -49,6 +49,16 @@ describe('extractMetadata', () => {
     ]);
   });
 
+  it('rechnet die Dauer einer MP3 mit fester Bitrate auf die ganze Datei hoch', async () => {
+    // 1000 Frames zu je 1152 Samples bei 44,1 kHz; gelesen wird wie beim Scan nur der Anfang
+    const file = mp3({ title: 'Predigt' }, 1000);
+    const seconds = (1000 * 1152) / 44100;
+    const whole = await extractMetadata('a/b.mp3', file, 'audio/mpeg', file.length);
+    const head = await extractMetadata('a/b.mp3', file.subarray(0, 64 * 1024), 'audio/mpeg', file.length);
+    expect(whole.duration).toBeCloseTo(seconds, 0);
+    expect(head.duration).toBeCloseTo(seconds, 0);
+  });
+
   it('übersteht kaputte Dateien', async () => {
     const meta = await extractMetadata('lose.mp3', Buffer.from('keine musik'), 'audio/mpeg');
     expect(meta).toMatchObject({ title: 'lose', artist: UNKNOWN_ARTIST, album: undefined });

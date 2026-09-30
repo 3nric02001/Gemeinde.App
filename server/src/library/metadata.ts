@@ -1,4 +1,4 @@
-import { parseBuffer } from 'music-metadata';
+import { parseBuffer, type IAudioMetadata } from 'music-metadata';
 import { fileStem, parsePath } from './pathMeta.js';
 
 export interface TrackMeta {
@@ -168,6 +168,24 @@ function pickPicture(pictures: Array<{ data: Uint8Array; format: string; type?: 
   return { data: Buffer.from(front.data), mime };
 }
 
+/**
+ * Dauer der ganzen Datei, auch wenn nur ihr Anfang gelesen wurde. music-metadata kennt dann nur den Ausschnitt:
+ * Bei MP3 mit fester Bitrate ohne Xing/Info-Header schätzt es aus dessen Länge, bei Ogg zählt es bis zur
+ * letzten Seite darin. Beides ergäbe wenige Sekunden je Titel, also rechnen wir auf die ganze Datei hoch.
+ */
+function fullDuration(format: IAudioMetadata['format'], head: Buffer, size: number | undefined): number | undefined {
+  const { duration } = format;
+  if (!duration || !size || size <= head.length) return duration;
+  if (format.container === 'MPEG' && format.codecProfile === 'CBR' && format.numberOfSamples && format.sampleRate) {
+    // Aus einem Xing/Info-Header stammt die Dauer schon für die ganze Datei; nur die Schätzung aus dem Ausschnitt hochrechnen.
+    if (Math.abs(duration - format.numberOfSamples / format.sampleRate) > 0.5) return duration;
+    const start = Math.min(tagSpan(head) ?? 0, head.length - 1);
+    return (duration * (size - start)) / (head.length - start);
+  }
+  if (format.container === 'Ogg') return format.bitrate ? (size * 8) / format.bitrate : undefined;
+  return duration;
+}
+
 export const UNKNOWN_ARTIST = 'Unbekannter Interpret';
 
 function text(value: string | undefined | null): string | undefined {
@@ -197,8 +215,9 @@ function validYear(year: number | undefined): number | undefined {
 /**
  * Liest Tags aus dem Dateianfang und ergänzt Fehlendes aus dem Pfad.
  * Scheitert das Parsen (z. B. MP4 mit Metadaten am Dateiende), bleibt der Pfad-Fallback.
+ * `size` ist die ganze Dateigröße: Ist `head` nur der Anfang, rechnet die Dauer damit statt mit dem Ausschnitt.
  */
-export async function extractMetadata(path: string, head: Buffer, mimeType?: string): Promise<TrackMeta> {
+export async function extractMetadata(path: string, head: Buffer, mimeType?: string, size?: number): Promise<TrackMeta> {
   const fromPath = parsePath(path);
   let common: Awaited<ReturnType<typeof parseBuffer>>['common'] | undefined;
   let native: Awaited<ReturnType<typeof parseBuffer>>['native'] | undefined;
@@ -207,7 +226,7 @@ export async function extractMetadata(path: string, head: Buffer, mimeType?: str
     const parsed = await parseBuffer(head, { mimeType, path }, { duration: false, skipCovers: false });
     common = parsed.common;
     native = parsed.native;
-    duration = parsed.format.duration;
+    duration = fullDuration(parsed.format, head, size);
   } catch {
     common = undefined;
   }
