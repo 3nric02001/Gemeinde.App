@@ -58,8 +58,8 @@ export function albumsByIds(db: DB, ids: number[]): Record<string, unknown>[] {
   return ids.map((id) => byId.get(id)).filter((album) => album !== undefined);
 }
 
-/** Woraus ein Titel lief: eine Playlist der Verwaltung ('/album/5') oder eine eigene ('/playlist/3') */
-export const CONTEXT_PATTERN = '^/(album|playlist)/[1-9][0-9]{0,9}$';
+/** Woraus ein Titel lief: eine Playlist der Verwaltung ('/album/5'), eine eigene ('/playlist/3') oder die Favoriten */
+export const CONTEXT_PATTERN = '^(/(album|playlist)/[1-9][0-9]{0,9}|/favoriten)$';
 
 /**
  * Hörstand speichern; `position` am Ende des Titels heißt "fertig gehört".
@@ -121,12 +121,19 @@ export function listenerHome(db: DB, userId: number) {
     ...playlist,
     playedAt: at.get(`/playlist/${playlist.id}`),
   }));
-  // Beides zusammen höchstens 12, die zuletzt gehörten zuerst
-  const cutoff = [...albums, ...playlists].map((item) => item.playedAt ?? 0).sort((a, b) => b - a)[11] ?? 0;
+  // Die Favoriten-Playlist nur, solange es Titel mit Herz gibt
+  const hasFavorites = Boolean(db.prepare("SELECT 1 FROM favorites WHERE user_id = ? AND kind = 'track' LIMIT 1").get(userId));
+  const favoritesAt = hasFavorites ? (at.get('/favoriten') ?? null) : null;
+  // Alles zusammen höchstens 12, die zuletzt gehörten zuerst
+  const times = [...albums, ...playlists].map((item) => item.playedAt ?? 0);
+  if (favoritesAt) times.push(favoritesAt);
+  const cutoff = times.sort((a, b) => b - a)[11] ?? 0;
   return {
     resume,
     recent: albums.filter((album) => (album.playedAt ?? 0) >= cutoff),
     recentPlaylists: playlists.filter((playlist) => (playlist.playedAt ?? 0) >= cutoff),
+    /** Wann zuletzt aus den Favoriten gehört wurde; null: nicht unter den letzten */
+    favoritesPlayedAt: favoritesAt && favoritesAt >= cutoff ? favoritesAt : null,
   };
 }
 

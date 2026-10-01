@@ -6,7 +6,7 @@ import { TrackList } from '../src/components/TrackList';
 import { Home } from '../src/pages/Home';
 import { Playlists } from '../src/pages/Playlists';
 import { UserPlaylist } from '../src/pages/UserPlaylist';
-import { saveProgress } from '../src/me';
+import { loadMe, resetMe, saveProgress } from '../src/me';
 import { player } from '../src/player';
 import { closePlaylistDialog, loadPlaylists, resetPlaylists, type PlaylistDetail, type PlaylistSummary } from '../src/playlists';
 
@@ -46,6 +46,7 @@ let calls: Array<{ url: string; method: string; body?: unknown }> = [];
 let detail: PlaylistDetail;
 
 beforeEach(() => {
+  resetMe();
   resetPlaylists();
   closePlaylistDialog();
   calls = [];
@@ -63,7 +64,9 @@ beforeEach(() => {
         resume: [],
         recent: [{ id: 5, title: 'Lieder', year: 2020, trackCount: 1, duration: 240, hasCover: false, kind: 'auto', section: 'music', playedAt: 10 }],
         recentPlaylists: [{ ...own, playedAt: 20 }],
+        favoritesPlayedAt: 30,
       });
+    if (url === '/api/me/favorites') return json({ tracks: [song], albums: [] });
     if (url === '/api/facets') return json({ totals: { albums: 3, tracks: 9, duration: 1000 }, decades: [], recordings: [] });
     if (url === '/api/me/people') return json({ items: [{ id: 7, name: 'Ben' }, { id: 8, name: 'Carla' }] });
     if (url === '/api/me/playlists/1/shares') return json({ sharedWith: [{ id: 7, name: 'Ben' }] });
@@ -137,11 +140,18 @@ describe('eigene Playlists', () => {
     expect(screen.queryByText('Aus der Playlist entfernen')).toBeNull();
   });
 
-  it('stehen unter "Zuletzt gehört" zwischen den Alben, nach Zeit geordnet', async () => {
-    render(<Home />);
+  it('stehen mit den Favoriten unter "Zuletzt gehört" zwischen den Alben, nach Zeit geordnet und immer frisch', async () => {
+    await loadMe();
+    const { unmount } = render(<Home />);
     await screen.findByText('Zuletzt gehört');
-    const shelf = screen.getByText('Zuletzt gehört').closest('.shelf')!;
-    await waitFor(() => expect([...shelf.querySelectorAll('.card-title')].map((el) => el.textContent)).toEqual(['Sonntag', 'Lieder']));
+    const shelf = () => screen.getByText('Zuletzt gehört').closest('.shelf')!;
+    await waitFor(() =>
+      expect([...shelf().querySelectorAll('.card-title')].map((el) => el.textContent)).toEqual(['Favoriten', 'Sonntag', 'Lieder']),
+    );
+    // Zurück auf die Startseite: neu laden, nicht den Stand von eben zeigen
+    unmount();
+    render(<Home />);
+    await waitFor(() => expect(calls.filter((c) => c.url === '/api/me/home')).toHaveLength(2));
   });
 
   it('der Hörstand nennt die Playlist, aus der ein Titel läuft', async () => {
