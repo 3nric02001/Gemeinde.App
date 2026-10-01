@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { setCoverOverride, streamUrl, type Track } from '../api';
 import type { Branding, CurrentUser } from '../auth';
+import { saveDataPreferred } from '../preload';
 import { importKey, seal, unseal, type Sealed } from './crypto';
 import { idbClear, idbDelete, idbGet, idbGetAll, idbPut, idbSupported, partsOf } from './idb';
 
@@ -43,6 +44,17 @@ export interface OfflineState {
   expiresAt: number | undefined;
   /** Favoriten-Titel, die offline bleiben sollen (neue kommen von selbst dazu); undefined, wenn nicht gewünscht */
   favorites: number[] | undefined;
+  /** Titel, die für "Weiterhören" von selbst aufs Gerät kamen und wieder gehen, wenn sie zu Ende gehört sind */
+  resume: number[];
+  /** "Weiterhören" automatisch bereithalten (Standard: an) */
+  keepResume: boolean;
+}
+
+/** Auf dem Gerät: was "Weiterhören" selbst geladen hat, was der Hörer davon gelöscht hat, und ob es aus ist */
+interface ResumeMeta {
+  ids: number[];
+  skip: number[];
+  off?: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -60,9 +72,15 @@ const queue: Track[] = [];
 let working = false;
 /** Die aktuellen Favoriten-Titel vom Server, für den Abgleich mit den Offline-Kopien */
 let favoriteTracks: Track[] | undefined;
+/** Die Titel unter "Weiterhören" auf der Startseite, zuletzt vom Server */
+let resumeTracks: Track[] | undefined;
+/** Vom Hörer gelöschte Weiterhören-Titel; sie kommen nicht von selbst wieder, solange sie in der Liste stehen */
+let resumeSkip: number[] = [];
+/** Abgleiche nacheinander, damit sich zwei Aufrufe nicht die Liste überschreiben */
+let resumeRun: Promise<void> = Promise.resolve();
 
 function empty(): OfflineState {
-  return { enabled: false, items: [], ids: new Set(), progress: new Map(), error: undefined, expiresAt: undefined, favorites: undefined };
+  return { enabled: false, items: [], ids: new Set(), progress: new Map(), error: undefined, expiresAt: undefined, favorites: undefined, resume: [], keepResume: true };
 }
 
 function set(next: Partial<OfflineState>): void {
@@ -122,7 +140,16 @@ async function loadItems(): Promise<void> {
     }
   }
   const favorites = (await idbGet<{ ids: number[] }>('meta', 'favorites'))?.ids;
-  set({ items, enabled: Boolean(profile), expiresAt: profile && profile.contactAt + profile.days * DAY_MS, favorites });
+  const resume = await idbGet<ResumeMeta>('meta', 'resume');
+  resumeSkip = resume?.skip ?? [];
+  set({
+    items,
+    enabled: Boolean(profile),
+    expiresAt: profile && profile.contactAt + profile.days * DAY_MS,
+    favorites,
+    resume: resume?.ids ?? [],
+    keepResume: !resume?.off,
+  });
 }
 
 /**
@@ -158,6 +185,7 @@ export async function connectOffline(user: CurrentUser, branding?: Branding): Pr
     profile = next;
     await loadItems();
     await applyFavorites();
+    await applyResume();
   } catch {
     set({ enabled: false });
   }
@@ -180,6 +208,8 @@ export async function wipeOffline(): Promise<void> {
   queue.length = 0;
   profile = undefined;
   favoriteTracks = undefined;
+  resumeTracks = undefined;
+  resumeSkip = [];
   for (const url of coverUrls.values()) URL.revokeObjectURL(url);
   coverUrls.clear();
   state = empty();
@@ -194,8 +224,17 @@ export async function wipeOffline(): Promise<void> {
 
 export const isDownloaded = (trackId: number) => state.ids.has(trackId);
 
-/** Titel für unterwegs speichern; mehrere laufen nacheinander. */
+/** Titel für unterwegs speichern; mehrere laufen nacheinander. Vom Hörer gewählt, bleiben sie auch nach dem Weiterhören. */
 export function download(tracks: Track[]): void {
+  if (!state.enabled) return;
+  const claimed = new Set(tracks.map((track) => track.id));
+  if (state.resume.some((id) => claimed.has(id))) {
+    void saveResume({ resume: state.resume.filter((id) => !claimed.has(id)) }).catch(() => undefined);
+  }
+  enqueue(tracks);
+}
+
+function enqueue(tracks: Track[]): void {
   if (!state.enabled) return;
   const progress = new Map(state.progress);
   for (const track of tracks) {
@@ -303,7 +342,18 @@ async function save(track: Track, run: number): Promise<void> {
   await loadItems();
 }
 
+/** Vom Hörer gelöscht: Weiterhören-Titel darunter nicht gleich wieder laden */
 export async function removeDownloads(trackIds: number[]): Promise<void> {
+  const listed = new Set((resumeTracks ?? []).map((track) => track.id));
+  const removed = new Set(trackIds);
+  if (trackIds.some((id) => listed.has(id) || state.resume.includes(id))) {
+    resumeSkip = [...new Set([...resumeSkip, ...trackIds.filter((id) => listed.has(id))])];
+    await saveResume({ resume: state.resume.filter((id) => !removed.has(id)) }).catch(() => undefined);
+  }
+  await deleteCopies(trackIds);
+}
+
+async function deleteCopies(trackIds: number[]): Promise<void> {
   for (const id of trackIds) {
     await idbDelete('tracks', id);
     await idbDelete('parts', partsOf(id));
@@ -330,7 +380,11 @@ export async function keepFavorites(on: boolean): Promise<void> {
   const ids = state.favorites ?? [];
   await idbDelete('meta', 'favorites').catch(() => undefined);
   set({ favorites: undefined });
-  await removeDownloads(ids);
+  // Was gerade unter "Weiterhören" steht, bleibt und geht später mit dem Weiterhören
+  const listed = new Set(state.keepResume ? (resumeTracks ?? []).map((track) => track.id) : []);
+  const stay = ids.filter((id) => listed.has(id) || state.resume.includes(id));
+  if (stay.length) await saveResume({ resume: [...new Set([...state.resume, ...stay])] }).catch(() => undefined);
+  await deleteCopies(ids.filter((id) => !stay.includes(id)));
 }
 
 /** Die Favoriten haben sich geändert (geladen, Herz an oder aus): neue Titel mitnehmen, wenn gewünscht. */
@@ -352,7 +406,60 @@ async function applyFavorites(): Promise<void> {
     set({ favorites: ids });
   }
   const missing = favoriteTracks.filter((track) => !state.ids.has(track.id) && !state.progress.has(track.id));
-  if (missing.length) download(missing);
+  if (missing.length) enqueue(missing);
+}
+
+async function saveResume(next: { resume?: number[]; keepResume?: boolean }): Promise<void> {
+  const resume = next.resume ?? state.resume;
+  const keep = next.keepResume ?? state.keepResume;
+  set({ resume, keepResume: keep });
+  if (!profile) return;
+  await idbPut('meta', { ids: resume, skip: resumeSkip, off: !keep || undefined } satisfies ResumeMeta, 'resume');
+}
+
+/**
+ * Die Titel unter "Weiterhören" (angefangene Predigten) auf dem Gerät bereithalten, damit sie bei
+ * schwachem Netz nicht erst laden müssen. Wer aus der Liste fällt (zu Ende gehört), wird wieder
+ * gelöscht, außer der Hörer hat ihn selbst heruntergeladen oder er ist ein offline gehaltener Favorit.
+ */
+export async function syncResume(tracks: Track[]): Promise<void> {
+  resumeTracks = tracks;
+  await ready;
+  await applyResume();
+}
+
+/** "Weiterhören" automatisch bereithalten oder nicht mehr; aus löscht, was davon von selbst kam. */
+export async function keepResume(on: boolean): Promise<void> {
+  await ready;
+  if (!state.enabled) return;
+  if (on) resumeSkip = [];
+  await saveResume({ keepResume: on }).catch(() => undefined);
+  await applyResume();
+}
+
+function applyResume(): Promise<void> {
+  resumeRun = resumeRun.then(reconcileResume).catch(() => undefined);
+  return resumeRun;
+}
+
+async function reconcileResume(): Promise<void> {
+  if (!state.enabled || !profile) return;
+  const tracks = state.keepResume ? resumeTracks : [];
+  if (!tracks) return;
+  const wanted = new Set(tracks.map((track) => track.id));
+  resumeSkip = resumeSkip.filter((id) => wanted.has(id));
+  const favorites = new Set(state.favorites ?? []);
+  // Noch ladende bleiben vorgemerkt und gehen beim nächsten Abgleich; Favoriten gehören dann den Favoriten.
+  const owned = state.resume.filter((id) => wanted.has(id) || (state.progress.has(id) && !favorites.has(id)));
+  const dropped = state.resume.filter((id) => !owned.includes(id) && !favorites.has(id));
+  // Neues nur laden, wenn nicht gespart werden soll; bei schwachem Netz hilft es dann ohnehin nicht mehr.
+  const missing = saveDataPreferred()
+    ? []
+    : tracks.filter((track) => !state.ids.has(track.id) && !state.progress.has(track.id) && !resumeSkip.includes(track.id));
+  const next = [...owned, ...missing.map((track) => track.id).filter((id) => !owned.includes(id))];
+  await saveResume({ resume: next });
+  if (missing.length) enqueue(missing);
+  if (dropped.length) await deleteCopies(dropped);
 }
 
 /** Entschlüsselter Titel als Blob, nur im Speicher; undefined, wenn nicht (mehr) vorhanden. */

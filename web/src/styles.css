@@ -4612,3 +4612,8 @@ dl.structure-placeholders {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
 }
+
+.resume-toggle {
+  margin-left: 0;
+  font: inherit;
+}
