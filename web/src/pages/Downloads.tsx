@@ -3,7 +3,7 @@ import { loadAuth, useAuth } from '../auth';
 import { Icon } from '../components/Icon';
 import { TrackList } from '../components/TrackList';
 import { formatBytes, plural } from '../format';
-import { removeDownloads, storageEstimate, useOffline } from '../offline';
+import { keepResume, removeDownloads, storageEstimate, useOffline } from '../offline';
 import { FAVORITES_CONTEXT } from '../me';
 import { player } from '../player';
 import { Empty } from './common';
@@ -19,6 +19,8 @@ export function Downloads() {
   // Offline gehaltene Favoriten als eigene Playlist, in ihrer Reihenfolge; auch ohne Server abspielbar
   const byId = new Map(tracks.map((track) => [track.id, track]));
   const favorites = (offline.favorites ?? []).map((id) => byId.get(id)).filter((track) => track !== undefined);
+  // Von selbst bereitgehaltene Titel unter "Weiterhören"
+  const resume = offline.resume.map((id) => byId.get(id)).filter((track) => track !== undefined);
   const size = offline.items.reduce((sum, item) => sum + item.size, 0);
   const pending = offline.progress.size;
 
@@ -78,9 +80,17 @@ export function Downloads() {
               <TrackList tracks={favorites} from={FAVORITES_CONTEXT} />
             </section>
           )}
+          {resume.length > 0 && (
+            <section class="shelf">
+              <div class="section-head">
+                <h2>Weiterhören</h2>
+              </div>
+              <TrackList tracks={resume} />
+            </section>
+          )}
           {tracks.length > 0 && (
             <>
-              {favorites.length > 0 && (
+              {(favorites.length > 0 || resume.length > 0) && (
                 <div class="section-head shelf">
                   <h2>Alle Titel</h2>
                 </div>
@@ -108,6 +118,16 @@ export function Downloads() {
             </>
           )}
         </>
+      )}
+      {offline.enabled && (
+        <p class="admin-hint">
+          {offline.keepResume
+            ? 'Angefangene Titel unter „Weiterhören“ werden automatisch aufs Gerät geladen, damit sie bei schwachem Netz nicht erst laden müssen, und wieder gelöscht, wenn du sie zu Ende gehört hast. '
+            : 'Angefangene Titel unter „Weiterhören“ werden nicht automatisch aufs Gerät geladen. '}
+          <button type="button" class="link-button resume-toggle" onClick={() => void keepResume(!offline.keepResume)}>
+            {offline.keepResume ? 'Ausschalten' : 'Einschalten'}
+          </button>
+        </p>
       )}
       {estimate && (
         <p class="admin-hint">

@@ -1,3 +1,4 @@
+import { useEffect } from 'preact/hooks';
 import type { Album, Facets, Page, Track } from '../api';
 import { coverUrl, kindLabel, query } from '../api';
 import { useAuth } from '../auth';
@@ -11,6 +12,7 @@ import { TrackList } from '../components/TrackList';
 import { formatDuration, formatLongDate, formatTime, plural, withoutDate } from '../format';
 import { useApi } from '../hooks';
 import { useMe } from '../me';
+import { syncResume } from '../offline';
 import { usePlaylists, type PlaylistSummary } from '../playlists';
 import { LiveTile } from './Live';
 import { useLive } from '../live';
@@ -40,6 +42,11 @@ export function Home() {
     recentPlaylists?: Array<PlaylistSummary & { playedAt?: number }>;
     favoritesPlayedAt?: number | null;
   }>('/api/me/home', { fresh: true });
+  // Was unter "Weiterhören" steht, liegt für schwaches Netz schon auf dem Gerät (die Liste vom Server,
+  // nicht die gefilterte: die Hörstände sind beim ersten Zeichnen eventuell noch nicht geladen)
+  useEffect(() => {
+    if (personal.data) void syncResume(personal.data.resume).catch(() => undefined);
+  }, [personal.data]);
   const facets = useApi<Facets>('/api/facets');
   const live = useLive();
   const playlists = usePlaylists();

@@ -4,7 +4,19 @@ import { trackCoverUrl, type Track } from '../src/api';
 import { getAuth, loadAuth, logout } from '../src/auth';
 import { importKey, seal, unseal } from '../src/offline/crypto';
 import { idbGetAll } from '../src/offline/idb';
-import { connectOffline, download, getOffline, keepFavorites, offlineProfile, readDownload, syncFavorites, wipeOffline } from '../src/offline';
+import {
+  connectOffline,
+  download,
+  getOffline,
+  keepFavorites,
+  keepResume,
+  offlineProfile,
+  readDownload,
+  removeDownloads,
+  syncFavorites,
+  syncResume,
+  wipeOffline,
+} from '../src/offline';
 
 const KEY_A = Buffer.alloc(32, 1).toString('base64url');
 const KEY_B = Buffer.alloc(32, 2).toString('base64url');
@@ -167,6 +179,78 @@ describe('Favoriten offline', () => {
     await wipeOffline();
     await connectOffline(user);
     expect(getOffline().favorites).toBeUndefined();
+  });
+});
+
+describe('Weiterhören bereithalten', () => {
+  const song: Track = { ...track, id: 43, title: 'Lobpreis', hasCover: false };
+
+  it('lädt die Titel unter Weiterhören und löscht sie, wenn sie herausfallen', async () => {
+    await connectOffline(user);
+    await syncResume([track, song]);
+    await vi.waitFor(() => expect(getOffline().ids).toEqual(new Set([41, 43])));
+    expect(getOffline().resume).toEqual([41, 43]);
+
+    await syncResume([song]);
+    expect(getOffline().ids).toEqual(new Set([43]));
+    expect(getOffline().resume).toEqual([43]);
+  });
+
+  it('wartet auf den Schlüssel, wenn die Liste vor der Anmeldung kommt', async () => {
+    await syncResume([song]);
+    expect(getOffline().ids.size).toBe(0);
+    await connectOffline(user);
+    await vi.waitFor(() => expect(getOffline().ids.has(43)).toBe(true));
+  });
+
+  it('lässt selbst heruntergeladene und offline gehaltene Favoriten liegen', async () => {
+    await connectOffline(user);
+    await syncResume([track, song]);
+    await vi.waitFor(() => expect(getOffline().ids.size).toBe(2));
+    download([song]);
+    await syncFavorites([track]);
+    await keepFavorites(true);
+
+    await syncResume([]);
+    expect(getOffline().ids).toEqual(new Set([41, 43]));
+    expect(getOffline().resume).toEqual([]);
+  });
+
+  it('lädt vom Hörer Gelöschtes nicht gleich wieder', async () => {
+    await connectOffline(user);
+    await syncResume([song]);
+    await vi.waitFor(() => expect(getOffline().ids.has(43)).toBe(true));
+    await removeDownloads([43]);
+    await syncResume([song]);
+    expect(getOffline().progress.size).toBe(0);
+    expect(getOffline().ids.size).toBe(0);
+  });
+
+  it('lässt sich ausschalten und merkt sich das auf dem Gerät', async () => {
+    await connectOffline(user);
+    await syncResume([song]);
+    await vi.waitFor(() => expect(getOffline().ids.has(43)).toBe(true));
+    await keepResume(false);
+    expect(getOffline()).toMatchObject({ keepResume: false, resume: [] });
+    expect(getOffline().ids.size).toBe(0);
+
+    await connectOffline(user);
+    await syncResume([song]);
+    expect(getOffline().progress.size).toBe(0);
+
+    await keepResume(true);
+    await vi.waitFor(() => expect(getOffline().ids.has(43)).toBe(true));
+  });
+
+  it('lädt im Datensparmodus nichts Neues', async () => {
+    Object.defineProperty(navigator, 'connection', { value: { saveData: true }, configurable: true });
+    try {
+      await connectOffline(user);
+      await syncResume([song]);
+      expect(getOffline().progress.size).toBe(0);
+    } finally {
+      delete (navigator as { connection?: unknown }).connection;
+    }
   });
 });
 
