@@ -70,7 +70,8 @@ export function saveProgress(db: DB, userId: number, trackId: number, position: 
   db.prepare(
     `INSERT INTO listening (user_id, track_id, position, duration, updated_at, context) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id, track_id) DO UPDATE SET position = excluded.position,
-       duration = coalesce(excluded.duration, listening.duration), updated_at = excluded.updated_at, context = excluded.context`,
+       duration = coalesce(excluded.duration, listening.duration), updated_at = excluded.updated_at, context = excluded.context,
+       dismissed = CASE WHEN excluded.position = listening.position THEN listening.dismissed ELSE 0 END`,
   ).run(userId, trackId, Math.max(0, position), duration && duration > 0 ? duration : null, Date.now(), context ?? null);
   return true;
 }
@@ -89,13 +90,18 @@ export function listProgress(db: DB, userId: number): Array<{ trackId: number; p
     .all(userId, resumeMinDuration(), FINISHED_MARGIN) as Array<{ trackId: number; position: number; duration: number }>;
 }
 
-/** Für die Startseite: angefangene lange Titel und die zuletzt gehörten Alben. */
+/** Titel unter "Weiterhören" ausblenden; die Stelle bleibt, und hört man weiter, ist er wieder da. */
+export function dismissResume(db: DB, userId: number, trackId: number): void {
+  db.prepare('UPDATE listening SET dismissed = 1 WHERE user_id = ? AND track_id = ?').run(userId, trackId);
+}
+
+/** Für die Startseite: angefangene lange Titel (3 in der Liste, einer mehr für die Gottesdienst-Karte) und die zuletzt gehörten Alben. */
 export function listenerHome(db: DB, userId: number) {
   const unfinished = db
     .prepare(
       `SELECT l.track_id AS id, l.position, ${LENGTH} AS duration FROM listening l JOIN tracks t ON t.id = l.track_id
-       WHERE l.user_id = ? AND ${RESUMABLE} AND l.position >= 15 AND l.position < ${LENGTH} - ?
-       ORDER BY l.updated_at DESC LIMIT 6`,
+       WHERE l.user_id = ? AND l.dismissed = 0 AND ${RESUMABLE} AND l.position >= 15 AND l.position < ${LENGTH} - ?
+       ORDER BY l.updated_at DESC LIMIT 4`,
     )
     .all(userId, resumeMinDuration(), FINISHED_MARGIN) as Array<{ id: number; position: number; duration: number }>;
   const rows = new Map(unfinished.map((row) => [row.id, row]));

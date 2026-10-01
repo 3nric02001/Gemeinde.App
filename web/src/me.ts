@@ -220,6 +220,12 @@ export function enterDates(): () => void {
   };
 }
 
+/** Titel unter "Weiterhören" schließen; der Hörstand bleibt, beim Weiterhören ist er wieder da. */
+export async function dismissResume(trackId: number): Promise<void> {
+  await send('DELETE', `/api/me/resume/${trackId}`);
+  clearCache();
+}
+
 /** "Als gehört markieren" bzw. zurück; danach Hörstand und Weiterhören neu laden */
 export async function markAlbumHeard(albumId: number, heard: boolean): Promise<void> {
   await send('PUT', `/api/me/albums/${albumId}/heard`, { heard });

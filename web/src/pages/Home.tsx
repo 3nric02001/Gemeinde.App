@@ -1,4 +1,4 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { Album, Facets, Page, Track } from '../api';
 import { coverUrl, kindLabel, query } from '../api';
 import { useAuth } from '../auth';
@@ -11,13 +11,22 @@ import { InstallHint } from '../components/InstallHint';
 import { TrackList } from '../components/TrackList';
 import { formatDuration, formatLongDate, formatTime, plural, withoutDate } from '../format';
 import { useApi } from '../hooks';
-import { useMe } from '../me';
+import { dismissResume, useMe } from '../me';
 import { syncResume } from '../offline';
 import { usePlaylists, type PlaylistSummary } from '../playlists';
 import { LiveTile } from './Live';
 import { useLive } from '../live';
 import { Empty } from './common';
 import type { DatedAlbum } from './Dates';
+
+/** So viele Einträge zeigt "Weiterhören"; der aktuelle Gottesdienst steht extra in der großen Karte */
+const RESUME_SHOWN = 3;
+
+/** Der angefangene aktuelle Gottesdienst (für die große Karte) und die übrigen für die Liste */
+function splitResume<T extends Track>(resume: T[], service: DatedAlbum | undefined): { service?: T; others: T[] } {
+  const serviceResume = service ? resume.find((track) => track.albumId === service.id) : undefined;
+  return { service: serviceResume, others: resume.filter((track) => track !== serviceResume).slice(0, RESUME_SHOWN) };
+}
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -44,9 +53,17 @@ export function Home() {
   }>('/api/me/home', { fresh: true });
   // Was unter "Weiterhören" steht, liegt für schwaches Netz schon auf dem Gerät (die Liste vom Server,
   // nicht die gefilterte: die Hörstände sind beim ersten Zeichnen eventuell noch nicht geladen)
+  // Geschlossene Einträge verschwinden sofort; der Server merkt es sich für die nächste Liste
+  const [dismissed, setDismissed] = useState<ReadonlySet<number>>(new Set());
+  // Erst wenn auch der aktuelle Gottesdienst feststeht, sonst fiele kurz der falsche Titel heraus
   useEffect(() => {
-    if (personal.data) void syncResume(personal.data.resume).catch(() => undefined);
-  }, [personal.data]);
+    if (!personal.data || latest.loading) return;
+    const shown = splitResume(
+      personal.data.resume.filter((track) => !dismissed.has(track.id)),
+      latest.data?.items[0],
+    );
+    void syncResume([...(shown.service ? [shown.service] : []), ...shown.others]).catch(() => undefined);
+  }, [personal.data, latest.data, latest.loading, dismissed]);
   const facets = useApi<Facets>('/api/facets');
   const live = useLive();
   const playlists = usePlaylists();
@@ -69,10 +86,9 @@ export function Home() {
 
   const service = latest.data?.items[0];
   // Nur Titel, die noch nicht fertig gehört sind (die Liste vom Server kann ein paar Sekunden alt sein)
-  const resume = (personal.data?.resume ?? []).filter((track) => me.progress.has(track.id));
+  const resume = (personal.data?.resume ?? []).filter((track) => me.progress.has(track.id) && !dismissed.has(track.id));
   // Ist der aktuelle Gottesdienst angefangen, zeigt ihn die große Karte zum Weiterhören; darunter nicht noch einmal
-  const serviceResume = service ? resume.find((track) => track.albumId === service.id) : undefined;
-  const otherResume = resume.filter((track) => track !== serviceResume);
+  const { service: serviceResume, others: otherResume } = splitResume(resume, service);
   // Alben und Playlists (eigene, geteilte, die der Verwaltung) gemischt, zuletzt gehörte zuerst
   const recent = [
     ...(personal.data?.recent ?? []).filter((album) => album.id !== service?.id).map((album) => ({ at: album.playedAt ?? 0, album })),
@@ -98,7 +114,13 @@ export function Home() {
           <div class="section-head">
             <h2>Weiterhören</h2>
           </div>
-          <TrackList tracks={otherResume} />
+          <TrackList
+            tracks={otherResume}
+            onDismiss={(track) => {
+              setDismissed((current) => new Set([...current, track.id]));
+              void dismissResume(track.id).catch(() => setDismissed((current) => new Set([...current].filter((id) => id !== track.id))));
+            }}
+          />
         </section>
       )}
 

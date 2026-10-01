@@ -67,3 +67,28 @@ describe('Favoriten', () => {
     expect(screen.getByText('Alben')).toBeTruthy();
   });
 });
+
+describe('Weiterhören auf der Startseite', () => {
+  it('zeigt höchstens 3, lässt sich schließen und meldet es dem Server', async () => {
+    const sermons = [44, 45, 46, 47].map((id) => ({ ...song, id, albumId: id, title: `Predigt ${id}`, duration: 2400, position: 600 }));
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      requested.push(`${init?.method ?? 'GET'} ${url}`);
+      if (url === '/api/me/favorites') return json({ tracks: [], albums: [] });
+      if (url === '/api/me/progress') return json({ items: sermons.map((t) => ({ trackId: t.id, position: 600, duration: 2400 })) });
+      if (url === '/api/me/home') return json({ resume: sermons, recent: [] });
+      if (url.startsWith('/api/dates')) return json({ items: [], total: 0 });
+      if (url === '/api/facets') return json({ totals: { albums: 3, tracks: 9, duration: 1000 }, decades: [], recordings: [] });
+      if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+      return json({ items: [], total: 0 });
+    });
+    await loadMe();
+    render(<Home />);
+    await waitFor(() => expect(screen.getByText('Weiterhören')).toBeTruthy());
+    const titles = () => [...document.querySelectorAll('.track-title')].map((el) => el.textContent);
+    expect(titles()).toEqual(['Predigt 44', 'Predigt 45', 'Predigt 46']);
+    fireEvent.click(screen.getByLabelText('Predigt 44 schließen'));
+    expect(titles()).toEqual(['Predigt 45', 'Predigt 46', 'Predigt 47']);
+    await waitFor(() => expect(requested).toContain('DELETE /api/me/resume/44'));
+  });
+});

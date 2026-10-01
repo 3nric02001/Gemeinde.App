@@ -6,6 +6,7 @@ import { recordSearch } from '../library/searches.js';
 import { getOfflineSettings, offlineKey } from '../offline.js';
 import {
   datedStates,
+  dismissResume,
   listenerHome,
   listFavorites,
   listProgress,
@@ -48,6 +49,16 @@ export async function registerMeRoutes(app: FastifyInstance, { db }: { db: DB })
   });
 
   app.get('/api/me/progress', async (request) => ({ items: listProgress(db, userId(request)) }));
+
+  // Unter "Weiterhören" schließen; der Hörstand bleibt
+  app.delete(
+    '/api/me/resume/:id',
+    { schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } } } },
+    async (request: FastifyRequest<{ Params: { id: number } }>, reply) => {
+      dismissResume(db, userId(request), request.params.id);
+      return reply.code(204).send();
+    },
+  );
 
   app.put(
     '/api/me/progress/:id',
