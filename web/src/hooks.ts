@@ -7,7 +7,8 @@ export interface Loaded<T> {
   loading: boolean;
 }
 
-export function useApi<T>(url: string | undefined): Loaded<T> {
+/** `fresh`: zeigt sofort den letzten Stand, holt aber immer neu (z. B. „Zuletzt gehört“) */
+export function useApi<T>(url: string | undefined, { fresh = false }: { fresh?: boolean } = {}): Loaded<T> {
   const [state, setState] = useState<Loaded<T>>(() => ({
     data: url ? peekJson<T>(url) : undefined,
     error: undefined,
@@ -20,7 +21,7 @@ export function useApi<T>(url: string | undefined): Loaded<T> {
     }
     const controller = new AbortController();
     setState((prev) => ({ data: peekJson<T>(url) ?? prev.data, error: undefined, loading: true }));
-    getJson<T>(url, controller.signal)
+    getJson<T>(url, controller.signal, fresh)
       .then((data) => setState({ data, error: undefined, loading: false }))
       .catch((error: Error) => {
         if (error.name !== 'AbortError') setState({ data: undefined, error: error.message, loading: false });

@@ -125,9 +125,10 @@ export class ApiError extends Error {
 const cache = new Map<string, { at: number; data: unknown }>();
 const CACHE_MS = 60_000;
 
-export async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+/** `fresh`: immer neu vom Server holen (der Cache dient dann nur fürs sofortige Anzeigen des alten Stands) */
+export async function getJson<T>(url: string, signal?: AbortSignal, fresh = false): Promise<T> {
   const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.data as T;
+  if (!fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.data as T;
   const res = await fetch(url, { signal, headers: { accept: 'application/json' } });
   if (res.status === 401) sessionExpired();
   if (!res.ok) {

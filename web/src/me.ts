@@ -166,7 +166,7 @@ export function savedProgress(track: PlayerTrack): Progress | undefined {
 export const resumePosition = (track: PlayerTrack) => savedProgress(track)?.position;
 
 /** Woraus ein Titel laufen kann, wie der Server es für "Zuletzt gehört" annimmt: Playlist der Verwaltung oder eigene */
-const CONTEXT = /^\/(album|playlist)\/[1-9]\d{0,9}$/;
+const CONTEXT = /^(\/(album|playlist)\/[1-9]\d{0,9}|\/favoriten)$/;
 
 /**
  * Hörstand an den Server; Titel im Predigt-Player merken sich die Stelle auch sofort hier.

@@ -38,7 +38,8 @@ export function Home() {
     resume: Array<Track & { position: number }>;
     recent: Array<Album & { playedAt?: number }>;
     recentPlaylists?: Array<PlaylistSummary & { playedAt?: number }>;
-  }>('/api/me/home');
+    favoritesPlayedAt?: number | null;
+  }>('/api/me/home', { fresh: true });
   const facets = useApi<Facets>('/api/facets');
   const live = useLive();
   const playlists = usePlaylists();
@@ -69,6 +70,7 @@ export function Home() {
   const recent = [
     ...(personal.data?.recent ?? []).filter((album) => album.id !== service?.id).map((album) => ({ at: album.playedAt ?? 0, album })),
     ...(personal.data?.recentPlaylists ?? []).map((playlist) => ({ at: playlist.playedAt ?? 0, playlist })),
+    ...(personal.data?.favoritesPlayedAt && me.favorites?.tracks.length ? [{ at: personal.data.favoritesPlayedAt, favorites: true as const }] : []),
   ].sort((a, b) => b.at - a.at);
 
   return (
@@ -101,6 +103,8 @@ export function Home() {
             ? recent.map((item) =>
                 'album' in item ? (
                   <AlbumCard key={`a${item.album.id}`} album={item.album} />
+                ) : 'favorites' in item ? (
+                  <FavoritesCard key="favoriten" tracks={me.favorites!.tracks} />
                 ) : (
                   <PlaylistCard key={`p${item.playlist.id}`} playlist={item.playlist} />
                 ),

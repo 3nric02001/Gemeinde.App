@@ -164,4 +164,17 @@ describe('eigene Playlists', () => {
     await inject(ben, { method: 'PUT', url: `/api/me/progress/${trackId('Eins')}`, payload: { position: 5, context: `/playlist/${list.id}` } });
     expect((await inject(ben, { method: 'GET', url: '/api/me/home' })).json().recentPlaylists).toEqual([]);
   });
+
+  it('die Favoriten stehen unter "Zuletzt gehört", solange es Titel mit Herz gibt', async () => {
+    await inject(anna, { method: 'PUT', url: `/api/me/favorites/track/${trackId('Eins')}` });
+    const res = await inject(anna, { method: 'PUT', url: `/api/me/progress/${trackId('Eins')}`, payload: { position: 20, context: '/favoriten' } });
+    expect(res.statusCode).toBe(204);
+    let home = (await inject(anna, { method: 'GET', url: '/api/me/home' })).json();
+    expect(home.favoritesPlayedAt).toBeGreaterThan(0);
+    expect(home.recent).toEqual([]);
+
+    await inject(anna, { method: 'DELETE', url: `/api/me/favorites/track/${trackId('Eins')}` });
+    home = (await inject(anna, { method: 'GET', url: '/api/me/home' })).json();
+    expect(home.favoritesPlayedAt).toBeNull();
+  });
 });
