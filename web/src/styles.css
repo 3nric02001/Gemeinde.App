@@ -4617,3 +4617,19 @@ dl.structure-placeholders {
   margin-left: 0;
   font: inherit;
 }
+
+/* Kreuz zum Schließen unter "Weiterhören" (immer sichtbar, anders als das Menü) */
+.track:has(.track-dismiss) {
+  grid-template-columns: 44px minmax(0, 1fr) auto 36px 36px;
+}
+
+.track-dismiss {
+  width: 36px;
+  height: 36px;
+}
+
+@media (max-width: 760px) {
+  .track:has(.track-dismiss) {
+    grid-template-columns: 44px minmax(0, 1fr) 36px 36px;
+  }
+}

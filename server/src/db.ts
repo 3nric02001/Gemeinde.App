@@ -752,6 +752,10 @@ export const migrations: string[] = [
   -- NULL: aus seinem eigenen Album bzw. ohne Playlist.
   ALTER TABLE listening ADD COLUMN context TEXT;
   `,
+  `
+  -- Unter "Weiterhören" weggeklickt; die Stelle bleibt, beim nächsten Hören taucht der Titel wieder auf.
+  ALTER TABLE listening ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDatabase(path: string): DB {

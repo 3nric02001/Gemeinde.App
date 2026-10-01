@@ -212,6 +212,21 @@ describe('Weiterhören', () => {
     expect((await get('/api/me/home')).recent).toHaveLength(2);
   });
 
+  it('blendet geschlossene Titel aus, bis weitergehört wird', async () => {
+    const sermon = trackId('Predigt: Psalm 23');
+    ctx.db.prepare('UPDATE tracks SET duration = 2400 WHERE id = ?').run(sermon);
+    const save = (position: number) => inject({ method: 'PUT', url: `/api/me/progress/${sermon}`, payload: { position } });
+    await save(600);
+    expect((await inject({ method: 'DELETE', url: `/api/me/resume/${sermon}` })).statusCode).toBe(204);
+    expect((await get('/api/me/home')).resume).toEqual([]);
+    // Die Stelle bleibt; dieselbe Stelle noch einmal gemeldet (z. B. Pause) holt ihn nicht zurück
+    expect((await get('/api/me/progress')).items).toEqual([{ trackId: sermon, position: 600, duration: 2400 }]);
+    await save(600);
+    expect((await get('/api/me/home')).resume).toEqual([]);
+    await save(650);
+    expect((await get('/api/me/home')).resume.map((t: any) => t.id)).toEqual([sermon]);
+  });
+
   it('nimmt die Länge vom Browser, wenn der Scan sie nicht genau kennt', async () => {
     // Der Scan liest nur den Dateianfang; ohne Xing-Header ist die Länge dann geschätzt.
     const sermon = trackId('Predigt: Psalm 23');

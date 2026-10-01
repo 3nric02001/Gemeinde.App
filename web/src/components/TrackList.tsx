@@ -26,6 +26,8 @@ interface Props {
   highlight?: number;
   /** Weitere Menüeinträge je Titel, z. B. "Aus der Playlist entfernen" in einer eigenen Playlist */
   extraMenu?: (track: Track, index: number) => MenuItem[];
+  /** Kreuz zum Schließen je Titel, z. B. unter "Weiterhören" */
+  onDismiss?: (track: Track) => void;
 }
 
 export function trackMenu(track: Track): MenuItem[] {
@@ -48,7 +50,7 @@ export function trackMenu(track: Track): MenuItem[] {
   return items;
 }
 
-export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, from, highlight, extraMenu }: Props) {
+export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, from, highlight, extraMenu, onDismiss }: Props) {
   const linked = useRef<HTMLLIElement>(null);
   useEffect(() => linked.current?.scrollIntoView({ block: 'center' }), [highlight]);
   const currentId = usePlayerSelect((s) => s.current?.id);
@@ -115,6 +117,20 @@ export function TrackList({ tracks, variant = 'list', onPlay, ordinal = false, f
               <span class="track-time">
                 {resume ? `noch ${formatTime(resume.duration - resume.position)}` : formatTime(track.duration)}
               </span>
+              {onDismiss && (
+                <button
+                  type="button"
+                  class="icon-button track-dismiss"
+                  aria-label={`${track.title} schließen`}
+                  title="Schließen"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDismiss(track);
+                  }}
+                >
+                  <Icon name="close" size={18} />
+                </button>
+              )}
               <Menu label={`Weitere Aktionen für ${track.title}`} title={track.title} items={extraMenu ? [...trackMenu(track), ...extraMenu(track, index)] : trackMenu(track)} />
             </li>
           </Fragment>
