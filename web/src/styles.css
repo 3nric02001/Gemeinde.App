@@ -1701,7 +1701,8 @@ button.more-link {
   bottom: 0;
   z-index: 20;
   height: calc(var(--bar) + env(safe-area-inset-bottom));
-  padding: 0 16px env(safe-area-inset-bottom);
+  /* Genug Rand, damit der Lautstärkeregler nicht bis an den Bildschirmrand läuft */
+  padding: 0 28px env(safe-area-inset-bottom);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
   align-items: center;
