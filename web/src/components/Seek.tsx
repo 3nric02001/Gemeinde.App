@@ -4,8 +4,19 @@ import { player, usePlayer } from '../player';
 
 /** Fortschrittsbalken; während des Ziehens springt die Anzeige nicht zurück. */
 export function Seek({ compact = false }: { compact?: boolean }) {
-  const { position, duration, current } = usePlayer();
+  const { position, duration, current, live } = usePlayer();
   const [dragging, setDragging] = useState<number | null>(null);
+  // Beim Livestream gibt es keine Stelle, zu der man springen könnte
+  if (live) {
+    return (
+      <div class={`seek seek-live${compact ? ' seek-compact' : ''}`}>
+        <span class="live-badge">
+          <i aria-hidden="true" />
+          Live
+        </span>
+      </div>
+    );
+  }
   const value = dragging ?? position;
   const max = duration || 0;
   const percent = max ? Math.min(100, (value / max) * 100) : 0;

@@ -1,16 +1,28 @@
 import type { FastifyInstance } from 'fastify';
 
+/** Herkünfte (https://host) des eingeschalteten Livestreams: eingebettete Seite und Stream für den Player */
+export interface StreamOrigins {
+  frame?: string;
+  media?: string;
+}
+
 /**
  * Für die Weboberfläche: nur eigene Skripte, keine Einbettung in fremde Seiten.
- * `frameOrigin` ist die Adresse des eingeschalteten Livestreams (https://host), den /live einbettet.
+ * `stream` sind die Adressen des eingeschalteten Livestreams, den /live einbettet und der Player abspielt.
  */
-export function pageCsp(frameOrigin?: string): string {
-  return [
-    ...PAGE_CSP_BASE,
-    // Ohne Livestream gilt default-src 'self'; fremde Seiten nur vom eingestellten Stream
-    ...(frameOrigin ? [`frame-src 'self' ${frameOrigin}`] : []),
-  ].join('; ');
+export function pageCsp(stream: StreamOrigins = {}): string {
+  return PAGE_CSP_BASE.map((directive) =>
+    // Den Livestream (HLS) spielt das Audio-Element der App direkt vom Stream-Server
+    directive === MEDIA_SRC && stream.media ? `${MEDIA_SRC} ${stream.media}` : directive,
+  )
+    .concat(
+      // Ohne Livestream gilt default-src 'self'; fremde Seiten nur vom eingestellten Stream
+      stream.frame ? [`frame-src 'self' ${stream.frame}`] : [],
+    )
+    .join('; ');
 }
+
+const MEDIA_SRC = "media-src 'self' blob:";
 
 const PAGE_CSP_BASE = [
   "default-src 'self'",
@@ -18,7 +30,7 @@ const PAGE_CSP_BASE = [
   // Preact setzt einzelne style-Attribute (z. B. Farbton der Platzhalter).
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
-  "media-src 'self' blob:",
+  MEDIA_SRC,
   "connect-src 'self'",
   // Service Worker für die Offline-Nutzung (web/sw/sw.js), nur von der eigenen Adresse
   "worker-src 'self'",
@@ -39,13 +51,13 @@ export const API_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
  * Sicherheits-Header für jede Antwort. Schon gesetzte Header (etwa von einer Route) bleiben stehen.
  * HSTS nur, wenn die Anfrage per https kam; sonst würde ein Test über http den Browser aussperren.
  */
-export function registerSecurityHeaders(app: FastifyInstance, frameOrigin: () => string | undefined = () => undefined): void {
+export function registerSecurityHeaders(app: FastifyInstance, streamOrigins: () => StreamOrigins = () => ({})): void {
   app.addHook('onSend', async (request, reply, payload) => {
     const set = (name: string, value: string) => {
       if (!reply.hasHeader(name)) reply.header(name, value);
     };
     const isApi = request.url.startsWith('/api/') || request.url === '/api';
-    set('content-security-policy', isApi ? API_CSP : pageCsp(frameOrigin()));
+    set('content-security-policy', isApi ? API_CSP : pageCsp(streamOrigins()));
     set('x-content-type-options', 'nosniff');
     set('x-frame-options', 'DENY');
     set('referrer-policy', 'same-origin');

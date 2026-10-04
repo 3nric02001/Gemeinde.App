@@ -59,6 +59,7 @@ export async function registerUserAdminRoutes(
               enabled: { type: 'boolean' },
               url: { type: 'string', maxLength: 500 },
               title: { type: 'string', maxLength: 60 },
+              audioUrl: { type: 'string', maxLength: 500 },
             },
             additionalProperties: false,
           },

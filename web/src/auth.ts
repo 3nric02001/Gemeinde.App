@@ -34,6 +34,8 @@ export interface AuthState {
 export interface Livestream {
   url: string;
   title: string;
+  /** Direkte Adresse des Streams (HLS) für den Player; fehlt, wenn nur Einbetten geht */
+  audio?: string;
 }
 
 export interface Branding {

@@ -46,15 +46,24 @@ afterEach(async () => {
 
 describe('Livestream', () => {
   it('ist ab Werk mit dem Stream der Gemeinde eingeschaltet, aber nur für Angemeldete', async () => {
-    expect(await status(listener)).toEqual({ url: DEFAULT_LIVESTREAM.url, title: 'Livestream' });
+    expect(await status(listener)).toEqual({
+      url: DEFAULT_LIVESTREAM.url,
+      title: 'Livestream',
+      audio: 'https://vortrag.mbg-bielefeld-brake.de/hls/stream.m3u8',
+    });
     expect(await status('')).toBeNull();
     expect(await pageCsp()).toContain("frame-src 'self' https://vortrag.mbg-bielefeld-brake.de");
+    expect(await pageCsp()).toContain("media-src 'self' blob: https://vortrag.mbg-bielefeld-brake.de");
   });
 
   it('lässt sich umstellen und abschalten; die CSP folgt', async () => {
     const changed = await save({ url: 'https://live.example.org/embed/video/', title: 'Gottesdienst live' });
     expect(changed.statusCode).toBe(200);
-    expect(await status(listener)).toEqual({ url: 'https://live.example.org/embed/video/', title: 'Gottesdienst live' });
+    expect(await status(listener)).toEqual({
+      url: 'https://live.example.org/embed/video/',
+      title: 'Gottesdienst live',
+      audio: 'https://live.example.org/hls/stream.m3u8',
+    });
     const csp = await pageCsp();
     expect(csp).toMatch(/frame-src 'self' https:\/\/live\.example\.org(;|$)/);
     expect(csp).not.toContain('mbg-bielefeld-brake');
@@ -62,6 +71,7 @@ describe('Livestream', () => {
     expect((await save({ enabled: false })).json()).toMatchObject({ enabled: false, url: 'https://live.example.org/embed/video/' });
     expect(await status(listener)).toBeNull();
     expect(await pageCsp()).not.toContain('frame-src');
+    expect(await pageCsp()).toContain("media-src 'self' blob:;");
     // Die API bleibt in jedem Fall ohne Einbettung
     expect((await inject({ method: 'GET', url: '/api/auth/status' }, listener)).headers['content-security-policy']).toContain(
       "default-src 'none'",
@@ -69,6 +79,20 @@ describe('Livestream', () => {
 
     const log = (await inject({ method: 'GET', url: '/api/admin/changes' }, admin)).json();
     expect(JSON.stringify(log)).toContain('Livestream ausgeschaltet');
+  });
+
+  it('spielt im Player den eingetragenen Stream, bei fremden Seiten ohne Eintrag keinen', async () => {
+    await save({ url: 'https://www.youtube.com/embed/abc' });
+    expect(await status(listener)).toEqual({ url: 'https://www.youtube.com/embed/abc', title: 'Livestream' });
+    expect(await pageCsp()).toContain("media-src 'self' blob:;");
+
+    expect((await save({ audioUrl: 'https://cdn.example.org/live/index.m3u8' })).statusCode).toBe(200);
+    expect((await status(listener)).audio).toBe('https://cdn.example.org/live/index.m3u8');
+    const csp = await pageCsp();
+    expect(csp).toContain("media-src 'self' blob: https://cdn.example.org;");
+    expect(csp).toMatch(/frame-src 'self' https:\/\/www\.youtube\.com(;|$)/);
+
+    expect((await save({ audioUrl: 'http://cdn.example.org/live.m3u8' })).statusCode).toBe(400);
   });
 
   it('nimmt nur https-Adressen', async () => {

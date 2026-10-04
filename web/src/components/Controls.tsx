@@ -12,6 +12,7 @@ export function Controls({ large = false }: { large?: boolean }) {
   const shuffle = usePlayerSelect((s) => s.shuffle);
   const repeat = usePlayerSelect((s) => s.repeat);
   const hasTrack = usePlayerSelect((s) => Boolean(s.current));
+  const live = usePlayerSelect((s) => Boolean(s.live));
   const long = useLongTrack();
   const repeatLabel = repeat === 'off' ? 'Wiederholen' : repeat === 'all' ? 'Einen Titel wiederholen' : 'Wiederholen aus';
   const skip = (seconds: number) => (
@@ -25,6 +26,16 @@ export function Controls({ large = false }: { large?: boolean }) {
       <SkipIcon seconds={seconds} size={large ? 32 : 24} />
     </button>
   );
+  // Livestream: nur Abspielen und Pause, Springen und Spulen gibt es nicht
+  if (live) {
+    return (
+      <div class={`controls${large ? ' controls-large' : ''}`}>
+        <button type="button" class="play-button" aria-label={playing ? 'Pause' : 'Abspielen'} onClick={() => player.toggle()}>
+          <Icon name={playing ? 'pause' : 'play'} size={large ? 34 : 22} />
+        </button>
+      </div>
+    );
+  }
   return (
     <div class={`controls${large ? ' controls-large' : ''}`}>
       {long ? (

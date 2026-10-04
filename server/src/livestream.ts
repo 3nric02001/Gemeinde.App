@@ -10,12 +10,18 @@ export interface Livestream {
   url: string;
   /** Überschrift der Seite und Name der Kachel auf der Startseite */
   title: string;
+  /**
+   * Direkte Adresse des Streams (HLS, .m3u8) für den Player der App, nur https. Leer: bei Owncast
+   * (Adresse /embed/video/) automatisch https://host/hls/stream.m3u8, sonst kein Hören im Player.
+   */
+  audioUrl: string;
 }
 
 export const DEFAULT_LIVESTREAM: Livestream = {
   enabled: true,
   url: 'https://vortrag.mbg-bielefeld-brake.de/embed/video/',
   title: 'Livestream',
+  audioUrl: '',
 };
 
 /** Ungültige Eingabe in der Verwaltung, wird als 400 gemeldet */
@@ -43,6 +49,7 @@ export function getLivestream(db: DB): Livestream {
       enabled: (saved.enabled ?? DEFAULT_LIVESTREAM.enabled) && Boolean(parseStreamUrl(url)),
       url,
       title: saved.title?.trim() || DEFAULT_LIVESTREAM.title,
+      audioUrl: typeof saved.audioUrl === 'string' ? saved.audioUrl : DEFAULT_LIVESTREAM.audioUrl,
     };
   } catch {
     return DEFAULT_LIVESTREAM;
@@ -53,22 +60,43 @@ export function saveLivestream(db: DB, patch: Partial<Livestream>): Livestream {
   const next = { ...getLivestream(db), ...patch };
   next.url = next.url.trim();
   next.title = next.title.trim();
+  next.audioUrl = next.audioUrl.trim();
   if (next.url && !parseStreamUrl(next.url)) throw new LivestreamError('Bitte eine vollständige Adresse mit https:// angeben');
+  if (next.audioUrl && !parseStreamUrl(next.audioUrl)) {
+    throw new LivestreamError('Bitte für den Player eine vollständige Adresse mit https:// angeben oder das Feld leer lassen');
+  }
   if (next.enabled && !next.url) throw new LivestreamError('Zum Einschalten fehlt die Adresse des Streams');
   setMeta(db, 'livestream', JSON.stringify(next));
   return getLivestream(db);
 }
 
-/** Für die Hörer: nur, was die Seite braucht, und nur, wenn eingeschaltet. */
-export function publicLivestream(db: DB): { url: string; title: string } | null {
-  const live = getLivestream(db);
-  return live.enabled ? { url: live.url, title: live.title } : null;
+/**
+ * Adresse, die der Player der App abspielt (HLS). Eingetragen oder bei Owncast abgeleitet: Owncast liefert unter
+ * /embed/video/ die Seite zum Einbetten und unter /hls/stream.m3u8 den Stream selbst.
+ */
+export function streamAudioUrl(live: Livestream): string | undefined {
+  if (live.audioUrl) return parseStreamUrl(live.audioUrl)?.href;
+  const page = parseStreamUrl(live.url);
+  return page && /^\/embed\/video\/?$/.test(page.pathname) ? `${page.origin}/hls/stream.m3u8` : undefined;
 }
 
-/** Herkunft (https://host) für frame-src in der CSP der Seiten, solange der Stream eingeschaltet ist. */
-export function livestreamOrigin(db: DB): string | undefined {
+/** Für die Hörer: nur, was die Seite braucht, und nur, wenn eingeschaltet. */
+export function publicLivestream(db: DB): { url: string; title: string; audio?: string } | null {
   const live = getLivestream(db);
-  return live.enabled ? parseStreamUrl(live.url)?.origin : undefined;
+  if (!live.enabled) return null;
+  const audio = streamAudioUrl(live);
+  return audio ? { url: live.url, title: live.title, audio } : { url: live.url, title: live.title };
+}
+
+/**
+ * Herkünfte (https://host) für die CSP der Seiten, solange der Stream eingeschaltet ist: `frame` für die
+ * eingebettete Seite (frame-src), `media` für den Stream im Player (media-src).
+ */
+export function livestreamOrigins(db: DB): { frame?: string; media?: string } {
+  const live = getLivestream(db);
+  if (!live.enabled) return {};
+  const audio = streamAudioUrl(live);
+  return { frame: parseStreamUrl(live.url)?.origin, media: audio ? new URL(audio).origin : undefined };
 }
 
 /** So lange gilt eine Antwort des Stream-Servers, bevor die App wieder fragt */
