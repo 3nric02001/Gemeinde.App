@@ -4687,3 +4687,14 @@ dl.structure-placeholders {
     grid-template-columns: 44px minmax(0, 1fr) 36px 36px;
   }
 }
+
+/* iOS Safari zoomt beim Fokussieren in jedes Eingabefeld mit Schrift unter
+   16px hinein und zoomt danach nicht zurück. Nur dort auf 16px anheben, damit
+   Layout auf Desktop/Android gleich bleibt und Pinch-Zoom erlaubt bleibt. */
+@supports (-webkit-touch-callout: none) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
