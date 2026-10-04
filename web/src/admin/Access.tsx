@@ -654,6 +654,11 @@ interface LivestreamView {
   enabled: boolean;
   url: string;
   title: string;
+  audioUrl: string;
+}
+
+interface LivestreamStatus {
+  livestream?: { url: string; title: string; audio?: string } | null;
 }
 
 /** Livestream: Kachel auf der Startseite und Seite /live mit der eingebetteten Adresse */
@@ -673,7 +678,9 @@ function LivestreamSettings() {
     try {
       const saved = await adminRequest<LivestreamView>('PUT', '/api/admin/livestream', form);
       setData(saved);
-      setLivestream(saved.enabled ? { url: saved.url, title: saved.title } : null);
+      // Die abgeleitete Adresse für den Player kennt nur der Server
+      const status = await fetch('/api/auth/status').then((r) => (r.ok ? (r.json() as Promise<LivestreamStatus>) : undefined)).catch(() => undefined);
+      setLivestream(saved.enabled ? (status?.livestream ?? { url: saved.url, title: saved.title }) : null);
       setMessage({
         text: saved.enabled
           ? 'Gespeichert. Wer die App schon offen hat, sieht den Stream nach dem Neuladen.'
@@ -724,6 +731,22 @@ function LivestreamSettings() {
           onInput={(e) => setForm({ ...form, title: (e.target as HTMLInputElement).value })}
         />
       </label>
+      <label class="field">
+        <span>
+          Adresse für den Player <em>(HLS, .m3u8; leer: bei Owncast automatisch)</em>
+        </span>
+        <input
+          type="url"
+          maxLength={500}
+          placeholder="https://stream.example.org/hls/stream.m3u8"
+          value={form.audioUrl}
+          onInput={(e) => setForm({ ...form, audioUrl: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+      <p class="admin-hint">
+        Über diese Adresse läuft der Livestream im Player der App: Er erscheint unter „Jetzt läuft“ und spielt bei
+        gesperrtem Bildschirm weiter.
+      </p>
       {message && (
         <p class={message.ok ? 'admin-ok' : 'admin-error'} role="status">
           {message.text}

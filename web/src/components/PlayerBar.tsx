@@ -2,22 +2,33 @@ import { trackCoverUrl } from '../api';
 import { albumLabel } from '../format';
 import { currentHref, player, usePlayerSelect } from '../player';
 import { Controls, RateButton, Volume } from './Controls';
-import { Cover } from './Cover';
+import { Cover, LiveCover } from './Cover';
 import { Icon } from './Icon';
 import { Seek } from './Seek';
 
 /** Leiste am unteren Rand; auf dem Handy ein Mini-Player, der sich per Tipp aufklappt. */
 export function PlayerBar({ onExpand }: { onExpand: () => void }) {
   const track = usePlayerSelect((s) => s.current);
+  const live = usePlayerSelect((s) => s.live);
   const from = usePlayerSelect((s) => s.from);
   const playing = usePlayerSelect((s) => s.playing);
   const error = usePlayerSelect((s) => s.error);
   const progress = usePlayerSelect((s) => (s.duration ? Math.round((s.position / s.duration) * 200) / 2 : 0));
 
   return (
-    <footer class={`player-bar${track ? '' : ' is-empty'}`} aria-label="Wiedergabe">
-      <div class="player-now" onClick={() => track && onExpand()}>
-        {track ? (
+    <footer class={`player-bar${track || live ? '' : ' is-empty'}`} aria-label="Wiedergabe">
+      <div class="player-now" onClick={() => (track || live) && onExpand()}>
+        {live ? (
+          <>
+            <LiveCover class="cover-bar" />
+            <div class="player-meta">
+              <a class="player-title" href={live.href} onClick={(event) => event.stopPropagation()}>
+                {live.title}
+              </a>
+              <span class="player-artist">{error ?? 'Live'}</span>
+            </div>
+          </>
+        ) : track ? (
           <>
             <Cover src={trackCoverUrl(track)} title={track.album ?? track.title} date={track.albumDate} class="cover-bar" />
             <div class="player-meta">
@@ -60,7 +71,7 @@ export function PlayerBar({ onExpand }: { onExpand: () => void }) {
         type="button"
         class="mini-play"
         aria-label={playing ? 'Pause' : 'Abspielen'}
-        disabled={!track}
+        disabled={!track && !live}
         onClick={() => player.toggle()}
       >
         <Icon name={playing ? 'pause' : 'play'} size={26} />

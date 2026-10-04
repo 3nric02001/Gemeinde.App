@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { hashHue, initials } from '../format';
+import { Icon } from './Icon';
 
 interface Props {
   /** Bildadresse; ohne Bild erscheint ein Platzhalter */
@@ -41,6 +42,15 @@ export function Cover({ src, title, date, class: className = '', eager = false }
           {initials(title) || '♪'}
         </span>
       )}
+    </div>
+  );
+}
+
+/** Platzhalter für den Livestream: das Live-Symbol statt Anfangsbuchstaben */
+export function LiveCover({ class: className = '' }: { class?: string }) {
+  return (
+    <div class={`cover cover-live ${className}`}>
+      <Icon name="live" />
     </div>
   );
 }

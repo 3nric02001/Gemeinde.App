@@ -29,8 +29,32 @@ export function currentHref(track: Track, from: PlaybackContext | undefined): st
   return from?.href ?? (track.albumId ? `/album/${track.albumId}` : undefined);
 }
 
+/**
+ * Livestream im Player: läuft im selben Audio-Element wie die Titel, damit er wie Musik bei gesperrtem Bildschirm
+ * weiterläuft und auf dem Sperrbildschirm erscheint. Die Warteschlange bleibt dabei stehen.
+ */
+export interface LiveSource {
+  title: string;
+  /** Direkte Adresse des Streams (HLS) */
+  audio: string;
+  /** Seite des Livestreams in der App */
+  href: string;
+}
+
+/** Spielt der Browser HLS selbst ab (Safari, iOS, Android)? Sonst bleibt der Livestream eingebettet. */
+export function canPlayLive(audio: HTMLMediaElement = player.audio): boolean {
+  try {
+    return audio.canPlayType('application/vnd.apple.mpegurl') !== '';
+  } catch {
+    return false;
+  }
+}
+
 export interface PlayerState {
+  /** Laufender Titel; während des Livestreams undefined */
   current: Track | undefined;
+  /** Livestream, der gerade im Player steckt */
+  live: LiveSource | undefined;
   /** Herkunft des laufenden Titels (Playlist), falls vorhanden */
   from: PlaybackContext | undefined;
   currentKey: number | undefined;
@@ -89,6 +113,9 @@ export class Player {
   private blobUrl: string | undefined;
   private sourceToken = 0;
   private offlineChecked = false;
+  /** Livestream statt eines Titels; `resumeAt` ist die Stelle im Titel davor, die gespeichert bleibt */
+  private live: LiveSource | undefined;
+  private resumeAt = 0;
   /** Nächster Titel, kurz vor dem Ende des aktuellen schon im Speicher */
   private readonly preloader = new Preloader({ isDownloaded, readDownload });
   /** Titel, der gerade im Audio-Element steckt, und wann sein Hörstand zuletzt gespeichert wurde */
@@ -123,24 +150,19 @@ export class Player {
     this.state = this.compute();
     void offlineReady.then(() => (this.offlineChecked = true));
 
-    const current = this.queue.current;
-    if (current) {
-      // Nach dem Neuladen an derselben Stelle weitermachen, aber nicht von selbst losspielen.
-      void this.setSource(current.track);
-      this.loaded = { track: current.track, from: current.from?.href, savedAt: Date.now(), recorded: true, heard: 0, counted: false };
-      this.applyRate();
-      if (saved.position) {
-        audio.addEventListener('loadedmetadata', () => (audio.currentTime = saved.position!), { once: true });
-      }
-      this.updateMediaSession();
-    }
+    // Nach dem Neuladen an derselben Stelle weitermachen, aber nicht von selbst losspielen.
+    this.restoreCurrent(saved.position);
 
     const update = () => this.emit();
     for (const name of ['play', 'pause', 'timeupdate', 'durationchange', 'volumechange', 'loadstart', 'canplay', 'playing']) {
       audio.addEventListener(name, update);
     }
     audio.addEventListener('waiting', () => this.emit({ loading: true }));
-    audio.addEventListener('ended', () => this.advance(true));
+    audio.addEventListener('ended', () => {
+      // Ein Livestream endet, wenn die Übertragung aufhört; dann nicht in der Warteschlange weiter
+      if (this.live) this.emit({ error: 'Übertragung beendet' });
+      else this.advance(true);
+    });
     audio.addEventListener('durationchange', () => this.applyRate());
     // Hörstand: beim Start (für "Zuletzt gehört"), bei Pause und bei langen Titeln regelmäßig
     audio.addEventListener('playing', () => {
@@ -158,7 +180,7 @@ export class Player {
     });
     audio.addEventListener('error', () => {
       if (!audio.src) return;
-      this.emit({ error: 'Titel konnte nicht geladen werden' });
+      this.emit({ error: this.live ? 'Livestream konnte nicht geladen werden' : 'Titel konnte nicht geladen werden' });
     });
     this.setupMediaSession();
   }
@@ -202,16 +224,78 @@ export class Player {
   }
 
   toggle(): void {
+    if (this.live) {
+      if (this.audio.paused) this.resumeLive();
+      else this.audio.pause();
+      return;
+    }
     if (!this.queue.current) return;
     if (this.audio.paused) void this.play();
     else this.audio.pause();
   }
 
+  /** Livestream im Player starten; der laufende Titel hält an und bleibt in der Warteschlange */
+  playLive(source: LiveSource): void {
+    if (!this.live) {
+      this.saveProgress();
+      if (this.queue.current) this.resumeAt = this.audio.currentTime || 0;
+    }
+    this.live = source;
+    this.loaded = undefined;
+    this.sourceToken++;
+    this.releaseBlob();
+    this.preloader.clear();
+    this.audio.src = source.audio;
+    this.applyRate();
+    this.state = { ...this.state, error: undefined };
+    void this.play();
+    this.updateMediaSession();
+    this.emit();
+  }
+
+  /** Livestream beenden; der Titel davor steht wieder bereit (angehalten an seiner Stelle) */
+  stopLive(): void {
+    if (!this.live) return;
+    this.audio.pause();
+    this.live = undefined;
+    this.sourceToken++;
+    if (this.queue.current) this.restoreCurrent(this.resumeAt);
+    else {
+      this.audio.removeAttribute('src');
+      this.audio.load();
+      if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+    }
+    this.emit({ error: undefined });
+  }
+
+  /** Nach einer Pause wieder live einsteigen, nicht an der alten Stelle im Puffer */
+  private resumeLive(): void {
+    if (!this.live) return;
+    this.audio.src = this.live.audio;
+    this.emit({ error: undefined });
+    void this.play();
+  }
+
+  /** Aktuellen Titel der Warteschlange angehalten bereitlegen, optional an einer Stelle */
+  private restoreCurrent(position?: number): void {
+    const current = this.queue.current;
+    if (!current) return;
+    void this.setSource(current.track);
+    this.loaded = { track: current.track, from: current.from?.href, savedAt: Date.now(), recorded: true, heard: 0, counted: false };
+    this.applyRate();
+    if (position) {
+      this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = position), { once: true });
+    }
+    this.updateMediaSession();
+  }
+
   next(): void {
+    if (this.live) return;
     this.advance(false);
   }
 
   previous(): void {
+    if (this.live) return;
     // Wie gewohnt: nach den ersten Sekunden springt "Zurück" an den Anfang des Titels.
     if (this.audio.currentTime > 3 || this.queue.index <= 0 && this.queue.repeat !== 'all') {
       this.audio.currentTime = 0;
@@ -250,6 +334,7 @@ export class Player {
     this.releaseBlob();
     this.preloader.clear();
     this.loaded = undefined;
+    this.live = undefined;
     this.queue.set([]);
     this.queueDirty = true;
     window.clearTimeout(this.saveTimer);
@@ -266,12 +351,13 @@ export class Player {
   }
 
   seek(seconds: number): void {
+    if (this.live) return;
     if (Number.isFinite(seconds)) this.audio.currentTime = Math.max(0, seconds);
   }
 
   /** Relativ springen, z. B. 15 Sekunden zurück oder 30 vor */
   skip(seconds: number): void {
-    if (!this.queue.current) return;
+    if (!this.queue.current || this.live) return;
     const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : Infinity;
     this.seek(Math.min(duration - 0.5, Math.max(0, this.audio.currentTime + seconds)));
   }
@@ -297,7 +383,7 @@ export class Player {
   }
 
   private applyRate(): void {
-    const rate = this.long() ? this.rate : 1;
+    const rate = !this.live && this.long() ? this.rate : 1;
     this.audio.defaultPlaybackRate = rate;
     this.audio.playbackRate = rate;
   }
@@ -373,6 +459,8 @@ export class Player {
   private loadCurrent(autoplay: boolean): void {
     const current = this.queue.current;
     if (!current) return;
+    // Ein Titel löst den Livestream ab
+    this.live = undefined;
     // Stand des bisherigen Titels sichern, bevor er ausgetauscht wird.
     if (this.loaded && this.loaded.track.id !== current.track.id) this.saveProgress();
     const source = this.setSource(current.track);
@@ -424,6 +512,7 @@ export class Player {
    * vorgeladener Titel, der nicht mehr als Nächstes dran ist, verworfen.
    */
   private preloadNext(): void {
+    if (this.live) return;
     const current = this.queue.current;
     const next = this.queue.peekNext(true);
     // Wiederholen eines Titels spielt dieselbe Quelle erneut, da gibt es nichts vorzuladen.
@@ -459,16 +548,18 @@ export class Player {
   private compute(patch: Partial<PlayerState> = {}): PlayerState {
     const current = this.queue.current;
     const audio = this.audio;
+    const live = this.live;
     return {
-      current: current?.track,
-      from: current?.from,
-      currentKey: current?.key,
+      current: live ? undefined : current?.track,
+      live,
+      from: live ? undefined : current?.from,
+      currentKey: live ? undefined : current?.key,
       queue: this.queueDirty ? (this.queueCopy = [...this.queue.items]) : this.queueCopy,
       index: this.queue.index,
       playing: !audio.paused,
       loading: false,
       position: audio.currentTime || 0,
-      duration: Number.isFinite(audio.duration) ? audio.duration : (current?.track.duration ?? 0),
+      duration: live ? 0 : Number.isFinite(audio.duration) ? audio.duration : (current?.track.duration ?? 0),
       volume: audio.volume,
       muted: audio.muted,
       shuffle: this.queue.shuffle,
@@ -499,7 +590,8 @@ export class Player {
             queue: this.queue.snapshot(),
             volume: this.audio.volume,
             muted: this.audio.muted,
-            position: this.audio.currentTime,
+            // Während des Livestreams bleibt die Stelle im Titel davor gespeichert
+            position: this.live ? this.resumeAt : this.audio.currentTime,
             rate: this.rate,
           }),
         );
@@ -509,17 +601,19 @@ export class Player {
     }, 1000);
   }
 
+  /** Knöpfe auf dem Sperrbildschirm; beim Livestream nur Abspielen und Pause */
   private setupMediaSession(): void {
     if (!('mediaSession' in navigator)) return;
     const session = navigator.mediaSession;
-    const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
-      ['play', () => void this.play()],
+    const live = Boolean(this.live);
+    const handlers: Array<[MediaSessionAction, MediaSessionActionHandler | null]> = [
+      ['play', () => (this.live ? this.resumeLive() : void this.play())],
       ['pause', () => this.audio.pause()],
-      ['nexttrack', () => this.next()],
-      ['previoustrack', () => this.previous()],
-      ['seekto', (details) => this.seek(details.seekTime ?? 0)],
-      ['seekbackward', (details) => this.skip(-(details.seekOffset ?? 15))],
-      ['seekforward', (details) => this.skip(details.seekOffset ?? 30)],
+      ['nexttrack', live ? null : () => this.next()],
+      ['previoustrack', live ? null : () => this.previous()],
+      ['seekto', live ? null : (details) => this.seek(details.seekTime ?? 0)],
+      ['seekbackward', live ? null : (details) => this.skip(-(details.seekOffset ?? 15))],
+      ['seekforward', live ? null : (details) => this.skip(details.seekOffset ?? 30)],
     ];
     for (const [action, handler] of handlers) {
       try {
@@ -531,8 +625,18 @@ export class Player {
   }
 
   private updateMediaSession(): void {
+    if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+    this.setupMediaSession();
+    if (this.live) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: this.live.title,
+        artist: 'Live',
+        artwork: [{ src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
+      });
+      return;
+    }
     const track = this.queue.current?.track;
-    if (!track || !('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+    if (!track) return;
     const artwork = trackCoverUrl(track);
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
