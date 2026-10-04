@@ -161,10 +161,11 @@ const COMPARED = [
 
 export const MANUAL_KEY_PREFIX = 'manual:';
 
-/** Automatische Reihenfolge: nach CD, dann Tracknummer, Titel ohne Nummer ans Ende. */
-function compareTracks(a: TrackRow, b: TrackRow): number {
+/** Albumreihenfolge: Disc, dann Unterordner ("Teil 1" vor "Teil 2"), dann Tracknummer und Dateiname */
+export function compareTracks(a: Pick<TrackRow, 'path' | 'disc_no' | 'track_no'>, b: Pick<TrackRow, 'path' | 'disc_no' | 'track_no'>): number {
   return (
     (a.disc_no ?? 1) - (b.disc_no ?? 1) ||
+    comparePaths(dirname(a.path), dirname(b.path)) ||
     Number(a.track_no === null) - Number(b.track_no === null) ||
     (a.track_no ?? 0) - (b.track_no ?? 0) ||
     comparePaths(a.path, b.path)

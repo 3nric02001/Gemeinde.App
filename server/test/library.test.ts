@@ -157,6 +157,21 @@ describe('Scan und automatische Alben', () => {
   });
 });
 
+describe('Unterordner eines Albums', () => {
+  it('spielt Unterordner nacheinander ab statt die Tracknummern zu mischen', async () => {
+    const folder = 'Gottesdienste/2026_10_04_ Erntedankfest';
+    cloud.put(`${folder}/Teil 2/01 Lied.mp3`, mp3({ track: 1 }));
+    cloud.put(`${folder}/Teil 1/02 Predigt.mp3`, mp3({ track: 2 }));
+    cloud.put(`${folder}/Teil 10/01 Segen.mp3`, mp3({ track: 1 }));
+    cloud.put(`${folder}/Teil 1/01 Begrüßung.mp3`, mp3({ track: 1 }));
+    cloud.put(`${folder}/Teil 2/02 Gebet.mp3`, mp3({ track: 2 }));
+    await ctx.scanner.scan();
+    const album = (await albums()).find((a) => a.trackCount === 5);
+    const tracks = (await get<AlbumJson>(`/api/albums/${album!.id}`)).tracks!;
+    expect(tracks.map((t) => t.title)).toEqual(['Begrüßung', 'Predigt', 'Lied', 'Gebet', 'Segen']);
+  });
+});
+
 describe('Inkrementeller Scan', () => {
   it('liest nur neue und geänderte Dateien und behält Album-IDs', async () => {
     await ctx.scanner.scan();
