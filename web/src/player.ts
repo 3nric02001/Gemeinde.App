@@ -112,6 +112,10 @@ export class Player {
   /** Entschlüsselte Offline-Kopie des aktuellen Titels; Zähler verwirft veraltete Ladevorgänge */
   private blobUrl: string | undefined;
   private sourceToken = 0;
+  /** Zu welchem Ladevorgang die Quelle im Audio-Element gehört (bei Offline-Kopien erst nach dem Entschlüsseln) */
+  private srcToken = 0;
+  /** Stelle, an die nach dem Laden gesprungen wird; gilt nur für die Quelle, für die sie gesetzt wurde */
+  private pendingSeek: { token: number; position: number } | undefined;
   private offlineChecked = false;
   /** Livestream statt eines Titels; `resumeAt` ist die Stelle im Titel davor, die gespeichert bleibt */
   private live: LiveSource | undefined;
@@ -154,7 +158,8 @@ export class Player {
     this.restoreCurrent(saved.position);
 
     const update = () => this.emit();
-    for (const name of ['play', 'pause', 'timeupdate', 'durationchange', 'volumechange', 'loadstart', 'canplay', 'playing']) {
+    // seeking: Sprünge (Zurück an den Anfang, Regler) sofort zeigen, nicht erst beim nächsten timeupdate
+    for (const name of ['play', 'pause', 'timeupdate', 'durationchange', 'volumechange', 'loadstart', 'canplay', 'playing', 'seeking', 'seeked']) {
       audio.addEventListener(name, update);
     }
     audio.addEventListener('waiting', () => this.emit({ loading: true }));
@@ -164,6 +169,14 @@ export class Player {
       else this.advance(true);
     });
     audio.addEventListener('durationchange', () => this.applyRate());
+    // Gemerkte Stelle anfahren, aber nur beim Titel, für den sie gedacht war: ein liegengebliebener
+    // Sprung ließ sonst einen später gestarteten Titel an der Stelle des alten beginnen.
+    audio.addEventListener('loadedmetadata', () => {
+      const pending = this.pendingSeek;
+      if (!pending || pending.token !== this.srcToken) return;
+      this.pendingSeek = undefined;
+      if (pending.token === this.sourceToken) audio.currentTime = pending.position;
+    });
     // Hörstand: beim Start (für "Zuletzt gehört"), bei Pause und bei langen Titeln regelmäßig
     audio.addEventListener('playing', () => {
       if (this.loaded && !this.loaded.recorded) this.saveProgress();
@@ -283,9 +296,7 @@ export class Player {
     void this.setSource(current.track);
     this.loaded = { track: current.track, from: current.from?.href, savedAt: Date.now(), recorded: true, heard: 0, counted: false };
     this.applyRate();
-    if (position) {
-      this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = position), { once: true });
-    }
+    this.pendingSeek = position ? { token: this.sourceToken, position } : undefined;
     this.updateMediaSession();
   }
 
@@ -468,9 +479,7 @@ export class Player {
     const start = resumePosition(current.track);
     this.loaded = { track: current.track, from: current.from?.href, savedAt: Date.now(), recorded: false, start, heard: 0, counted: false };
     this.applyRate();
-    if (start !== undefined) {
-      this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = start), { once: true });
-    }
+    this.pendingSeek = start !== undefined ? { token: this.sourceToken, position: start } : undefined;
     this.state = { ...this.state, error: undefined };
     // Den Stream sofort starten (iOS erlaubt play() nur direkt nach dem Tippen), die Offline-Kopie nach dem Entschlüsseln.
     if (autoplay) void (source ? source.then((ok) => (ok ? this.play() : undefined)) : this.play());
@@ -490,10 +499,12 @@ export class Player {
     const preloaded = this.preloader.take(track.id);
     if (preloaded) {
       this.audio.src = this.blobUrl = URL.createObjectURL(preloaded);
+      this.srcToken = token;
       return undefined;
     }
     if (this.offlineChecked && !isDownloaded(track.id)) {
       this.audio.src = streamUrl(track.id);
+      this.srcToken = token;
       return undefined;
     }
     return (async () => {
@@ -503,6 +514,7 @@ export class Player {
       if (token !== this.sourceToken) return false;
       if (blob) this.audio.src = this.blobUrl = URL.createObjectURL(blob);
       else this.audio.src = streamUrl(track.id);
+      this.srcToken = token;
       return true;
     })();
   }
